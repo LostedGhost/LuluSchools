@@ -43,11 +43,11 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/inscriptions` | Tuteur, ou Élève ≥16 ans | UC-02 | Statut initial `soumise` ou `en_attente_consentement_parental` selon l'âge |
+| POST | `/inscriptions` | Tuteur | UC-02 | Statut initial `soumise` ou `en_attente_consentement_parental` selon l'âge (peut être court-circuité par `consentement_parental_donne: true` à la soumission). **Limitation Phase 1** : l'auto-inscription directe par un élève ≥16 ans sans tuteur n'est pas implémentée (nécessiterait un flux de compte dédié, symétrique à UC-01) — seul un tuteur peut soumettre pour l'instant. |
 | POST | `/inscriptions/{id}/consentement-parental` | Tuteur rattaché | UC-02 | Débloque une inscription en attente de consentement |
-| POST | `/inscriptions/{id}/valider` | A+ | UC-02, UC-03 | Génère le matricule (UC-03 est interne, pas d'endpoint dédié) |
+| POST | `/inscriptions/{id}/valider` | A+ (de l'établissement de la classe) | UC-02, UC-03 | Refusé (409) si consentement manquant ou classe complète (capacité atteinte, compte les inscriptions déjà `validee`). Génère le matricule (`BJ-{code_etab}-{annee}-{sequence}`) et le compte élève (mot de passe temporaire envoyé au tuteur par e-mail). |
 | POST | `/inscriptions/{id}/rejeter` | A+ | UC-02 | Motif obligatoire |
-| GET | `/inscriptions/{id}` / `/inscriptions?eleve_id=&etablissement_id=&statut=` | selon rattachement | UC-02 | Lecture |
+| GET | `/inscriptions/{id}` | Tuteur rattaché, ou A+ de l'établissement de la classe | UC-02 | Lecture (contrôle d'accès vérifié, pas seulement l'authentification — anti-IDOR) |
 
 ## Recrutement et contrats
 

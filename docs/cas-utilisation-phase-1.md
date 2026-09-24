@@ -116,8 +116,10 @@ A++ (admin ministériel, actif) · A+ (admin établissement, actif) · A- (admin
 
 > En tant qu'élève (ou tuteur), je veux soumettre une demande relevant du circuit des actes académiques — réclamation de note ou délivrance d'un acte officiel (bulletin, attestation, diplôme) — afin d'obtenir une correction ou un document officiel.
 
-- Types de demande : `réclamation_note` (gratuite, référence obligatoire à l'évaluation contestée + motif) ; `délivrance_bulletin` / `délivrance_attestation` / `délivrance_diplôme` (payantes, montant fixé par l'établissement/le ministère, paiement Kkiapay avant traitement).
-- Statuts communs : `soumise` → `en_traitement` (service compétent de l'établissement, A+) → `traitée` (acceptée avec document/correction produite, ou rejetée avec motif obligatoire).
+- **Catalogue d'actes configurable par établissement** (révision suite à un exemple réel de barème universitaire — IFRI) : plutôt qu'une liste figée de types, chaque établissement (A+) définit son propre catalogue de `TypeActeAcademique` : nom (ex. "Attestation de succès", "Attestation d'admissibilité", "Attestation de diplôme et diplôme", "Supplément au diplôme", "Certification de copie"), prix (0 si gratuit), liste de pièces justificatives requises (texte libre, ex. acte de naissance, CIP, relevés de notes, quittance de paiement), et une condition d'éligibilité optionnelle en texte libre (ex. "délivrée uniquement aux étudiants ayant validé toutes les unités d'enseignement, ou ayant soutenu leur mémoire"). Un même acte peut avoir une partie payante et une partie gratuite (ex. l'attestation de diplôme est payante, le diplôme lui-même est gratuit) — modélisé comme deux lignes de catalogue distinctes plutôt qu'un seul type ambigu.
+- `réclamation_note` reste un type particulier, toujours gratuit, hors catalogue configurable (référence obligatoire à l'évaluation contestée + motif).
+- Une demande d'acte (`DemandeActeAcademique`) référence un type du catalogue, fournit les pièces justificatives requises (upload via LuluFiles) et, si le type est payant, la preuve de paiement Kkiapay avant traitement.
+- Statuts communs : `soumise` → `en_traitement` (service compétent de l'établissement, A+, qui vérifie aussi les pièces fournies et l'éligibilité) → `traitée` (acceptée avec document/correction produite, ou rejetée avec motif obligatoire).
 - 🔓 Délai de recevabilité d'une réclamation de note — proposition par défaut : recevable jusqu'à la clôture officielle du bulletin de la période concernée. À confirmer.
 
 ---

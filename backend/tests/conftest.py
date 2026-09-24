@@ -104,3 +104,52 @@ def admin_ministeriel(db_session):
 @pytest.fixture()
 def admin_ministeriel_headers(admin_ministeriel):
     return {"Authorization": f"Bearer {token_pour(admin_ministeriel)}"}
+
+
+@pytest.fixture()
+def tuteur_headers(client, fake_email_client):
+    payload = {
+        "nom": "Dossou",
+        "prenom": "Awa",
+        "email": "awa.tuteur.fixture@example.com",
+        "mot_de_passe": "Password1",
+    }
+    client.post("/api/v1/auth/tuteurs", json=payload)
+    code = fake_email_client.sent[-1]["code"]
+    client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": payload["email"], "code": code})
+    login = client.post(
+        "/api/v1/auth/login", json={"identifiant": payload["email"], "mot_de_passe": payload["mot_de_passe"]}
+    ).json()
+    return {"Authorization": f"Bearer {login['access_token']}"}
+
+
+@pytest.fixture()
+def etablissement_avec_classe(client, fake_email_client, admin_ministeriel_headers):
+    etablissement = client.post(
+        "/api/v1/etablissements",
+        json={
+            "nom": "Ecole Primaire Test",
+            "type": "EP",
+            "statut": "public",
+            "admin": {"nom": "Kone", "prenom": "Fatou", "email": "fatou.kone.fixture@example.com"},
+        },
+        headers=admin_ministeriel_headers,
+    ).json()
+    mot_de_passe_temp = next(
+        m["mot_de_passe"]
+        for m in fake_email_client.sent
+        if m.get("to_email") == "fatou.kone.fixture@example.com"
+    )
+    login_admin = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": "fatou.kone.fixture@example.com", "mot_de_passe": mot_de_passe_temp},
+    ).json()
+    admin_headers = {"Authorization": f"Bearer {login_admin['access_token']}"}
+
+    classe = client.post(
+        f"/api/v1/etablissements/{etablissement['id']}/classes",
+        json={"niveau": "CE1", "capacite": 1, "politique_depassement": "ordre_arrivee"},
+        headers=admin_headers,
+    ).json()
+
+    return {"etablissement": etablissement, "classe": classe, "admin_headers": admin_headers}
