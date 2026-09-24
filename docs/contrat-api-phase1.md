@@ -23,8 +23,8 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/auth/tuteurs` | public | UC-01 | Crée un compte tuteur, déclenche l'envoi de l'OTP SMS |
-| POST | `/auth/tuteurs/verify-otp` | public | UC-01 | Valide le code à 6 chiffres, active le compte |
+| POST | `/auth/tuteurs` | public | UC-01 | Crée un compte tuteur, déclenche l'envoi de l'OTP par e-mail (Brevo) |
+| POST | `/auth/tuteurs/verify-otp` | public | UC-01 | Valide le code à 6 chiffres (10 min, 5 tentatives max), active le compte |
 | POST | `/auth/login` | public | — | Retourne access + refresh token |
 | POST | `/auth/refresh` | public (refresh token) | — | Renouvelle l'access token |
 | GET | `/me` | tout utilisateur authentifié | — | Profil de l'utilisateur courant |

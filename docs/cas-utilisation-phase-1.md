@@ -14,8 +14,9 @@ A++ (admin ministériel, actif) · A+ (admin établissement, actif) · A- (admin
 
 > En tant que parent/représentant légal, je veux créer un compte tuteur, afin de pouvoir suivre la scolarité de mon enfant et donner mon consentement à son inscription.
 
-- Champs : nom, prénom, téléphone (obligatoire, canal principal), e-mail (optionnel), pièce d'identité (type + numéro).
-- Vérification du téléphone par code à 6 chiffres (SMS) avant activation du compte.
+- Champs : nom, prénom, e-mail (obligatoire, unique), mot de passe, téléphone (optionnel, gardé pour un usage futur — tickets/notifications).
+- 🔓 Mot de passe : proposition par défaut — au moins 8 caractères, une majuscule, un chiffre (à confirmer ou ajuster).
+- Vérification de l'e-mail par code à 6 chiffres avant activation du compte (**changement** : e-mail plutôt que SMS — envoi via Brevo, voir `choix-technique-phase1.md`). Code valide 10 minutes, 5 tentatives maximum avant invalidation.
 - Un tuteur peut être rattaché à plusieurs élèves.
 - Tout consentement donné pour un élève mineur est horodaté et stocké de façon consultable (Art. 389-390 — le responsable du traitement doit pouvoir démontrer le consentement).
 

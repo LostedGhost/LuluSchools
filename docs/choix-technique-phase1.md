@@ -22,9 +22,11 @@ Raisonnement complet dans `docs/adr/ADR-001-architecture-backend.md` et `docs/ad
 - **Tests** : pytest + httpx (`TestClient`) + pytest-asyncio
 - **Paiement** : appels REST directs à l'API Kkiapay + endpoint webhook de confirmation
 
+- **Envoi d'e-mail** (OTP UC-01, et notifications futures) : **Brevo**, API transactionnelle (`POST https://api.brevo.com/v3/smtp/email`, header `api-key`), plan gratuit.
+
 ## Points opérationnels encore ouverts (pas bloquants pour coder)
-- Fournisseur SMS pour l'OTP du tuteur/élève (UC-01) — à choisir, interface abstraite dès le départ pour rester substituable.
 - Prestataire de signature électronique qualifiée (UC-05) — action administrative déjà notée dans `cas-utilisation-phase-1.md`.
+- Quota exact du plan gratuit Brevo (nombre d'e-mails/jour) — à vérifier sur le tableau de bord une fois le compte créé, pas documenté publiquement de façon fiable au moment de la rédaction.
 
 ## Frontend
 - **Build** : Vite + TypeScript
