@@ -34,6 +34,15 @@ class TuteurOut(BaseModel):
     email_verifie: bool
 
 
+class EnseignantCreate(TuteurCreate):
+    """Memes champs et regles que TuteurCreate (voir UC-01) - creation de compte
+    enseignant, prealable a UC-04 (candidature)."""
+
+
+class EnseignantOut(TuteurOut):
+    pass
+
+
 class OtpVerifyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

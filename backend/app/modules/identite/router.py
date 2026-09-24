@@ -17,9 +17,11 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.modules.identite.models import OtpVerification, RoleUtilisateur, Tuteur, Utilisateur
+from app.modules.identite.models import Enseignant, OtpVerification, RoleUtilisateur, Tuteur, Utilisateur
 from app.modules.identite.schemas import (
     ChangePasswordRequest,
+    EnseignantCreate,
+    EnseignantOut,
     LoginRequest,
     MeOut,
     OtpVerifyRequest,
@@ -144,6 +146,70 @@ def verifier_otp(payload: OtpVerifyRequest, db: Session = Depends(get_db)) -> Ut
     db.commit()
     db.refresh(utilisateur)
     return utilisateur
+
+
+enseignant_router = APIRouter(prefix="/auth/enseignants", tags=["identite"])
+
+
+@enseignant_router.post("", response_model=EnseignantOut, status_code=status.HTTP_201_CREATED)
+def creer_compte_enseignant(
+    payload: EnseignantCreate,
+    db: Session = Depends(get_db),
+    email_client: BrevoEmailClient = Depends(get_email_client),
+) -> Utilisateur:
+    """Prealable a UC-04 (candidature) : un enseignant doit avoir un compte verifie avant
+    de pouvoir postuler. Meme mecanisme que UC-01 (mot de passe + OTP email)."""
+    email_normalise = payload.email.lower()
+
+    if db.query(Utilisateur).filter(Utilisateur.login_id == email_normalise).first() is not None:
+        raise _api_error(
+            status.HTTP_409_CONFLICT, "email_deja_utilise", "Un compte existe deja avec cet e-mail."
+        )
+
+    utilisateur = Utilisateur(
+        nom=payload.nom,
+        prenom=payload.prenom,
+        login_id=email_normalise,
+        email=email_normalise,
+        telephone=payload.telephone,
+        mot_de_passe_hash=hash_password(payload.mot_de_passe),
+        role=RoleUtilisateur.ENSEIGNANT,
+        email_verifie=False,
+    )
+    db.add(utilisateur)
+    db.flush()
+
+    db.add(Enseignant(utilisateur_id=utilisateur.id))
+
+    code = generate_otp_code()
+    salt = generate_salt()
+    db.add(
+        OtpVerification(
+            utilisateur_id=utilisateur.id,
+            code_hash=hash_otp_code(code, salt),
+            salt=salt,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=OTP_VALIDITY_MINUTES),
+        )
+    )
+
+    try:
+        email_client.send_otp_email(to_email=utilisateur.email, to_name=utilisateur.prenom, code=code)
+    except EmailDeliveryError as exc:
+        db.rollback()
+        raise _api_error(
+            status.HTTP_502_BAD_GATEWAY,
+            "envoi_email_echoue",
+            "Impossible d'envoyer l'e-mail de verification, veuillez reessayer.",
+        ) from exc
+
+    db.commit()
+    db.refresh(utilisateur)
+    return utilisateur
+
+
+@enseignant_router.post("/verify-otp", response_model=OtpVerifyResponse)
+def verifier_otp_enseignant(payload: OtpVerifyRequest, db: Session = Depends(get_db)) -> Utilisateur:
+    return verifier_otp(payload, db)
 
 
 auth_router = APIRouter(prefix="/auth", tags=["identite"])

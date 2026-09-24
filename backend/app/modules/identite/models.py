@@ -56,6 +56,14 @@ class Tuteur(Base):
     utilisateur: Mapped[Utilisateur] = relationship(back_populates="tuteur")
 
 
+class Enseignant(Base):
+    __tablename__ = "enseignants"
+
+    utilisateur_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), primary_key=True)
+
+    utilisateur: Mapped[Utilisateur] = relationship()
+
+
 class OtpVerification(Base):
     __tablename__ = "otp_verifications"
 
