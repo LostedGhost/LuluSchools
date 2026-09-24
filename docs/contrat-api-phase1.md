@@ -34,7 +34,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/etablissements` | A++ | — | Création d'un établissement (EP/ES/UP), attribue le code établissement |
+| POST | `/etablissements` | A++ | — | Création d'un établissement (EP/ES/UP), attribue le code établissement (`EP01`, `ES01`, `UP01`…) ; crée aussi le premier compte A+ (mot de passe temporaire envoyé par e-mail, changement obligatoire à la première connexion). Le tout premier compte A++ n'a pas d'endpoint : il est provisionné une fois via `backend/scripts/seed_admin_ministeriel.py`, exécuté directement sur le serveur. |
 | GET | `/etablissements` / `/etablissements/{id}` | tout utilisateur authentifié | — | Lecture |
 | POST | `/etablissements/{id}/classes` | A+ | UC-02, UC-03 | Définit niveau, capacité, politique de dépassement |
 | GET | `/etablissements/{id}/classes` | tout utilisateur authentifié | — | Lecture |

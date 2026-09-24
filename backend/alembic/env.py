@@ -5,6 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.core.database import Base
+from app.modules.etablissements import models as etablissements_models  # noqa: F401
 from app.modules.identite import models as identite_models  # noqa: F401
 
 config = context.config
