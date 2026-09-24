@@ -4,7 +4,7 @@ Copier ce fichier au démarrage du projet et cocher au fur et à mesure des vali
 
 - [x] **1. Cas d'utilisation** — liste complète, validée explicitement (Phase 1 — voir `docs/cas-utilisation-phase-1.md`)
 - [x] **2. Diagrammes UML** — diagramme de cas d'utilisation + diagramme de classes, validés — voir `docs/diagrammes-uml-phase1.md`
-- [ ] **3. Choix technique et contrat d'API** — stack retenue et contrat d'API posés, en attente de validation — voir `README.md`, `docs/choix-technique-phase1.md`, `docs/contrat-api-phase1.md`, `docs/adr/`
+- [x] **3. Choix technique et contrat d'API** — stack retenue et contrat d'API validés — voir `README.md`, `docs/choix-technique-phase1.md`, `docs/contrat-api-phase1.md`, `docs/adr/`
 - [ ] **4. Backend** — tous les endpoints développés, testés et documentés, un par un
 - [ ] **5. Validation complète du backend** — test de bout en bout réalisé (Postman ou équivalent)
 - [ ] **6. Frontend** — design system, composants de base et pages validés sur données mock
@@ -20,4 +20,4 @@ Copier ce fichier au démarrage du projet et cocher au fur et à mesure des vali
 
 ## Notes / écarts assumés
 
-(Consigner ici toute étape sautée délibérément, avec la raison et le risque accepté.)
+- **Plan LuluFiles gratuit ("Lancement")** : 5 Go de transfert/mois et 2 Mo/s de bande passante partagés par tout le compte. Choix assumé par l'utilisateur pour la Phase 1 pilote ; passage à un plan payant prévu au besoin, à réévaluer avant la Phase 2/3 (voir `docs/adr/ADR-003-stockage-fichiers-lulufiles.md`).
