@@ -10,6 +10,7 @@ from app.modules.etablissements.router import router as etablissements_router
 from app.modules.identite.router import auth_router, enseignant_router, me_router
 from app.modules.identite.router import router as identite_router
 from app.modules.inscriptions.router import router as inscriptions_router
+from app.modules.recrutement.router import router as recrutement_router
 from app.system.router import router as system_router
 
 app = FastAPI(title="LuluSchools API", version="0.1.0")
@@ -54,3 +55,4 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(me_router, prefix="/api/v1")
 app.include_router(etablissements_router, prefix="/api/v1")
 app.include_router(inscriptions_router, prefix="/api/v1")
+app.include_router(recrutement_router, prefix="/api/v1")

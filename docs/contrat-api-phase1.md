@@ -53,18 +53,18 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/etablissements/{id}/postes` | A+ | UC-04 | Définit seuils/coefficients par type de document, capacité |
+| POST | `/etablissements/{id}/postes` | A+ | UC-04 | Définit les critères par type de document (coefficient, seuil minimal) |
 | GET | `/postes/{id}` | tout utilisateur authentifié | UC-04 | Lecture |
-| POST | `/postes/{id}/candidatures` | Enseignant | UC-04 | Upload des documents ; déclenche la notation IA (FreeLLM, hors casier judiciaire) en tâche de fond |
-| GET | `/candidatures/{id}` / `/candidatures?enseignant_id=&poste_id=&statut=` | selon rattachement | UC-04 | Lecture, inclut le détail des notes par document |
-| POST | `/candidatures/{id}/contestation` | Enseignant candidat | UC-04b | Fenêtre de 5 jours ouvrés après notification du rejet |
-| POST | `/contestations/{id}/decision` | A+ | UC-04b | `acceptee` / `rejetee`, motif obligatoire si rejet |
-| POST | `/candidatures/{id}/contrat` | A+ | UC-05 | Crée le contrat en attente de signature (syllabus + rémunération) |
-| POST | `/contrats/{id}/signer` | Enseignant titulaire | UC-05 | Signature électronique qualifiée (prestataire externe, cf. `choix-technique-phase1.md`) |
-| POST | `/contrats/{id}/reconduction` | A+ | UC-05b | Crée un nouveau contrat en attente de signature, inclut `POST /contrats/{id}/signer` |
-| POST | `/referentiels-coefficients` | A++ | UC-09 | Référentiel national initial |
-| POST | `/referentiels-coefficients/{id}/proposition` | A+ | UC-09 | Proposition de mise à jour |
-| POST | `/referentiels-coefficients/{id}/valider` | A++ | UC-09 | Seule action qui rend une proposition effective |
+| POST | `/postes/{id}/candidatures` | Enseignant | UC-04 | `multipart/form-data` : `types[]` + `fichiers[]` (un par critère du poste, exactement) + `casier_judiciaire` à part. Upload vers LuluFiles puis notation FreeLLM **synchrone** (pas encore en tâche de fond) pour chaque document scoré ; le casier judiciaire est stocké localement, jamais sur LuluFiles (Art. 395). Si un document échoue à être noté (FreeLLM indisponible), la candidature reste `en_evaluation` sans score, en attente d'une révision manuelle — **l'endpoint de revue manuelle n'est pas encore construit**. |
+| GET | `/candidatures/{id}` | Enseignant propriétaire, ou A+ de l'établissement du poste | UC-04 | Lecture, inclut le détail des notes par document |
+| POST | `/candidatures/{id}/contestation` | Enseignant candidat | UC-04b | Fenêtre de 5 jours (calendaires en implémentation actuelle — la spec dit "ouvrés", simplification à corriger) après la candidature, uniquement si `statut=rejetee` |
+| POST | `/contestations/{id}/decision` | A+ | UC-04b | `acceptee` / `rejetee`, motif obligatoire si rejet ; acceptée → candidature repasse `en_evaluation` |
+| POST | `/candidatures/{id}/contrat` | A+ | UC-05 | Crée le contrat en attente de signature (syllabus) ; nécessite `statut=en_evaluation` avec un score calculé |
+| POST | `/contrats/{id}/signer` | Enseignant titulaire | UC-05 | **Implémenté en signature simple (horodatage + hash + nom tapé vérifié), pas la signature qualifiée prévue pour la V1 — aucun prestataire de certification n'a été choisi (point ouvert)** |
+| POST | `/contrats/{id}/reconduction` | A+ | UC-05b | **Non implémenté** (modèle de données `PropositionReconduction` posé, endpoint à écrire) |
+| POST | `/referentiels-coefficients` | A++ | UC-09 | **Non implémenté** |
+| POST | `/referentiels-coefficients/{id}/proposition` | A+ | UC-09 | **Non implémenté** |
+| POST | `/referentiels-coefficients/{id}/valider` | A++ | UC-09 | **Non implémenté** |
 
 ## Pédagogie
 

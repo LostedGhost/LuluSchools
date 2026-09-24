@@ -22,7 +22,7 @@ API backend sous préfixe `/api/v1` — contrat complet et à jour dans `docs/co
 - Stockage de fichiers via LuluFiles, sauf le casier judiciaire qui reste local pour raisons légales — Art. 395 de la loi béninoise n° 2017-20 (ADR-003).
 
 ## État d'avancement
-Étapes 1-3 du pipeline validées. Étape 4 (backend) en cours : identité (UC-01 + auth JWT complet), établissements/classes et inscriptions (UC-02/UC-03) faits et testés (35 tests). Reste : recrutement/contrats, pédagogie, évaluations, actes académiques.
+Étapes 1-3 du pipeline validées. Étape 4 (backend) en cours : identité, établissements/classes, inscriptions et recrutement (UC-01 à UC-05 partiel) faits et testés (46 tests). Reste : pédagogie, évaluations, actes académiques ; signature qualifiée (UC-05) et reconduction (UC-05b) en attente.
 
 ## Dernière synchronisation
-2026-09-24 — après le module inscriptions.
+2026-09-24 — après le module recrutement.

@@ -4,8 +4,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import uuid
+
 from app.core.database import Base, get_db
 from app.core.email import EmailDeliveryError, get_email_client
+from app.core.files import get_files_client
+from app.core.llm import DocumentScoringError, get_llm_client
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -58,13 +62,54 @@ def fake_email_client() -> FakeEmailClient:
     return FakeEmailClient()
 
 
+class FakeFilesClient:
+    def __init__(self) -> None:
+        self.uploaded: list[dict] = []
+
+    def upload(self, content: bytes, filename: str, content_type: str) -> str:
+        file_id = str(uuid.uuid4())
+        self.uploaded.append({"file_id": file_id, "filename": filename, "content_type": content_type})
+        return file_id
+
+    def get_signed_link(self, file_id: str, disposition: str = "attachment") -> str:
+        return f"https://lulufiles-api.onrender.com/files/{file_id}/content?signed=1"
+
+
 @pytest.fixture()
-def client(db_session, fake_email_client):
+def fake_files_client() -> FakeFilesClient:
+    return FakeFilesClient()
+
+
+class FakeLLMClient:
+    def __init__(self) -> None:
+        self.scores_par_type: dict[str, float] = {}
+        self.score_par_defaut = 90.0
+        self.types_en_echec: set[str] = set()
+
+    def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
+        for type_document in self.types_en_echec:
+            if type_document in critere:
+                raise DocumentScoringError("echec simule")
+        for type_document, score in self.scores_par_type.items():
+            if type_document in critere:
+                return score
+        return self.score_par_defaut
+
+
+@pytest.fixture()
+def fake_llm_client() -> FakeLLMClient:
+    return FakeLLMClient()
+
+
+@pytest.fixture()
+def client(db_session, fake_email_client, fake_files_client, fake_llm_client):
     def _override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_email_client] = lambda: fake_email_client
+    app.dependency_overrides[get_files_client] = lambda: fake_files_client
+    app.dependency_overrides[get_llm_client] = lambda: fake_llm_client
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -117,6 +162,23 @@ def tuteur_headers(client, fake_email_client):
     client.post("/api/v1/auth/tuteurs", json=payload)
     code = fake_email_client.sent[-1]["code"]
     client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": payload["email"], "code": code})
+    login = client.post(
+        "/api/v1/auth/login", json={"identifiant": payload["email"], "mot_de_passe": payload["mot_de_passe"]}
+    ).json()
+    return {"Authorization": f"Bearer {login['access_token']}"}
+
+
+@pytest.fixture()
+def enseignant_headers(client, fake_email_client):
+    payload = {
+        "nom": "Traore",
+        "prenom": "Moussa",
+        "email": "moussa.traore.fixture@example.com",
+        "mot_de_passe": "Password1",
+    }
+    client.post("/api/v1/auth/enseignants", json=payload)
+    code = next(m["code"] for m in reversed(fake_email_client.sent) if m.get("to_email") == payload["email"])
+    client.post("/api/v1/auth/enseignants/verify-otp", json={"email": payload["email"], "code": code})
     login = client.post(
         "/api/v1/auth/login", json={"identifiant": payload["email"], "mot_de_passe": payload["mot_de_passe"]}
     ).json()
