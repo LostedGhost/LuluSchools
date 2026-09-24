@@ -13,6 +13,12 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 - Chaque endpoint est annoté du rôle RBAC minimal requis et du cas d'utilisation dont il découle.
 - **Fichiers** (cours, documents de candidature hors casier judiciaire, soumissions de devoirs, actes académiques) : upload en `multipart/form-data` vers l'endpoint métier concerné (ex. `POST /candidatures/{id}/documents`), le backend relaie vers LuluFiles et stocke `lulufiles_file_id` (voir ADR-003) — jamais de clé LuluFiles côté client. Téléchargement via un lien signé à durée limitée : `GET /fichiers/{id}/lien` (rôle : selon rattachement au dossier) renvoie `{ "url": "...", "expires_at": "..." }`, jamais l'octet brut depuis notre API. Le casier judiciaire n'a pas de route de ce type — accès restreint hors API REST standard (cf. section "Hors contrat" ci-dessous).
 
+## Système
+
+| Méthode | Chemin | Rôle | UC | Notes |
+|---|---|---|---|---|
+| GET | `/health` | **public, assumé** | — | Sonde de disponibilité (supervision/load balancer) : `200 {"status":"ok","checks":{"database":true}}` ou `503 {"status":"degraded","checks":{"database":false}}`. Pas de logique métier, pas d'authentification par choix documenté (checklist sécurité §8). |
+
 ## Identité et authentification
 
 | Méthode | Chemin | Rôle | UC | Notes |

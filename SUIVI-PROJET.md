@@ -5,7 +5,7 @@ Copier ce fichier au démarrage du projet et cocher au fur et à mesure des vali
 - [x] **1. Cas d'utilisation** — liste complète, validée explicitement (Phase 1 — voir `docs/cas-utilisation-phase-1.md`)
 - [x] **2. Diagrammes UML** — diagramme de cas d'utilisation + diagramme de classes, validés — voir `docs/diagrammes-uml-phase1.md`
 - [x] **3. Choix technique et contrat d'API** — stack retenue et contrat d'API validés — voir `README.md`, `docs/choix-technique-phase1.md`, `docs/contrat-api-phase1.md`, `docs/adr/`
-- [ ] **4. Backend** — tous les endpoints développés, testés et documentés, un par un
+- [ ] **4. Backend** — tous les endpoints développés, testés et documentés, un par un (en cours : `GET /health` fait, voir `docs/contrat-api-phase1.md`)
 - [ ] **5. Validation complète du backend** — test de bout en bout réalisé (Postman ou équivalent)
 - [ ] **6. Frontend** — design system, composants de base et pages validés sur données mock
 - [ ] **7. Intégration** — backend et frontend réels connectés, écarts corrigés

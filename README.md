@@ -32,15 +32,22 @@ Premier déploiement au Bénin : conformité suivie article par article contre l
 
 ## Développement local (sans Docker)
 
-Prérequis : Python 3.12+, Node.js 20+, PostgreSQL installé nativement.
+Prérequis : Python 3.12+ (testé avec 3.13), Node.js 20+, PostgreSQL installé nativement.
 
 ```bash
 cp .env.example .env
 # renseigner .env avec les vraies valeurs
+
+cd backend
+python -m venv .venv
+./.venv/Scripts/activate   # ou source .venv/bin/activate sous Linux/macOS
+pip install -r requirements.txt
+pytest                      # lance la suite de tests
+uvicorn app.main:app --reload   # démarre l'API sur http://localhost:8000
 ```
 
-Le détail des commandes d'installation backend/frontend sera ajouté ici au fur et à mesure de l'implémentation (étapes 4 et 6 du pipeline) — ce projet n'a pas encore de code applicatif, seulement la spécification (étapes 1 à 3).
+Le frontend n'existe pas encore (étape 6 du pipeline, après validation complète du backend).
 
 ## Statut
 
-Étapes 1 (cas d'utilisation) et 2 (UML) validées. Étape 3 (choix technique et contrat d'API) posée, en attente de validation avant le démarrage du backend.
+Étapes 1 (cas d'utilisation), 2 (UML) et 3 (choix technique et contrat d'API) validées. Étape 4 (backend, endpoint par endpoint) démarrée : `GET /api/v1/health` développé et testé (3 tests, passants).
