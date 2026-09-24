@@ -1,0 +1,23 @@
+# Suivi de projet — LuluSchools
+
+Copier ce fichier au démarrage du projet et cocher au fur et à mesure des validations. Chaque case cochée correspond à un artefact réellement produit et validé, pas juste "commencé". Méthode : pipeline spec-first `lucio-dev`.
+
+- [x] **1. Cas d'utilisation** — liste complète, validée explicitement (Phase 1 — voir `docs/cas-utilisation-phase-1.md`)
+- [x] **2. Diagrammes UML** — diagramme de cas d'utilisation + diagramme de classes, validés — voir `docs/diagrammes-uml-phase1.md`
+- [ ] **3. Choix technique et contrat d'API** — stack retenue, contrat d'API posé avant le premier endpoint
+- [ ] **4. Backend** — tous les endpoints développés, testés et documentés, un par un
+- [ ] **5. Validation complète du backend** — test de bout en bout réalisé (Postman ou équivalent)
+- [ ] **6. Frontend** — design system, composants de base et pages validés sur données mock
+- [ ] **7. Intégration** — backend et frontend réels connectés, écarts corrigés
+- [ ] **8. Déploiement** — application déployée et vérifiée en conditions réelles
+
+## Cadrage verrouillé
+
+- Portage : mandat ministériel officiel (Bénin). A++ = acteur gouvernemental réel.
+- Zone V1 : Bénin — conformité suivie via le référentiel loi n° 2017-20 (skill `droit-numerique-benin`).
+- Paiement / séquestre : Kkiapay (agrégateur mobile money/carte).
+- Phasage MVP : Phase 1 (socle identité/inscriptions/contrats/cours/devoirs/moyennes) → Phase 2 (réclamations/actes payants/tickets/messagerie) → Phase 3 (vidéo/live/billetterie/micro-jobs+séquestre/3D).
+
+## Notes / écarts assumés
+
+(Consigner ici toute étape sautée délibérément, avec la raison et le risque accepté.)
