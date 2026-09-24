@@ -51,4 +51,4 @@ Le frontend n'existe pas encore (étape 6 du pipeline, après validation complè
 
 ## Statut
 
-Étapes 1 (cas d'utilisation), 2 (UML) et 3 (choix technique et contrat d'API) validées. Étape 4 (backend, endpoint par endpoint) en cours : `GET /api/v1/health`, `POST /api/v1/auth/tuteurs` et `POST /api/v1/auth/tuteurs/verify-otp` développés, testés (16 tests, passants) et migrés (Alembic).
+Étapes 1 (cas d'utilisation), 2 (UML) et 3 (choix technique et contrat d'API) validées. Étape 4 (backend) : premier jet complet de tous les modules de la Phase 1 (identité, établissements, inscriptions, recrutement/contrats, pédagogie, évaluations, actes académiques) — 60 tests passants, 8 migrations appliquées. Limitations et points ouverts documentés dans [backend/PROJECT_MAP.md](backend/PROJECT_MAP.md) et [docs/contrat-api-phase1.md](docs/contrat-api-phase1.md) (le plus important : signature électronique qualifiée UC-05 en attente d'un prestataire, remplacée par une signature simple pour l'instant). Étape 5 (validation de bout en bout) pas encore commencée.

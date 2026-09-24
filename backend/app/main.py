@@ -6,7 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.modules.actes.router import router as actes_router
 from app.modules.etablissements.router import router as etablissements_router
+from app.modules.evaluations.router import router as evaluations_router
+from app.modules.pedagogie.router import router as pedagogie_router
 from app.modules.identite.router import auth_router, enseignant_router, me_router
 from app.modules.identite.router import router as identite_router
 from app.modules.inscriptions.router import router as inscriptions_router
@@ -56,3 +59,6 @@ app.include_router(me_router, prefix="/api/v1")
 app.include_router(etablissements_router, prefix="/api/v1")
 app.include_router(inscriptions_router, prefix="/api/v1")
 app.include_router(recrutement_router, prefix="/api/v1")
+app.include_router(pedagogie_router, prefix="/api/v1")
+app.include_router(evaluations_router, prefix="/api/v1")
+app.include_router(actes_router, prefix="/api/v1")

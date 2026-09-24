@@ -215,3 +215,71 @@ def etablissement_avec_classe(client, fake_email_client, admin_ministeriel_heade
     ).json()
 
     return {"etablissement": etablissement, "classe": classe, "admin_headers": admin_headers}
+
+
+@pytest.fixture()
+def classe_avec_enseignant_et_eleve(client, fake_email_client, fake_llm_client, etablissement_avec_classe, enseignant_headers):
+    """Etablissement + classe + un enseignant sous contrat signe dans cet etablissement +
+    un eleve inscrit et valide dans cette classe. Sert de socle aux tests pedagogie/
+    evaluations/actes, qui exigent tous un rattachement reel (pas juste un role)."""
+    admin_headers = etablissement_avec_classe["admin_headers"]
+    classe = etablissement_avec_classe["classe"]
+
+    poste = client.post(
+        f"/api/v1/etablissements/{etablissement_avec_classe['etablissement']['id']}/postes",
+        json={"titre": "Professeur", "criteres": [{"type_document": "cv", "coefficient": 1, "seuil_minimal": 0}]},
+        headers=admin_headers,
+    ).json()
+    fake_llm_client.score_par_defaut = 100.0
+    candidature = client.post(
+        f"/api/v1/postes/{poste['id']}/candidatures",
+        data={"types": ["cv"]},
+        files=[
+            ("fichiers", ("cv.png", __import__("io").BytesIO(b"contenu"), "image/png")),
+            ("casier_judiciaire", ("casier.pdf", __import__("io").BytesIO(b"casier"), "application/pdf")),
+        ],
+        headers=enseignant_headers,
+    ).json()
+    contrat = client.post(
+        f"/api/v1/candidatures/{candidature['id']}/contrat",
+        json={"syllabus": "Programme", "date_fin": "2027-06-30"},
+        headers=admin_headers,
+    ).json()
+    client.post(
+        f"/api/v1/contrats/{contrat['id']}/signer",
+        json={"nom_tape": "Moussa Traore"},
+        headers=enseignant_headers,
+    )
+
+    tuteur_payload = {
+        "nom": "Dossou", "prenom": "Awa", "email": "awa.tuteur.classe@example.com", "mot_de_passe": "Password1",
+    }
+    client.post("/api/v1/auth/tuteurs", json=tuteur_payload)
+    code = next(m["code"] for m in reversed(fake_email_client.sent) if m.get("to_email") == tuteur_payload["email"])
+    client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": tuteur_payload["email"], "code": code})
+    login_tuteur = client.post(
+        "/api/v1/auth/login", json={"identifiant": tuteur_payload["email"], "mot_de_passe": tuteur_payload["mot_de_passe"]}
+    ).json()
+    tuteur_headers_local = {"Authorization": f"Bearer {login_tuteur['access_token']}"}
+
+    inscription = client.post(
+        "/api/v1/inscriptions",
+        json={"nom": "Dossou", "prenom": "Aisha", "date_naissance": "2010-01-01", "classe_id": classe["id"]},
+        headers=tuteur_headers_local,
+    ).json()
+    client.post(f"/api/v1/inscriptions/{inscription['id']}/valider", headers=admin_headers)
+    identifiants_eleve = next(m for m in fake_email_client.sent if "login_id" in m and m["to_email"] == tuteur_payload["email"])
+    login_eleve = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": identifiants_eleve["login_id"], "mot_de_passe": identifiants_eleve["mot_de_passe"]},
+    ).json()
+    eleve_headers = {"Authorization": f"Bearer {login_eleve['access_token']}"}
+
+    return {
+        "etablissement": etablissement_avec_classe["etablissement"],
+        "classe": classe,
+        "admin_headers": admin_headers,
+        "enseignant_headers": enseignant_headers,
+        "eleve_headers": eleve_headers,
+        "tuteur_headers": tuteur_headers_local,
+    }

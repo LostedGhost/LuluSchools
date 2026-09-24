@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
@@ -20,11 +20,13 @@ from app.modules.recrutement.models import (
     CritereDocumentPoste,
     DocumentCandidature,
     Poste,
+    PropositionReconduction,
     StatutCandidature,
     StatutContestation,
     StatutContrat,
     StatutDocument,
     StatutPoste,
+    StatutProposition,
     StatutVerificationCasier,
     VerificationCasierJudiciaire,
 )
@@ -38,10 +40,13 @@ from app.modules.recrutement.schemas import (
     ContratSignerRequest,
     PosteCreate,
     PosteOut,
+    PropositionReconductionOut,
+    ReconductionCreate,
 )
 
 CONTESTATION_DELAI_JOURS = 5
 CASIER_JUDICIAIRE_RETENTION_JOURS = 30
+RECONDUCTION_FENETRE_JOURS = 30
 
 router = APIRouter(tags=["recrutement"])
 
@@ -303,6 +308,7 @@ def creer_contrat(
         enseignant_id=candidature.enseignant_id,
         etablissement_id=poste.etablissement_id,
         syllabus=payload.syllabus,
+        date_fin=payload.date_fin,
         statut=StatutContrat.EN_ATTENTE_SIGNATURE,
     )
     candidature.statut = StatutCandidature.RETENUE
@@ -343,3 +349,54 @@ def signer_contrat(
     db.commit()
     db.refresh(contrat)
     return contrat
+
+
+@router.post(
+    "/contrats/{contrat_id}/reconduction",
+    response_model=PropositionReconductionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def proposer_reconduction(
+    contrat_id: str,
+    payload: ReconductionCreate,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> PropositionReconduction:
+    """UC-05b. L'enseignant doit re-signer integralement (pas de reconduction tacite) :
+    cree un nouveau Contrat en attente de signature via POST /contrats/{id}/signer."""
+    contrat = db.get(Contrat, contrat_id)
+    if contrat is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Contrat introuvable.")
+    _verifier_admin_de_l_etablissement(db, admin, contrat.etablissement_id)
+
+    if contrat.statut != StatutContrat.SIGNE:
+        raise api_error(
+            status.HTTP_409_CONFLICT, "contrat_non_signe", "Seul un contrat signe peut etre reconduit."
+        )
+    if (contrat.date_fin - date.today()).days > RECONDUCTION_FENETRE_JOURS:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "hors_fenetre",
+            f"La reconduction n'est possible que dans les {RECONDUCTION_FENETRE_JOURS} jours avant l'echeance.",
+        )
+
+    nouveau_contrat = Contrat(
+        candidature_id=contrat.candidature_id,
+        enseignant_id=contrat.enseignant_id,
+        etablissement_id=contrat.etablissement_id,
+        syllabus=payload.syllabus,
+        date_fin=payload.date_fin,
+        statut=StatutContrat.EN_ATTENTE_SIGNATURE,
+    )
+    db.add(nouveau_contrat)
+    db.flush()
+
+    proposition = PropositionReconduction(
+        contrat_precedent_id=contrat.id,
+        nouveau_contrat_id=nouveau_contrat.id,
+        statut=StatutProposition.EN_ATTENTE,
+    )
+    db.add(proposition)
+    db.commit()
+    db.refresh(proposition)
+    return proposition

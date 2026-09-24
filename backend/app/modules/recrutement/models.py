@@ -1,8 +1,8 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -157,6 +157,7 @@ class Contrat(Base):
     enseignant_id: Mapped[str] = mapped_column(ForeignKey("enseignants.utilisateur_id"), index=True)
     etablissement_id: Mapped[str] = mapped_column(ForeignKey("etablissements.id"), index=True)
     syllabus: Mapped[str] = mapped_column(Text)
+    date_fin: Mapped[date] = mapped_column(Date)
     statut: Mapped[StatutContrat] = mapped_column(
         Enum(StatutContrat), default=StatutContrat.EN_ATTENTE_SIGNATURE
     )

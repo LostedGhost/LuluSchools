@@ -70,29 +70,34 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/classes/{id}/cours` | Enseignant rattaché | UC-06 | Formats texte/PDF/audio, 50 Mo max par défaut |
-| GET | `/cours/{id}` / `/classes/{id}/cours` | Élève inscrit, Enseignant rattaché | UC-06 | Lecture |
-| POST | `/cours/{id}/quiz` | Enseignant | UC-07 | Seuil de réussite configurable, défaut 80% |
-| POST | `/quiz/{id}/tentatives` | Élève inscrit | UC-07 | Tentatives illimitées, retourne résultat + déblocage du chapitre suivant |
+| POST | `/classes/{id}/cours` | Enseignant rattaché (contrat `signe` avec l'établissement de la classe) | UC-06 | `multipart/form-data` (titre, chapitre, format, contenu_texte ou fichier). 50 Mo max, upload vers LuluFiles si fichier fourni |
+| GET | `/classes/{id}/cours` | Élève inscrit (`inscription validee`), Enseignant rattaché, A+ | UC-06 | Lecture |
+| POST | `/cours/{id}/quiz` | Enseignant propriétaire du cours | UC-07 | Seuil de réussite configurable, défaut 80% |
+| POST | `/quiz/{id}/tentatives` | Élève inscrit | UC-07 | Tentatives illimitées. **Limitation** : pas de banque de questions/réponses (non spécifiée par un UC validé) — le score est fourni par l'appelant, pas encore calculé à partir de vraies réponses |
 
 ## Devoirs, évaluations, bulletins
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/classes/{id}/devoirs` | Enseignant | UC-08 | `bareme: rigide|flexible`, non modifiable après première soumission |
-| POST | `/devoirs/{id}/soumissions` | Élève inscrit | UC-08 | Verrouillage strict à l'échéance, absence → note 0 sans dérogation |
-| POST | `/soumissions/{id}/corriger` | Enseignant | UC-08 | Automatique si barème rigide, manuel si flexible |
-| GET | `/eleves/{id}/bulletins` / `/bulletins/{id}` | Élève, Tuteur, Enseignant rattaché | UC-09 | Calcul automatique de la moyenne |
-| POST | `/bulletins/{id}/valider-passage` | Enseignant (conseil de classe) | UC-09 | Décision lourde (passage/redoublement/diplôme) toujours humaine |
+| POST | `/classes/{id}/devoirs` | Enseignant rattaché | UC-08 | `bareme: rigide|flexible` |
+| POST | `/devoirs/{id}/soumissions` | Élève inscrit | UC-08 | Rejetée (409) si la date limite est dépassée — pas de soumission tardive acceptée. L'absence de ligne de soumission compte pour 0 au calcul du bulletin (pas besoin de tâche planifiée) |
+| POST | `/soumissions/{id}/corriger` | Enseignant propriétaire du devoir | UC-08 | Note manuelle dans les deux cas (barème rigide non auto-corrigé pour l'instant — pas de corrigé-type spécifié par un UC validé) |
+| GET | `/eleves/{id}/bulletins?classe_id=&periode=` | Élève, Tuteur, Enseignant rattaché, A+ | UC-09 | Calcule et enregistre la moyenne (moyenne simple sur les devoirs clos et notés — **pas encore pondérée par les coefficients du référentiel**, à brancher) |
+| POST | `/bulletins/{id}/valider-passage` | Enseignant | UC-09 | Décision lourde (passage/redoublement/diplôme) toujours humaine, jamais déduite du seul calcul |
+| POST | `/referentiels-coefficients` | A++ | UC-09 | Référentiel national, `statut=valide` directement |
+| POST | `/referentiels-coefficients/{id}/proposition` | A+ | UC-09 | Crée une proposition (`statut=proposition_en_attente`) liée au référentiel visé |
+| POST | `/referentiels-coefficients/{id}/valider` | A++ | UC-09 | Seule action qui rend une proposition effective ; remplace l'ancien référentiel |
 
 ## Actes académiques
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/demandes-actes` | Élève, Tuteur | UC-10 | `type: reclamation_note|delivrance_bulletin|delivrance_attestation|delivrance_diplome` |
-| GET | `/demandes-actes/{id}` / `/demandes-actes?statut=&type=` | selon rattachement, A+ | UC-10 | Lecture |
-| POST | `/demandes-actes/{id}/traiter` | A+ | UC-10 | Accepte (document/correction produite) ou rejette (motif obligatoire) |
-| POST | `/demandes-actes/{id}/paiement/webhook` | public (signature Kkiapay vérifiée) | UC-10 | Confirmation de paiement pour les types payants uniquement |
+| POST | `/etablissements/{id}/types-actes` | A+ | UC-10 | Catalogue configurable : nom, prix, pièces requises (texte libre), condition d'éligibilité optionnelle |
+| GET | `/etablissements/{id}/types-actes` | tout utilisateur authentifié concerné | UC-10 | Lecture du catalogue |
+| POST | `/demandes-actes` | Élève | UC-10 | `est_reclamation: true` (gratuite, `reference_evaluation` obligatoire) **ou** `type_acte_id` (payant si `prix>0`, sinon `en_traitement` immédiat). **Limitation** : le tuteur ne peut pas soumettre au nom de l'élève pour l'instant |
+| GET | `/demandes-actes/{id}` | Élève propriétaire, A+ de l'établissement courant de l'élève | UC-10 | Lecture |
+| POST | `/demandes-actes/{id}/traiter` | A+ | UC-10 | Accepte ou rejette (motif obligatoire) ; refusé (409) tant que le paiement n'est pas confirmé pour un acte payant |
+| POST | `/demandes-actes/{id}/paiement/webhook` | public | UC-10 | **L'intégration Kkiapay réelle (vérification de signature) n'est pas construite** — pose seulement la forme de la confirmation, à sécuriser avant mise en production |
 
 ## Hors contrat pour l'instant
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -8,6 +8,7 @@ from app.modules.recrutement.models import (
     StatutContrat,
     StatutDocument,
     StatutPoste,
+    StatutProposition,
 )
 
 
@@ -89,6 +90,7 @@ class ContratCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     syllabus: str
+    date_fin: date
 
 
 class ContratOut(BaseModel):
@@ -97,6 +99,7 @@ class ContratOut(BaseModel):
     id: str
     candidature_id: str
     syllabus: str
+    date_fin: date
     statut: StatutContrat
     signature_horodatage: datetime | None
 
@@ -105,3 +108,19 @@ class ContratSignerRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nom_tape: str
+
+
+class ReconductionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    syllabus: str
+    date_fin: date
+
+
+class PropositionReconductionOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    contrat_precedent_id: str
+    nouveau_contrat_id: str | None
+    statut: StatutProposition

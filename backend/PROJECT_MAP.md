@@ -9,7 +9,10 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/identite/` — comptes utilisateurs (tuteur, auth, OTP)
 - `app/modules/etablissements/` — établissements, classes, admins A+/A++
 - `app/modules/inscriptions/` — inscriptions élève (consentement parental, validation, matricule, compte élève auto-créé)
-- `app/modules/recrutement/` — postes, candidatures (notation IA + LuluFiles + casier judiciaire), contestations, contrats
+- `app/modules/recrutement/` — postes, candidatures (notation IA + LuluFiles + casier judiciaire), contestations, contrats, reconduction
+- `app/modules/pedagogie/` — cours, quiz (pas de banque de questions — voir zones instables)
+- `app/modules/evaluations/` — devoirs, soumissions, référentiels de coefficients (UC-09), bulletins
+- `app/modules/actes/` — catalogue d'actes académiques par établissement, demandes (réclamation ou acte payant)
 - `alembic/` — migrations (une par évolution de schéma, jamais réécrites une fois appliquées)
 - `scripts/` — outils one-shot serveur (seed du tout premier compte A++)
 - `tests/` — pytest, SQLite en mémoire (`StaticPool` pour partager la connexion entre threads), Brevo mocké via `FakeEmailClient` — aucun appel réseau réel dans la suite
@@ -43,6 +46,18 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `conversion.py` — `convertir_en_image()` : convertit la première page d'un PDF en PNG via PyMuPDF (FreeLLM n'accepte que des images en vision) ; passe les images telles quelles.
 - `router.py` — `POST/GET /etablissements/{id}/postes`, `POST /postes/{id}/candidatures` (upload multipart, notation FreeLLM synchrone, casier judiciaire routé en stockage local), `GET /candidatures/{id}`, `POST /candidatures/{id}/contestation`, `POST /contestations/{id}/decision`, `POST /candidatures/{id}/contrat`, `POST /contrats/{id}/signer` (signature **simple**, pas encore qualifiée — voir zones instables).
 
+### app/modules/pedagogie/
+- `models.py` — `Cours`, `Quiz` (voir docstring : pas de banque de questions, non spécifiée par un UC validé), `TentativeQuiz`.
+- `router.py` — `POST/GET /classes/{id}/cours`, `POST /cours/{id}/quiz`, `POST /quiz/{id}/tentatives`. Contient aussi `_verifier_enseignant_rattache` et `_verifier_eleve_inscrit`, réutilisées par `evaluations/router.py`.
+
+### app/modules/evaluations/
+- `models.py` — `Devoir`, `Soumission` (voir docstring : pas de ligne = 0 au bulletin), `ReferentielCoefficient` (gouvernance UC-09, pas encore branchée au calcul), `Bulletin`.
+- `router.py` — `POST /classes/{id}/devoirs`, `POST /devoirs/{id}/soumissions` (rejette si en retard), `POST /soumissions/{id}/corriger`, gouvernance `/referentiels-coefficients*`, `GET /eleves/{id}/bulletins` (calcule et upsert), `POST /bulletins/{id}/valider-passage`.
+
+### app/modules/actes/
+- `models.py` — `TypeActeAcademique` (catalogue par établissement, voir UC-10 révisé), `DemandeActeAcademique`.
+- `router.py` — `POST/GET /etablissements/{id}/types-actes`, `POST /demandes-actes`, `POST /demandes-actes/{id}/paiement/webhook` (stub, pas de vraie vérification Kkiapay), `POST /demandes-actes/{id}/traiter`.
+
 ### alembic/versions/
 - `0001_identite_initial.py` — utilisateurs, tuteurs, otp_verifications.
 - `0002_identite_login_id.py` — ajoute `login_id`/`mot_de_passe_temporaire`, rend `email` optionnel.
@@ -50,6 +65,8 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `0004_inscriptions.py` — eleves, inscriptions.
 - `0005_enseignants.py` — enseignants.
 - `0006_recrutement.py` — postes, criteres_document_poste, candidatures, documents_candidature, verifications_casier_judiciaire, contestations, contrats, propositions_reconduction.
+- `0007_contrats_date_fin.py` — ajoute `date_fin` sur `contrats` (necessaire a la fenetre de reconduction).
+- `0008_pedagogie_evaluations_actes.py` — cours, quiz, tentatives_quiz, devoirs, soumissions, referentiels_coefficients, bulletins, types_acte_academique, demandes_acte_academique.
 Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** downgrade validés manuellement pour 0001).
 
 ### scripts/
@@ -65,12 +82,19 @@ Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** 
 - Compte provisionné (élève, admin établissement) = mot de passe temporaire envoyé par e-mail + `mot_de_passe_temporaire=True`.
 
 ## État d'avancement / zones instables
-- Fait et testé (46 tests) : `/health`, identité (UC-01 + enseignant + auth JWT), établissements/classes, inscriptions (UC-02/UC-03), recrutement (UC-04, UC-04b, UC-05 partiel).
-- Pas commencé : pédagogie/évaluations (UC-06 à UC-09), actes académiques (UC-10 — modèle révisé le 2026-09-24 vers un catalogue configurable par établissement).
+Tous les modules de la Phase 1 (UC-01 à UC-10) ont un premier jet fait et testé (60 tests) : `/health`, identité, établissements/classes, inscriptions, recrutement/contrats (avec reconduction), pédagogie, évaluations, actes académiques.
+
 - **Fragile** : `mot_de_passe_temporaire` n'est qu'un indicateur renvoyé par `/auth/login`, rien ne bloque encore côté serveur tant qu'il n'est pas changé.
-- **Limitations assumées** : `POST /inscriptions` n'accepte que les tuteurs (pas d'auto-inscription ≥16 ans sans tuteur) ; notation FreeLLM synchrone dans la requête (pas de file d'attente/tâche de fond) ; contestation candidature comptée en jours calendaires plutôt qu'ouvrés ; aucun endpoint de révision manuelle pour les documents en `echec_notation`.
-- **Bloqué en attente d'un choix externe** : signature électronique qualifiée (UC-05) — `POST /contrats/{id}/signer` implémente une signature simple en attendant.
-- **Non implémenté** : `POST /contrats/{id}/reconduction` (UC-05b, modèle de données posé), le module `referentiels-coefficients` (UC-09 gouvernance).
+- **Limitations assumées, documentées dans le contrat d'API** :
+  - `POST /inscriptions` et `POST /demandes-actes` n'acceptent que le titulaire direct du compte (tuteur, élève) — pas de soumission pour compte d'un tiers.
+  - Notation FreeLLM synchrone dans la requête (pas de file d'attente/tâche de fond).
+  - Aucun endpoint de révision manuelle pour un document en `echec_notation` (candidature) — la donnée existe, l'action n'existe pas.
+  - Contestation candidature comptée en jours calendaires plutôt qu'ouvrés.
+  - Quiz : pas de banque de questions/réponses (non spécifiée) — le score est fourni par l'appelant.
+  - Barème rigide (devoir) pas réellement auto-corrigé — pas de corrigé-type spécifié, la correction reste manuelle dans les deux cas.
+  - Bulletin : moyenne simple sur les devoirs, **pas encore pondérée** par `ReferentielCoefficient` (la gouvernance UC-09 existe, le calcul ne s'en sert pas encore).
+  - Webhook de paiement des actes académiques : forme posée, **aucune vérification de signature Kkiapay réelle** — à sécuriser avant production.
+- **Bloqué en attente d'un choix externe** : signature électronique qualifiée (UC-05) — `POST /contrats/{id}/signer` implémente une signature simple en attendant un prestataire.
 
 ## Dernière synchronisation
-2026-09-24 — après le module recrutement (UC-04, UC-04b, UC-05 partiel).
+2026-09-24 — après pédagogie, évaluations et actes académiques : premier jet complet de la Phase 1.

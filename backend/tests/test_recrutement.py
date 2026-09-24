@@ -1,4 +1,5 @@
 import io
+from datetime import date, timedelta
 
 import pymupdf
 
@@ -139,7 +140,10 @@ def test_contrat_puis_signature(client, fake_llm_client, enseignant_headers, eta
 
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
-        json={"syllabus": "Programme de mathematiques niveau CE1"},
+        json={
+            "syllabus": "Programme de mathematiques niveau CE1",
+            "date_fin": (date.today() + timedelta(days=300)).isoformat(),
+        },
         headers=etablissement_avec_classe["admin_headers"],
     )
     assert contrat.status_code == 201
@@ -177,3 +181,64 @@ def test_casier_judiciaire_stocke_localement_pas_sur_lulufiles(
     assert fichiers_ecrits[0].read_bytes() == b"contenu sensible du casier"
     # Seuls les 2 documents scores (cv, diplome) doivent avoir transite par LuluFiles.
     assert len(fake_files_client.uploaded) == 2
+
+
+def _creer_contrat_signe(client, fake_llm_client, enseignant_headers, etablissement_avec_classe, date_fin):
+    poste = _creer_poste(
+        client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"]
+    )
+    fake_llm_client.score_par_defaut = 85.0
+    candidature = _postuler(client, enseignant_headers, poste["id"]).json()
+    contrat = client.post(
+        f"/api/v1/candidatures/{candidature['id']}/contrat",
+        json={"syllabus": "Programme initial", "date_fin": date_fin.isoformat()},
+        headers=etablissement_avec_classe["admin_headers"],
+    ).json()
+    client.post(
+        f"/api/v1/contrats/{contrat['id']}/signer",
+        json={"nom_tape": "Moussa Traore"},
+        headers=enseignant_headers,
+    )
+    return contrat
+
+
+def test_reconduction_refusee_hors_fenetre(
+    client, fake_llm_client, enseignant_headers, etablissement_avec_classe
+):
+    contrat = _creer_contrat_signe(
+        client, fake_llm_client, enseignant_headers, etablissement_avec_classe, date.today() + timedelta(days=200)
+    )
+
+    response = client.post(
+        f"/api/v1/contrats/{contrat['id']}/reconduction",
+        json={"syllabus": "Programme reconduit", "date_fin": (date.today() + timedelta(days=565)).isoformat()},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "hors_fenetre"
+
+
+def test_reconduction_dans_la_fenetre_cree_un_nouveau_contrat_a_signer(
+    client, fake_llm_client, enseignant_headers, etablissement_avec_classe
+):
+    contrat = _creer_contrat_signe(
+        client, fake_llm_client, enseignant_headers, etablissement_avec_classe, date.today() + timedelta(days=20)
+    )
+
+    proposition = client.post(
+        f"/api/v1/contrats/{contrat['id']}/reconduction",
+        json={"syllabus": "Programme reconduit", "date_fin": (date.today() + timedelta(days=385)).isoformat()},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    assert proposition.status_code == 201
+    body = proposition.json()
+    assert body["statut"] == "en_attente"
+    assert body["nouveau_contrat_id"] is not None
+
+    signature = client.post(
+        f"/api/v1/contrats/{body['nouveau_contrat_id']}/signer",
+        json={"nom_tape": "Moussa Traore"},
+        headers=enseignant_headers,
+    )
+    assert signature.status_code == 200
+    assert signature.json()["statut"] == "signe"
