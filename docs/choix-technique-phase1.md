@@ -1,0 +1,38 @@
+# LuluSchools — Choix technique, étape 3 (méthode lucio-dev)
+
+Raisonnement complet dans `docs/adr/ADR-001-architecture-backend.md` et `docs/adr/ADR-002-integration-llm-freellm.md`. Ce document liste la stack retenue au complet. Contrainte transversale : **pas de Docker** — chaque choix ci-dessous fonctionne en installation native (venv Python, npm, PostgreSQL natif).
+
+## Imposé par l'utilisateur
+- Backend : **FastAPI** (Python 3.12)
+- Frontend : **React** 18
+- Base de données : **PostgreSQL**
+- Paiement : **Kkiapay**
+- Accès LLM : **FreeLLM** (service personnel de l'utilisateur, API compatible OpenAI) — voir ADR-002
+
+## Backend
+- **ORM / migrations** : SQLAlchemy 2.0 + Alembic
+- **Validation / config** : Pydantic v2 + `pydantic-settings` (lecture de `.env`)
+- **Serveur ASGI** : Uvicorn en dev, Gunicorn (workers Uvicorn) en prod, supervisé par systemd
+- **Auth** : JWT (access + refresh) via `python-jose` ; mots de passe hashés en Argon2 (`argon2-cffi`)
+- **Accès LLM (notation de documents, UC-04, et tout besoin futur)** : SDK `openai` pointé vers FreeLLM — voir ADR-002
+- **Conversion PDF → image** (préalable à l'envoi vision) : `pymupdf` (pip pur, pas de dépendance système)
+- **Génération PDF** (bulletins, actes académiques) : `reportlab` — préféré à WeasyPrint qui nécessite Pango/Cairo au niveau système, pénible à installer sur Windows sans Docker pour isoler la dépendance
+- **Tâches planifiées** (purge casier judiciaire à 30 jours, rappels d'échéance) : APScheduler in-process
+- **Tests** : pytest + httpx (`TestClient`) + pytest-asyncio
+- **Paiement** : appels REST directs à l'API Kkiapay + endpoint webhook de confirmation
+
+## Points opérationnels encore ouverts (pas bloquants pour coder)
+- Fournisseur SMS pour l'OTP du tuteur/élève (UC-01) — à choisir, interface abstraite dès le départ pour rester substituable.
+- Prestataire de signature électronique qualifiée (UC-05) — action administrative déjà notée dans `cas-utilisation-phase-1.md`.
+
+## Frontend
+- **Build** : Vite + TypeScript
+- **Routing** : React Router
+- **Style** : Tailwind CSS
+- Détails d'architecture (state management, data fetching, structure de dossiers) affinés à l'étape 6 avec le skill `react-architecture`, une fois le backend validé de bout en bout — pas avant, pour respecter l'ordre du pipeline.
+
+## Déploiement (aperçu — détaillé à l'étape 8)
+VPS Linux classique : Nginx en reverse proxy + service de fichiers statiques pour le build React, Gunicorn/Uvicorn pour FastAPI, PostgreSQL natif, systemd pour la supervision des process, Certbot pour le SSL. Aucune brique ne nécessite Docker.
+
+## Configuration et secrets
+Tout secret/paramètre d'environnement passe par `.env` (jamais commité — voir `.gitignore`) ; `.env.example` documente les clés attendues sans valeurs réelles.
