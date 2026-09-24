@@ -15,6 +15,7 @@ Raisonnement complet dans `docs/adr/ADR-001-architecture-backend.md` et `docs/ad
 - **Serveur ASGI** : Uvicorn en dev, Gunicorn (workers Uvicorn) en prod, supervisé par systemd
 - **Auth** : JWT (access + refresh) via `python-jose` ; mots de passe hashés en Argon2 (`argon2-cffi`)
 - **Accès LLM (notation de documents, UC-04, et tout besoin futur)** : SDK `openai` pointé vers FreeLLM — voir ADR-002
+- **Stockage de fichiers** (cours, candidatures hors casier judiciaire, devoirs, actes académiques) : **LuluFiles** (client HTTP `httpx`, un seul disque, stockage à plat) — voir ADR-003. Le casier judiciaire reste sur le système de fichiers local du serveur, accès restreint (Art. 395).
 - **Conversion PDF → image** (préalable à l'envoi vision) : `pymupdf` (pip pur, pas de dépendance système)
 - **Génération PDF** (bulletins, actes académiques) : `reportlab` — préféré à WeasyPrint qui nécessite Pango/Cairo au niveau système, pénible à installer sur Windows sans Docker pour isoler la dépendance
 - **Tâches planifiées** (purge casier judiciaire à 30 jours, rappels d'échéance) : APScheduler in-process

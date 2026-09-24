@@ -10,6 +10,7 @@ Construit avec la méthode spec-first [`lucio-dev`](https://github.com/LostedGho
 - **Frontend** : React 18 + Vite + TypeScript, Tailwind CSS
 - **Paiement** : Kkiapay
 - **Accès LLM** (notation automatique de documents, etc.) : [FreeLLM](https://github.com/LostedGhost/freellm-lucio), API compatible OpenAI
+- **Stockage de fichiers** : [LuluFiles](https://lulufiles-api.onrender.com) pour tout document sauf le casier judiciaire (resté local pour raisons légales, Art. 395)
 - **Déploiement** : VPS classique sans conteneurs — Nginx + Gunicorn/Uvicorn + systemd + PostgreSQL natif
 
 Détail complet et justification des choix : [docs/choix-technique-phase1.md](docs/choix-technique-phase1.md) et les ADR dans [docs/adr/](docs/adr/).
