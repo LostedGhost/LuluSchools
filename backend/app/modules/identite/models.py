@@ -30,9 +30,13 @@ class Utilisateur(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     nom: Mapped[str] = mapped_column(String(100))
     prenom: Mapped[str] = mapped_column(String(100))
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    # Identifiant de connexion : l'e-mail pour tuteur/enseignant/admin, le matricule pour un eleve
+    # (compte auto-cree sans e-mail propre a l'inscription, voir UC-02/UC-03).
+    login_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     telephone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     mot_de_passe_hash: Mapped[str] = mapped_column(String(255))
+    mot_de_passe_temporaire: Mapped[bool] = mapped_column(Boolean, default=False)
     role: Mapped[RoleUtilisateur] = mapped_column(Enum(RoleUtilisateur))
     email_verifie: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

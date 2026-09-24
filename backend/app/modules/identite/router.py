@@ -1,15 +1,31 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
-from app.core.security import generate_otp_code, generate_salt, hash_otp_code, hash_password
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    generate_otp_code,
+    generate_salt,
+    hash_otp_code,
+    hash_password,
+    verify_password,
+)
 from app.modules.identite.models import OtpVerification, RoleUtilisateur, Tuteur, Utilisateur
 from app.modules.identite.schemas import (
+    ChangePasswordRequest,
+    LoginRequest,
+    MeOut,
     OtpVerifyRequest,
     OtpVerifyResponse,
+    RefreshRequest,
+    TokenPair,
     TuteurCreate,
     TuteurOut,
 )
@@ -43,6 +59,7 @@ def creer_compte_tuteur(
     utilisateur = Utilisateur(
         nom=payload.nom,
         prenom=payload.prenom,
+        login_id=email_normalise,
         email=email_normalise,
         telephone=payload.telephone,
         mot_de_passe_hash=hash_password(payload.mot_de_passe),
@@ -126,4 +143,78 @@ def verifier_otp(payload: OtpVerifyRequest, db: Session = Depends(get_db)) -> Ut
     utilisateur.email_verifie = True
     db.commit()
     db.refresh(utilisateur)
+    return utilisateur
+
+
+auth_router = APIRouter(prefix="/auth", tags=["identite"])
+me_router = APIRouter(tags=["identite"])
+
+
+@auth_router.post("/login", response_model=TokenPair)
+def se_connecter(payload: LoginRequest, db: Session = Depends(get_db)) -> dict:
+    utilisateur = db.query(Utilisateur).filter(Utilisateur.login_id == payload.identifiant).first()
+    if utilisateur is None or not verify_password(payload.mot_de_passe, utilisateur.mot_de_passe_hash):
+        raise _api_error(
+            status.HTTP_401_UNAUTHORIZED, "identifiants_invalides", "Identifiant ou mot de passe incorrect."
+        )
+
+    if not utilisateur.email_verifie:
+        raise _api_error(
+            status.HTTP_403_FORBIDDEN, "compte_non_verifie", "Ce compte n'est pas encore verifie."
+        )
+
+    return {
+        "access_token": create_access_token(utilisateur.id, utilisateur.role.value),
+        "refresh_token": create_refresh_token(utilisateur.id),
+        "doit_changer_mot_de_passe": utilisateur.mot_de_passe_temporaire,
+    }
+
+
+@auth_router.post("/refresh", response_model=TokenPair)
+def rafraichir_token(payload: RefreshRequest, db: Session = Depends(get_db)) -> dict:
+    try:
+        decoded = decode_token(payload.refresh_token)
+    except JWTError as exc:
+        raise _api_error(
+            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Refresh token invalide ou expire."
+        ) from exc
+
+    if decoded.get("type") != "refresh":
+        raise _api_error(
+            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Ce token n'est pas un refresh token."
+        )
+
+    utilisateur = db.get(Utilisateur, decoded.get("sub"))
+    if utilisateur is None:
+        raise _api_error(
+            status.HTTP_401_UNAUTHORIZED, "utilisateur_introuvable", "Utilisateur introuvable."
+        )
+
+    return {
+        "access_token": create_access_token(utilisateur.id, utilisateur.role.value),
+        "refresh_token": create_refresh_token(utilisateur.id),
+        "doit_changer_mot_de_passe": utilisateur.mot_de_passe_temporaire,
+    }
+
+
+@auth_router.post("/change-password", response_model=MeOut)
+def changer_mot_de_passe(
+    payload: ChangePasswordRequest,
+    utilisateur: Utilisateur = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Utilisateur:
+    if not verify_password(payload.ancien_mot_de_passe, utilisateur.mot_de_passe_hash):
+        raise _api_error(
+            status.HTTP_401_UNAUTHORIZED, "mot_de_passe_incorrect", "Ancien mot de passe incorrect."
+        )
+
+    utilisateur.mot_de_passe_hash = hash_password(payload.nouveau_mot_de_passe)
+    utilisateur.mot_de_passe_temporaire = False
+    db.commit()
+    db.refresh(utilisateur)
+    return utilisateur
+
+
+@me_router.get("/me", response_model=MeOut)
+def mon_profil(utilisateur: Utilisateur = Depends(get_current_user)) -> Utilisateur:
     return utilisateur

@@ -25,8 +25,9 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 |---|---|---|---|---|
 | POST | `/auth/tuteurs` | public | UC-01 | Crée un compte tuteur, déclenche l'envoi de l'OTP par e-mail (Brevo) |
 | POST | `/auth/tuteurs/verify-otp` | public | UC-01 | Valide le code à 6 chiffres (10 min, 5 tentatives max), active le compte |
-| POST | `/auth/login` | public | — | Retourne access + refresh token |
+| POST | `/auth/login` | public | — | `identifiant` (e-mail pour tuteur/enseignant/admin, matricule pour un élève) + mot de passe → access + refresh token. Refusé (403) si le compte n'est pas encore vérifié. |
 | POST | `/auth/refresh` | public (refresh token) | — | Renouvelle l'access token |
+| POST | `/auth/change-password` | tout utilisateur authentifié | — | Change le mot de passe ; lève le drapeau `doit_changer_mot_de_passe` (utile pour les comptes élève provisionnés avec un mot de passe temporaire) |
 | GET | `/me` | tout utilisateur authentifié | — | Profil de l'utilisateur courant |
 
 ## Établissements, classes, campagnes
