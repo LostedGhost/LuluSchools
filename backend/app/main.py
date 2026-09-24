@@ -1,7 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import HTTPException as FastAPIHTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.modules.identite.router import router as identite_router
 from app.system.router import router as system_router
 
 app = FastAPI(title="LuluSchools API", version="0.1.0")
@@ -14,4 +19,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(FastAPIHTTPException)
+async def http_exception_handler(request: Request, exc: FastAPIHTTPException) -> JSONResponse:
+    if isinstance(exc.detail, dict) and "error" in exc.detail:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": "http_error", "message": str(exc.detail), "details": {}}},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "validation_error",
+                "message": "Donnees invalides.",
+                "details": {"fields": jsonable_encoder(exc.errors())},
+            }
+        },
+    )
+
+
 app.include_router(system_router, prefix="/api/v1")
+app.include_router(identite_router, prefix="/api/v1")

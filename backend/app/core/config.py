@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     kkiapay_secret: str = ""
     kkiapay_sandbox: bool = True
 
-    sms_provider_api_key: str = ""
+    brevo_api_key: str = ""
+    brevo_sender_email: str = "no-reply@luluschools.example"
+    brevo_sender_name: str = "LuluSchools"
 
     casier_judiciaire_storage_path: str = "./casier-judiciaire"
 

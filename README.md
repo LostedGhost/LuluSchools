@@ -42,7 +42,8 @@ cd backend
 python -m venv .venv
 ./.venv/Scripts/activate   # ou source .venv/bin/activate sous Linux/macOS
 pip install -r requirements.txt
-pytest                      # lance la suite de tests
+alembic upgrade head         # applique les migrations sur la base PostgreSQL configurée dans .env
+pytest                       # lance la suite de tests (base SQLite en mémoire, aucune dépendance externe)
 uvicorn app.main:app --reload   # démarre l'API sur http://localhost:8000
 ```
 
@@ -50,4 +51,4 @@ Le frontend n'existe pas encore (étape 6 du pipeline, après validation complè
 
 ## Statut
 
-Étapes 1 (cas d'utilisation), 2 (UML) et 3 (choix technique et contrat d'API) validées. Étape 4 (backend, endpoint par endpoint) démarrée : `GET /api/v1/health` développé et testé (3 tests, passants).
+Étapes 1 (cas d'utilisation), 2 (UML) et 3 (choix technique et contrat d'API) validées. Étape 4 (backend, endpoint par endpoint) en cours : `GET /api/v1/health`, `POST /api/v1/auth/tuteurs` et `POST /api/v1/auth/tuteurs/verify-otp` développés, testés (16 tests, passants) et migrés (Alembic).
