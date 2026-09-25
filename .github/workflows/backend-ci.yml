@@ -50,7 +50,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Verifier que les migrations Alembic s'appliquent sans erreur (Postgres)
-        run: alembic upgrade head
+        run: python -m alembic upgrade head
         env:
           DATABASE_URL: postgresql+psycopg://luluschools:luluschools@localhost:5432/luluschools_ci
           JWT_SECRET_KEY: ci-only-secret
