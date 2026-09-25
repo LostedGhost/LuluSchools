@@ -11,6 +11,7 @@ import type { DemandeActeOut, StatutDemandeActe, TypeActeOut } from "../../types
 import { Badge, Card, ErrorBanner, Field, Select, TextArea, TextInput, Btn, EmptyState } from "../../components/ui";
 import { KkiapayButton } from "../../components/KkiapayButton";
 import { FileStack, FlagTriangleRight, ScrollText } from "lucide-react";
+import { estRempli } from "../../utils/validation";
 
 const LIBELLES_STATUT: Record<StatutDemandeActe, { label: string; tone: "neutral" | "success" | "error" | "pending" | "info" }> = {
   soumise: { label: "En attente de paiement", tone: "pending" },
@@ -29,6 +30,7 @@ export function ActesPage() {
   const [motif, setMotif] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [champErreurs, setChampErreurs] = useState<{ typeActeId?: string; referenceEvaluation?: string; motif?: string }>({});
 
   const charger = () => {
     mesDemandesActes()
@@ -49,6 +51,19 @@ export function ActesPage() {
   const soumettre = async (e: FormEvent) => {
     e.preventDefault();
     setErreur(null);
+
+    const erreurs: typeof champErreurs = {};
+    if (mode === "catalogue") {
+      if (!estRempli(typeActeId)) erreurs.typeActeId = "Veuillez choisir un type d'acte.";
+    } else {
+      if (!estRempli(referenceEvaluation)) erreurs.referenceEvaluation = "Référence requise.";
+      if (!estRempli(motif) || motif.trim().length < 10) {
+        erreurs.motif = "Veuillez détailler le motif (10 caractères minimum).";
+      }
+    }
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       if (mode === "catalogue") {
@@ -146,13 +161,12 @@ export function ActesPage() {
               </Btn>
             </div>
 
-            <form onSubmit={soumettre} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <form onSubmit={soumettre} noValidate style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {mode === "catalogue" ? (
-                <Field label="Type d'acte" required>
+                <Field label="Type d'acte" required error={champErreurs.typeActeId}>
                   <Select
                     value={typeActeId}
                     onChange={(e: any) => setTypeActeId(e.target.value)}
-                    required
                   >
                     <option value="">Choisir...</option>
                     {types.map((t) => (
@@ -169,19 +183,17 @@ export function ActesPage() {
                 </Field>
               ) : (
                 <>
-                  <Field label="Référence de l'évaluation contestée" required>
+                  <Field label="Référence de l'évaluation contestée" required error={champErreurs.referenceEvaluation}>
                     <TextInput
                       value={referenceEvaluation}
                       onChange={(e: any) => setReferenceEvaluation(e.target.value)}
                       placeholder="ex: identifiant du devoir ou du bulletin"
-                      required
                     />
                   </Field>
-                  <Field label="Motif de la réclamation" required>
+                  <Field label="Motif de la réclamation" required error={champErreurs.motif}>
                     <TextArea
                       value={motif}
                       onChange={(e: any) => setMotif(e.target.value)}
-                      required
                     />
                   </Field>
                 </>
