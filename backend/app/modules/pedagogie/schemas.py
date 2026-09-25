@@ -22,7 +22,14 @@ class CoursOut(BaseModel):
     titre: str
     chapitre: str
     format: FormatCours
+    contenu_texte: str | None
     lulufiles_file_id: str | None
+
+
+class LienFichierOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
 
 
 class QuizCreate(BaseModel):

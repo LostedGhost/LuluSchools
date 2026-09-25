@@ -6,6 +6,7 @@ from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.modules.identite.models import Enseignant
 
 
 def _new_uuid() -> str:
@@ -95,6 +96,18 @@ class Candidature(Base):
     verification_casier: Mapped["VerificationCasierJudiciaire | None"] = relationship(
         back_populates="candidature", uselist=False
     )
+    enseignant: Mapped[Enseignant] = relationship()
+
+    @property
+    def enseignant_nom(self) -> str:
+        """Bug reel corrige (audit frontend, 2026-09-25) : CandidatureOut n'exposait que
+        des id, rendant une candidature litteralement anonyme pour l'A+ qui doit pourtant
+        decider d'un recrutement reel."""
+        return self.enseignant.utilisateur.nom
+
+    @property
+    def enseignant_prenom(self) -> str:
+        return self.enseignant.utilisateur.prenom
 
 
 class DocumentCandidature(Base):

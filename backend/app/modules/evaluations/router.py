@@ -22,6 +22,7 @@ from app.modules.evaluations.schemas import (
     CorrectionRequest,
     DevoirCreate,
     DevoirOut,
+    QuestionDevoirAvecBaremeOut,
     ReferentielCreate,
     ReferentielOut,
     ReferentielPropositionCreate,
@@ -291,6 +292,23 @@ def corriger_soumission(
     db.commit()
     db.refresh(soumission)
     return soumission
+
+
+@router.get("/devoirs/{devoir_id}/questions-bareme", response_model=list[QuestionDevoirAvecBaremeOut])
+def lister_questions_avec_bareme(
+    devoir_id: str, db: Session = Depends(get_db), enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT))
+) -> list[QuestionDevoir]:
+    """Bug reel corrige (audit frontend, 2026-09-25) : l'ecran de revision manuelle
+    affichait un champ de points par question sans jamais montrer le bareme que
+    l'enseignant avait lui-meme redige pour l'IA - il devait s'en souvenir ou rouvrir le
+    devoir ailleurs. Reserve au proprietaire du devoir : voir la note sur
+    QuestionDevoirAvecBaremeOut pour pourquoi ce n'est jamais mis sur DevoirOut."""
+    devoir = db.get(Devoir, devoir_id)
+    if devoir is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+    if devoir.enseignant_id != enseignant.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
+    return sorted(devoir.questions, key=lambda q: q.ordre)
 
 
 @router.get("/devoirs/{devoir_id}/soumissions-a-revoir", response_model=list[SoumissionOut])

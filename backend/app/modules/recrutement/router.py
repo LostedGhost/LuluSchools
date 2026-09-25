@@ -37,6 +37,7 @@ from app.modules.recrutement.schemas import (
     ContestationOut,
     ContratCreate,
     ContratOut,
+    LienFichierOut,
     NotationManuelleRequest,
     PosteCreate,
     PosteOut,
@@ -378,6 +379,37 @@ def obtenir_candidature(
     return candidature
 
 
+@router.get("/documents-candidature/{document_id}/lien", response_model=LienFichierOut)
+def obtenir_lien_document_candidature(
+    document_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(get_current_user),
+) -> LienFichierOut:
+    """Bug reel corrige : ni le candidat ni l'A+ n'avaient jusqu'ici de moyen de
+    consulter le document lui-meme (seule la note IA etait exposee) - rend l'ecran de
+    revision manuelle (UC-04) et la verification d'un A+ effectivement utilisables."""
+    document = db.get(DocumentCandidature, document_id)
+    if document is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Document introuvable.")
+    candidature = db.get(Candidature, document.candidature_id)
+    if utilisateur.role == RoleUtilisateur.ENSEIGNANT and candidature.enseignant_id != utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce document ne vous appartient pas.")
+    if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        poste = db.get(Poste, candidature.poste_id)
+        _verifier_admin_de_l_etablissement(db, utilisateur, poste.etablissement_id)
+    if not document.lulufiles_file_id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce document n'a pas de fichier associe.")
+
+    try:
+        url = files_client.get_signed_link(document.lulufiles_file_id, disposition="inline")
+    except FileStorageError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez reessayer."
+        ) from exc
+    return LienFichierOut(url=url)
+
+
 @router.post(
     "/candidatures/{candidature_id}/contestation",
     response_model=ContestationOut,
@@ -520,6 +552,32 @@ def signer_contrat(
     db.commit()
     db.refresh(contrat)
     return contrat
+
+
+@router.get("/contrats/{contrat_id}/lien-signature", response_model=LienFichierOut)
+def obtenir_lien_signature_contrat(
+    contrat_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(get_current_user),
+) -> LienFichierOut:
+    contrat = db.get(Contrat, contrat_id)
+    if contrat is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Contrat introuvable.")
+    if utilisateur.role == RoleUtilisateur.ENSEIGNANT and contrat.enseignant_id != utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce contrat ne vous appartient pas.")
+    if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        _verifier_admin_de_l_etablissement(db, utilisateur, contrat.etablissement_id)
+    if not contrat.signature_image_lulufiles_id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce contrat n'est pas encore signe.")
+
+    try:
+        url = files_client.get_signed_link(contrat.signature_image_lulufiles_id, disposition="inline")
+    except FileStorageError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez reessayer."
+        ) from exc
+    return LienFichierOut(url=url)
 
 
 @router.post(

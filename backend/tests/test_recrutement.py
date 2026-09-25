@@ -72,6 +72,10 @@ def test_candidature_avec_scores_au_dessus_du_seuil_calcule_le_score(
     assert body["score"] == 80.0
     assert body["statut"] == "en_evaluation"
     assert all(d["statut"] == "note" for d in body["documents"])
+    # Bug reel corrige : une candidature litteralement anonyme (id seulement) etait
+    # inutilisable pour qu'un A+ decide reellement d'un recrutement.
+    assert body["enseignant_nom"] == "Traore"
+    assert body["enseignant_prenom"] == "Moussa"
 
 
 def test_candidature_sous_le_seuil_est_rejetee(
@@ -181,6 +185,47 @@ def test_contrat_puis_signature(client, fake_llm_client, enseignant_headers, eta
     assert signature.status_code == 200
     assert signature.json()["signature_image_lulufiles_id"] is not None
     assert signature.json()["statut"] == "signe"
+
+    # Bug reel corrige : ni l'enseignant ni l'A+ n'avaient de moyen de consulter la
+    # signature elle-meme une fois deposee.
+    lien_enseignant = client.get(f"/api/v1/contrats/{contrat_id}/lien-signature", headers=enseignant_headers)
+    assert lien_enseignant.status_code == 200
+    assert lien_enseignant.json()["url"].startswith("https://lulufiles-api.onrender.com/")
+    lien_admin = client.get(
+        f"/api/v1/contrats/{contrat_id}/lien-signature", headers=etablissement_avec_classe["admin_headers"]
+    )
+    assert lien_admin.status_code == 200
+
+
+def test_lien_signature_refuse_avant_signature(client, fake_llm_client, enseignant_headers, etablissement_avec_classe):
+    poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
+    fake_llm_client.score_par_defaut = 85.0
+    candidature = _postuler(client, enseignant_headers, poste["id"]).json()
+    contrat = client.post(
+        f"/api/v1/candidatures/{candidature['id']}/contrat",
+        json={"syllabus": "Programme", "date_fin": (date.today() + timedelta(days=300)).isoformat()},
+        headers=etablissement_avec_classe["admin_headers"],
+    ).json()
+
+    reponse = client.get(f"/api/v1/contrats/{contrat['id']}/lien-signature", headers=enseignant_headers)
+    assert reponse.status_code == 404
+
+
+def test_lien_document_candidature_visible_par_le_candidat_et_l_admin(
+    client, fake_llm_client, enseignant_headers, etablissement_avec_classe
+):
+    poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
+    fake_llm_client.score_par_defaut = 85.0
+    candidature = _postuler_et_relire(client, enseignant_headers, poste["id"]).json()
+    document_id = candidature["documents"][0]["id"]
+    assert candidature["documents"][0]["lulufiles_file_id"] is not None
+
+    lien_candidat = client.get(f"/api/v1/documents-candidature/{document_id}/lien", headers=enseignant_headers)
+    assert lien_candidat.status_code == 200
+    lien_admin = client.get(
+        f"/api/v1/documents-candidature/{document_id}/lien", headers=etablissement_avec_classe["admin_headers"]
+    )
+    assert lien_admin.status_code == 200
 
 
 def test_casier_judiciaire_stocke_localement_pas_sur_lulufiles(

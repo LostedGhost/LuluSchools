@@ -22,6 +22,21 @@ class QuestionDevoirOut(BaseModel):
     points_max: float
 
 
+class QuestionDevoirAvecBaremeOut(BaseModel):
+    """Reservee a l'enseignant proprietaire du devoir (ecran de revision manuelle) -
+    jamais exposee sur DevoirOut/QuestionDevoirOut, qui sont aussi lus par l'eleve avant
+    qu'il ait repondu (GET /devoirs/{id} et GET /classes/{id}/devoirs sont ouverts a
+    ELEVE) : y ajouter bareme_reponse revelerait la reponse attendue avant soumission."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    ordre: int
+    enonce: str
+    bareme_reponse: str
+    points_max: float
+
+
 class DevoirCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

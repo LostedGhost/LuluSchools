@@ -20,6 +20,7 @@ from app.modules.pedagogie.models import (
 )
 from app.modules.pedagogie.schemas import (
     CoursOut,
+    LienFichierOut,
     QuestionElProfessorCreate,
     QuizCreate,
     QuizOut,
@@ -130,6 +131,36 @@ def lister_cours(
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
     return db.query(Cours).filter(Cours.classe_id == classe_id).all()
+
+
+@router.get("/cours/{cours_id}/lien-fichier", response_model=LienFichierOut)
+def obtenir_lien_fichier_cours(
+    cours_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> LienFichierOut:
+    """Bug reel corrige : `Cours.lulufiles_file_id` etait stocke a l'upload (UC-06) mais
+    jamais transforme en lien consultable - un cours pdf/audio/video n'avait aucun moyen
+    d'etre effectivement lu par un eleve. Meme controle d'acces que lister_cours."""
+    cours = db.get(Cours, cours_id)
+    if cours is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        _verifier_eleve_inscrit(db, utilisateur.id, cours.classe_id)
+    elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
+        classe = db.get(Classe, cours.classe_id)
+        _verifier_enseignant_rattache(db, utilisateur, classe.etablissement_id)
+    if not cours.lulufiles_file_id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce cours n'a pas de fichier associe.")
+
+    try:
+        url = files_client.get_signed_link(cours.lulufiles_file_id, disposition="inline")
+    except FileStorageError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez reessayer."
+        ) from exc
+    return LienFichierOut(url=url)
 
 
 @router.get("/cours/{cours_id}/quiz", response_model=list[QuizOut])

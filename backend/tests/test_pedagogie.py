@@ -10,6 +10,40 @@ def test_publier_cours_texte_et_le_lister(client, classe_avec_enseignant_et_elev
     liste = client.get(f"/api/v1/classes/{ctx['classe']['id']}/cours", headers=ctx["eleve_headers"])
     assert liste.status_code == 200
     assert len(liste.json()) == 1
+    # Bug reel corrige : le contenu texte d'un cours doit etre lisible par l'eleve,
+    # pas seulement stocke pour la generation de quiz en interne.
+    assert liste.json()[0]["contenu_texte"] == "1/2 + 1/2 = 1"
+
+
+def test_lien_fichier_cours_pdf(client, classe_avec_enseignant_et_eleve):
+    import io
+
+    ctx = classe_avec_enseignant_et_eleve
+    cours = client.post(
+        f"/api/v1/classes/{ctx['classe']['id']}/cours",
+        data={"titre": "Le corrige", "chapitre": "Chapitre 3", "format": "pdf"},
+        files={"fichier": ("corrige.pdf", io.BytesIO(b"contenu-pdf"), "application/pdf")},
+        headers=ctx["enseignant_headers"],
+    ).json()
+
+    lien_eleve = client.get(f"/api/v1/cours/{cours['id']}/lien-fichier", headers=ctx["eleve_headers"])
+    assert lien_eleve.status_code == 200
+    assert lien_eleve.json()["url"].startswith("https://lulufiles-api.onrender.com/")
+
+    lien_enseignant = client.get(f"/api/v1/cours/{cours['id']}/lien-fichier", headers=ctx["enseignant_headers"])
+    assert lien_enseignant.status_code == 200
+
+
+def test_lien_fichier_refuse_pour_cours_texte_sans_fichier(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    cours = client.post(
+        f"/api/v1/classes/{ctx['classe']['id']}/cours",
+        data={"titre": "Sans fichier", "chapitre": "Chapitre 3", "format": "texte", "contenu_texte": "..."},
+        headers=ctx["enseignant_headers"],
+    ).json()
+
+    reponse = client.get(f"/api/v1/cours/{cours['id']}/lien-fichier", headers=ctx["eleve_headers"])
+    assert reponse.status_code == 404
 
 
 def test_eleve_non_inscrit_ne_peut_pas_lister_les_cours(

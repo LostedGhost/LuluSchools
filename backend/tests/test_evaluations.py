@@ -80,6 +80,18 @@ def test_revision_manuelle_apres_echec_de_correction(client, fake_llm_client, cl
     assert a_revoir.status_code == 200
     assert len(a_revoir.json()) == 1
 
+    # Bug reel corrige : l'enseignant doit pouvoir revoir son propre bareme pendant la
+    # correction manuelle, sans jamais l'exposer a l'eleve sur le meme devoir.
+    bareme_enseignant = client.get(
+        f"/api/v1/devoirs/{devoir['id']}/questions-bareme", headers=ctx["enseignant_headers"]
+    )
+    assert bareme_enseignant.status_code == 200
+    assert bareme_enseignant.json()[0]["bareme_reponse"] == "La reponse attendue est 2."
+
+    refus_eleve = client.get(f"/api/v1/devoirs/{devoir['id']}/questions-bareme", headers=ctx["eleve_headers"])
+    assert refus_eleve.status_code == 403
+    assert "bareme_reponse" not in devoir["questions"][0]
+
     correction = client.post(
         f"/api/v1/soumissions/{soumission['id']}/corriger",
         json={

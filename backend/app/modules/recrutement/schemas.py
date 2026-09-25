@@ -52,6 +52,13 @@ class DocumentCandidatureOut(BaseModel):
     type_document: str
     note_ia: float | None
     statut: StatutDocument
+    lulufiles_file_id: str | None
+
+
+class LienFichierOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
 
 
 class CandidatureOut(BaseModel):
@@ -62,6 +69,8 @@ class CandidatureOut(BaseModel):
     statut: StatutCandidature
     score: float | None
     documents: list[DocumentCandidatureOut]
+    enseignant_nom: str
+    enseignant_prenom: str
 
 
 class ContestationCreate(BaseModel):

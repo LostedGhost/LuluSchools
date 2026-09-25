@@ -60,7 +60,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | GET | `/etablissements/{id}/postes` | tout utilisateur authentifié | UC-04 | Liste les postes de l'établissement (découverte pour un enseignant candidat) |
 | POST | `/etablissements/{id}/postes` | A+ | UC-04 | Définit les critères par type de document (coefficient, seuil minimal) |
 | GET | `/postes/{id}` | tout utilisateur authentifié | UC-04 | Lecture |
-| GET | `/postes/{id}/candidatures` | A+ de l'établissement du poste | UC-04, UC-05 | Toutes les candidatures du poste — nécessaire pour que l'A+ puisse créer un contrat (`POST /candidatures/{id}/contrat`) sans déjà connaître l'id de la candidature |
+| GET | `/postes/{id}/candidatures` | A+ de l'établissement du poste | UC-04, UC-05 | Toutes les candidatures du poste — nécessaire pour que l'A+ puisse créer un contrat (`POST /candidatures/{id}/contrat`) sans déjà connaître l'id de la candidature. Inclut `enseignant_nom`/`enseignant_prenom` (**ajouté a posteriori** : une candidature réduite à des identifiants était inexploitable pour une vraie décision de recrutement). |
 | GET | `/mes-candidatures` | Enseignant | UC-04 | Historique des candidatures de l'enseignant courant |
 | GET | `/mes-contrats` | Enseignant | UC-05 | Contrats de l'enseignant courant (statut, échéance) |
 | GET | `/etablissements/{id}/contestations-en-attente` | A+ | UC-04b | Contestations `en_attente` de décision pour l'établissement |
@@ -73,13 +73,16 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | POST | `/contrats/{id}/reconduction` | A+ | UC-05b | Fenêtre de 30 jours avant `date_fin` ; crée un nouveau contrat en attente de signature |
 | GET | `/candidatures/en-attente-revision` | A+ | UC-04 | Écran de révision manuelle : candidatures avec au moins un document en échec de notation IA |
 | POST | `/documents-candidature/{id}/noter-manuellement` | A+ | UC-04 | Note manuelle (synchrone), puis recalcule automatiquement le score/statut de la candidature |
+| GET | `/documents-candidature/{id}/lien` | Enseignant propriétaire, ou A+ de l'établissement du poste | UC-04 | **Ajouté a posteriori (audit frontend, 2026-09-25)** : lien signé LuluFiles vers le document lui-même — `note_ia` seule ne rendait pas l'écran de révision manuelle réellement utilisable. |
+| GET | `/contrats/{id}/lien-signature` | Enseignant titulaire, ou A+ de l'établissement | UC-05 | **Ajouté a posteriori** : lien signé vers l'image de signature déposée par `POST /contrats/{id}/signer`, jusque-là jamais consultable. |
 
 ## Pédagogie
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
 | POST | `/classes/{id}/cours` | Enseignant rattaché (contrat `signe` avec l'établissement de la classe) | UC-06 | `multipart/form-data` (titre, chapitre, format, contenu_texte ou fichier). 50 Mo max, upload vers LuluFiles si fichier fourni |
-| GET | `/classes/{id}/cours` | Élève inscrit (`inscription validee`), Enseignant rattaché, A+ | UC-06 | Lecture |
+| GET | `/classes/{id}/cours` | Élève inscrit (`inscription validee`), Enseignant rattaché, A+ | UC-06 | Lecture, inclut désormais `contenu_texte` (**corrigé a posteriori, audit frontend 2026-09-25** : absent du premier jet, rendait un cours de format texte illisible par l'élève) |
+| GET | `/cours/{id}/lien-fichier` | Élève inscrit, Enseignant rattaché | UC-06 | **Ajouté a posteriori** : lien signé LuluFiles pour un cours pdf/audio/vidéo — `lulufiles_file_id` était stocké mais jamais transformé en lien consultable (`LuluFilesClient.get_signed_link` n'était appelé nulle part) |
 | GET | `/cours/{id}/quiz` | tout utilisateur authentifié (élève inscrit vérifié) | UC-07 | Liste les quiz du cours |
 | POST | `/cours/{id}/quiz` | Enseignant propriétaire du cours | UC-07 | Questions **générées par FreeLLM** (QCM à 4 choix) à partir de `cours.contenu_texte` (obligatoire, sinon 422) ; seuil de réussite configurable, défaut 80% |
 | GET | `/quiz/{id}` | Élève inscrit | UC-07 | Questions sans la bonne réponse (jamais exposée avant la tentative) |
@@ -96,6 +99,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | POST | `/devoirs/{id}/soumissions` | Élève inscrit | UC-08 | `reponses: [{question_id, texte_reponse}, ...]`, une par question exactement. Rejetée (409) si la date limite est dépassée. Correction **automatique par FreeLLM**, exécutée **en arrière-plan** (`BackgroundTasks`, un appel réseau par question — pas de SLA, ADR-002) : la réponse renvoie `statut=en_correction`, à relire via `GET /soumissions/{id}` une fois le traitement terminé (rigide = tout ou rien, flexible = crédit partiel) ; en cas d'échec, `statut=echec_correction` et la soumission attend une révision manuelle |
 | GET | `/soumissions/{id}` | Élève propriétaire, Enseignant du devoir, A+ | UC-08 | Permet de suivre l'avancement de la correction en arrière-plan |
 | GET | `/devoirs/{id}/soumissions-a-revoir` | Enseignant propriétaire | UC-08 | Écran de révision manuelle : soumissions en `echec_correction` |
+| GET | `/devoirs/{id}/questions-bareme` | Enseignant propriétaire | UC-08 | **Ajouté a posteriori (audit frontend, 2026-09-25)** : expose `bareme_reponse` par question pour l'écran de révision manuelle — jamais sur `DevoirOut`/`GET /devoirs/{id}`, qui restent accessibles à l'Élève avant sa réponse (l'y exposer aurait révélé la réponse attendue). |
 | POST | `/soumissions/{id}/corriger` | Enseignant propriétaire du devoir | UC-08 | `reponses: [{question_id, points_obtenus}, ...]` — sert de filet de secours (échec IA) et de surcharge possible d'une correction déjà faite |
 | GET | `/eleves/{id}/bulletins?classe_id=&periode=` | Élève, Tuteur, Enseignant rattaché, A+ | UC-09 | Calcule et enregistre la **moyenne pondérée** : chaque devoir est normalisé sur 100 puis pondéré par le coefficient (niveau, matière) du référentiel validé en vigueur (défaut 1.0 si aucun référentiel ne couvre la matière). Un devoir compte dès qu'il est corrigé, même avant son échéance formelle ; sans soumission, il ne compte comme 0 qu'une fois l'échéance passée |
 | POST | `/bulletins/{id}/valider-passage` | Enseignant | UC-09 | Décision lourde (passage/redoublement/diplôme) toujours humaine, jamais déduite du seul calcul |
