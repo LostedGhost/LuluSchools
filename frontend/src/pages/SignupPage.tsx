@@ -9,6 +9,7 @@ import {
 import { messageErreur } from "../api/client";
 import { Btn, ErrorBanner, Field, TextInput } from "../components/ui";
 import { CheckCircle, Mail, Users, BookOpen } from "lucide-react";
+import { estEmailValide, estRempli, erreurMotDePasse } from "../utils/validation";
 
 /* ── Stepper ── */
 function StepDot({
@@ -112,6 +113,7 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
   const [code, setCode] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [champErreurs, setChampErreurs] = useState<{ prenom?: string; nom?: string; email?: string; motDePasse?: string; code?: string }>({});
 
   const creerCompte = role === "tuteur" ? creerCompteTuteur : creerCompteEnseignant;
   const verifierOtp = role === "tuteur" ? verifierOtpTuteur : verifierOtpEnseignant;
@@ -124,6 +126,16 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
   const soumettreInscription = async (e: FormEvent) => {
     e.preventDefault();
     setErreur(null);
+
+    const erreurs: typeof champErreurs = {};
+    if (!estRempli(prenom)) erreurs.prenom = "Prénom requis.";
+    if (!estRempli(nom)) erreurs.nom = "Nom requis.";
+    if (!estEmailValide(email)) erreurs.email = "Adresse e-mail invalide.";
+    const erreurMdp = erreurMotDePasse(motDePasse);
+    if (erreurMdp) erreurs.motDePasse = erreurMdp;
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       await creerCompte({ nom, prenom, email, mot_de_passe: motDePasse });
@@ -138,6 +150,13 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
   const soumettreOtp = async (e: FormEvent) => {
     e.preventDefault();
     setErreur(null);
+
+    if (code.length !== 6) {
+      setChampErreurs({ code: "Le code doit contenir exactement 6 chiffres." });
+      return;
+    }
+    setChampErreurs({});
+
     setEnCours(true);
     try {
       await verifierOtp(email, code);
@@ -215,32 +234,29 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
           <form onSubmit={soumettreInscription} noValidate className="anim-slide-up">
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <Field label="Prénom" required>
+                <Field label="Prénom" required error={champErreurs.prenom}>
                   <TextInput
                     value={prenom}
                     onChange={(e) => setPrenom(e.target.value)}
-                    required
                     autoFocus
                     autoComplete="given-name"
                     placeholder="Aisha"
                   />
                 </Field>
-                <Field label="Nom" required>
+                <Field label="Nom" required error={champErreurs.nom}>
                   <TextInput
                     value={nom}
                     onChange={(e) => setNom(e.target.value)}
-                    required
                     autoComplete="family-name"
                     placeholder="Dossou"
                   />
                 </Field>
               </div>
-              <Field label="Adresse e-mail" required>
+              <Field label="Adresse e-mail" required error={champErreurs.email}>
                 <TextInput
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
                   autoComplete="email"
                   placeholder="votre@email.com"
                 />
@@ -248,16 +264,15 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
               <Field
                 label="Mot de passe"
                 required
+                error={champErreurs.motDePasse}
                 helper="8+ caractères, 1 majuscule, 1 chiffre"
               >
                 <TextInput
                   type="password"
                   value={motDePasse}
                   onChange={(e) => setMotDePasse(e.target.value)}
-                  required
                   autoComplete="new-password"
                   placeholder="••••••••"
-                  minLength={8}
                 />
               </Field>
 
@@ -303,15 +318,13 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <Field label="Code de vérification à 6 chiffres" required>
+              <Field label="Code de vérification à 6 chiffres" required error={champErreurs.code}>
                 <TextInput
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  required
                   autoFocus
                   maxLength={6}
                   inputMode="numeric"
-                  pattern="\d{6}"
                   placeholder="123456"
                   style={{
                     fontFamily: "var(--font-mono)",

@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
+import { RedirectIfAuthenticated } from "./auth/RedirectIfAuthenticated";
 import { AppLayout, ThemeProvider } from "./layout/AppLayout";
 import { EleveProfileProvider } from "./eleve/EleveProfileContext";
 import { AdminEtabProvider } from "./admin/AdminEtabContext";
@@ -37,6 +38,7 @@ import { InscriptionsAValiderPage } from "./pages/admin_etablissement/Inscriptio
 import { RecrutementPage } from "./pages/admin_etablissement/RecrutementPage";
 import { ContestationsPage } from "./pages/admin_etablissement/ContestationsPage";
 import { ActesAdminPage } from "./pages/admin_etablissement/ActesAdminPage";
+import { ReferentielsEtabPage } from "./pages/admin_etablissement/ReferentielsEtabPage";
 
 import { AdminMinisterielDashboard } from "./pages/admin_ministeriel/AdminMinisterielDashboard";
 import { EtablissementsPage } from "./pages/admin_ministeriel/EtablissementsPage";
@@ -51,9 +53,30 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/etablissements" element={<EtablissementsAnnuairePage />} />
-            <Route path="/connexion" element={<LoginPage />} />
-            <Route path="/inscription-tuteur" element={<SignupPage role="tuteur" />} />
-            <Route path="/inscription-enseignant" element={<SignupPage role="enseignant" />} />
+            <Route
+              path="/connexion"
+              element={
+                <RedirectIfAuthenticated>
+                  <LoginPage />
+                </RedirectIfAuthenticated>
+              }
+            />
+            <Route
+              path="/inscription-tuteur"
+              element={
+                <RedirectIfAuthenticated>
+                  <SignupPage role="tuteur" />
+                </RedirectIfAuthenticated>
+              }
+            />
+            <Route
+              path="/inscription-enseignant"
+              element={
+                <RedirectIfAuthenticated>
+                  <SignupPage role="enseignant" />
+                </RedirectIfAuthenticated>
+              }
+            />
             <Route
               path="/changer-mot-de-passe"
               element={
@@ -265,6 +288,16 @@ function App() {
                 <RequireAuth roles={["admin_etablissement"]}>
                   <AdminEtabProvider>
                     <ActesAdminPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/referentiels"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <ReferentielsEtabPage />
                   </AdminEtabProvider>
                 </RequireAuth>
               }

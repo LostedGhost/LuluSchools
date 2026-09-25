@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { messageErreur } from "../api/client";
 import { Btn, ErrorBanner, Field, TextInput } from "../components/ui";
 import { Eye, EyeOff } from "lucide-react";
+import { estRempli } from "../utils/validation";
 
 export function LoginPage() {
   const { seConnecter } = useAuth();
@@ -14,10 +15,18 @@ export function LoginPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [champErreurs, setChampErreurs] = useState<{ identifiant?: string; motDePasse?: string }>({});
 
   const soumettre = async (e: FormEvent) => {
     e.preventDefault();
     setErreur(null);
+
+    const erreurs: typeof champErreurs = {};
+    if (!estRempli(identifiant)) erreurs.identifiant = "E-mail ou matricule requis.";
+    if (!estRempli(motDePasse)) erreurs.motDePasse = "Mot de passe requis.";
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       const profil = await seConnecter(identifiant, motDePasse);
@@ -101,27 +110,25 @@ export function LoginPage() {
 
         <form onSubmit={soumettre} noValidate>
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <Field label="E-mail ou matricule" required>
+            <Field label="E-mail ou matricule" required error={champErreurs.identifiant}>
               <TextInput
                 id="login-identifiant"
                 type="text"
                 value={identifiant}
                 onChange={(e) => setIdentifiant(e.target.value)}
-                required
                 autoFocus
                 autoComplete="username"
                 placeholder="votre@email.com ou 710000126"
               />
             </Field>
 
-            <Field label="Mot de passe" required>
+            <Field label="Mot de passe" required error={champErreurs.motDePasse}>
               <div style={{ position: "relative" }}>
                 <TextInput
                   id="login-password"
                   type={showPwd ? "text" : "password"}
                   value={motDePasse}
                   onChange={(e) => setMotDePasse(e.target.value)}
-                  required
                   autoComplete="current-password"
                   placeholder="••••••••"
                   style={{ paddingRight: "48px" }}

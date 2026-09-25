@@ -18,6 +18,7 @@ import {
   TextInput,
 } from "../../components/ui";
 import { PlusCircle, RefreshCw, Users, Layers, School } from "lucide-react";
+import { estRempli, erreurEntierPositif } from "../../utils/validation";
 
 const LIBELLES_POLITIQUE: Record<
   PolitiqueDepassement,
@@ -38,6 +39,7 @@ export function ClassesPage() {
   const [succes, setSucces] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [chargement, setChargement] = useState(true);
+  const [champErreurs, setChampErreurs] = useState<{ niveau?: string; capacite?: string }>({});
 
   const charger = () => {
     setChargement(true);
@@ -54,12 +56,16 @@ export function ClassesPage() {
 
   const soumettre = async (e: FormEvent) => {
     e.preventDefault();
-    if (!niveau.trim()) {
-      setErreur("Veuillez renseigner le nom ou niveau de la classe.");
-      return;
-    }
     setErreur(null);
     setSucces(null);
+
+    const erreurs: typeof champErreurs = {};
+    if (!estRempli(niveau)) erreurs.niveau = "Nom ou niveau de la classe requis.";
+    const erreurCap = erreurEntierPositif(capacite, { min: 1, max: 200 });
+    if (erreurCap) erreurs.capacite = erreurCap;
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       await creerClasse(etablissement.id, {
@@ -113,25 +119,26 @@ export function ClassesPage() {
           />
         </div>
 
-        <form onSubmit={soumettre} className="space-y-4">
+        <form onSubmit={soumettre} noValidate className="space-y-4">
           <div className="grid-2">
             <Field
               label="Niveau ou Nom de la classe"
               helper="Ex : 6ème A, Seconde C, CM2, CP1"
               required
+              error={champErreurs.niveau}
             >
               <TextInput
                 placeholder="Ex : 6ème A"
                 value={niveau}
                 onChange={(e) => setNiveau(e.target.value)}
-                required
               />
             </Field>
 
             <Field
               label="Capacité maximale"
-              helper="Nombre de places ouvertes aux élèves"
+              helper="Nombre de places ouvertes aux élèves (1 à 200)"
               required
+              error={champErreurs.capacite}
             >
               <TextInput
                 type="number"
@@ -139,7 +146,6 @@ export function ClassesPage() {
                 max={200}
                 value={capacite}
                 onChange={(e) => setCapacite(Number(e.target.value))}
-                required
               />
             </Field>
           </div>

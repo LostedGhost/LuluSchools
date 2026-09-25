@@ -5,6 +5,7 @@ import { changerMotDePasse } from "../api/auth";
 import { messageErreur } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Btn, ErrorBanner, Field, SuccessBanner, TextInput } from "../components/ui";
+import { estRempli, erreurMotDePasse } from "../utils/validation";
 
 function computePasswordStrength(pwd: string): {
   percent: number;
@@ -36,6 +37,7 @@ export function ChangePasswordPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [champErreurs, setChampErreurs] = useState<{ ancien?: string; nouveau?: string }>({});
 
   const strength = computePasswordStrength(nouveau);
 
@@ -43,6 +45,15 @@ export function ChangePasswordPage() {
     e.preventDefault();
     setErreur(null);
     setSucces(null);
+
+    const erreurs: typeof champErreurs = {};
+    if (!estRempli(ancien)) erreurs.ancien = "Mot de passe actuel requis.";
+    const erreurMdp = erreurMotDePasse(nouveau);
+    if (erreurMdp) erreurs.nouveau = erreurMdp;
+    else if (nouveau === ancien) erreurs.nouveau = "Le nouveau mot de passe doit être différent de l'actuel.";
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       await changerMotDePasse(ancien, nouveau);
@@ -156,14 +167,13 @@ export function ChangePasswordPage() {
 
         <form onSubmit={soumettre} noValidate>
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-            <Field label="Mot de passe actuel (temporaire)" required>
+            <Field label="Mot de passe actuel (temporaire)" required error={champErreurs.ancien}>
               <div style={{ position: "relative" }}>
                 <TextInput
                   id="ancien-password"
                   type={showAncien ? "text" : "password"}
                   value={ancien}
                   onChange={(e) => setAncien(e.target.value)}
-                  required
                   autoFocus
                   autoComplete="current-password"
                   placeholder="••••••••"
@@ -196,6 +206,7 @@ export function ChangePasswordPage() {
               label="Nouveau mot de passe"
               helper="8+ caractères, au moins 1 majuscule et 1 chiffre"
               required
+              error={champErreurs.nouveau}
             >
               <div style={{ position: "relative" }}>
                 <TextInput
@@ -203,7 +214,6 @@ export function ChangePasswordPage() {
                   type={showNouveau ? "text" : "password"}
                   value={nouveau}
                   onChange={(e) => setNouveau(e.target.value)}
-                  required
                   autoComplete="new-password"
                   placeholder="Ex: SuperPasse123!"
                   style={{ paddingRight: "48px" }}

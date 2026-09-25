@@ -6,6 +6,7 @@ import { creerInscription } from "../../api/inscriptions";
 import { messageErreur } from "../../api/client";
 import type { ClasseOut, EtablissementOut, Nationalite } from "../../types/api";
 import { Btn, Card, ErrorBanner, Field, PageTitle, SectionHead, Select, TextInput } from "../../components/ui";
+import { estRempli, erreurDateNaissance } from "../../utils/validation";
 
 export function NouvelleInscriptionPage() {
   const navigate = useNavigate();
@@ -20,6 +21,13 @@ export function NouvelleInscriptionPage() {
   const [consentement, setConsentement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [champErreurs, setChampErreurs] = useState<{
+    nom?: string;
+    prenom?: string;
+    dateNaissance?: string;
+    etablissementId?: string;
+    classeId?: string;
+  }>({});
 
   useEffect(() => {
     listerEtablissements()
@@ -40,10 +48,17 @@ export function NouvelleInscriptionPage() {
   const soumettre = async (e: FormEvent) => {
     e.preventDefault();
     setErreur(null);
-    if (!classeId) {
-      setErreur("Veuillez choisir une classe.");
-      return;
-    }
+
+    const erreurs: typeof champErreurs = {};
+    if (!estRempli(nom)) erreurs.nom = "Nom requis.";
+    if (!estRempli(prenom)) erreurs.prenom = "Prénom requis.";
+    const erreurDate = erreurDateNaissance(dateNaissance);
+    if (erreurDate) erreurs.dateNaissance = erreurDate;
+    if (!estRempli(etablissementId)) erreurs.etablissementId = "Veuillez choisir un établissement.";
+    if (!estRempli(classeId)) erreurs.classeId = "Veuillez choisir une classe.";
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       await creerInscription({
@@ -114,31 +129,29 @@ export function NouvelleInscriptionPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}>
             <div className="grid-2">
-              <Field label="Nom de l'enfant" required>
+              <Field label="Nom de l'enfant" required error={champErreurs.nom}>
                 <TextInput
                   placeholder="Ex: Dossou"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
-                  required
                 />
               </Field>
-              <Field label="Prénom de l'enfant" required>
+              <Field label="Prénom de l'enfant" required error={champErreurs.prenom}>
                 <TextInput
                   placeholder="Ex: Koffi"
                   value={prenom}
                   onChange={(e) => setPrenom(e.target.value)}
-                  required
                 />
               </Field>
             </div>
 
             <div className="grid-2">
-              <Field label="Date de naissance" required>
+              <Field label="Date de naissance" required error={champErreurs.dateNaissance}>
                 <TextInput
                   type="date"
                   value={dateNaissance}
                   onChange={(e) => setDateNaissance(e.target.value)}
-                  required
+                  max={new Date().toISOString().slice(0, 10)}
                 />
               </Field>
 
@@ -188,6 +201,7 @@ export function NouvelleInscriptionPage() {
               label="Établissement scolaire"
               helper="Choisissez l'école pour afficher les classes disponibles"
               required
+              error={champErreurs.etablissementId}
             >
               <Select
                 value={etablissementId}
@@ -195,7 +209,6 @@ export function NouvelleInscriptionPage() {
                   setEtablissementId(e.target.value);
                   setClasseId("");
                 }}
-                required
               >
                 <option value="">Sélectionner un établissement...</option>
                 {etablissements.map((etab) => (
@@ -216,11 +229,11 @@ export function NouvelleInscriptionPage() {
                   : undefined
               }
               required
+              error={champErreurs.classeId}
             >
               <Select
                 value={classeId}
                 onChange={(e) => setClasseId(e.target.value)}
-                required
                 disabled={!etablissementId || classes.length === 0}
               >
                 <option value="">
