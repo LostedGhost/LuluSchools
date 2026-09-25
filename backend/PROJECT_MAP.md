@@ -57,7 +57,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 
 ### app/modules/actes/
 - `models.py` — `TypeActeAcademique` (catalogue par établissement, voir UC-10 révisé), `DemandeActeAcademique` (+ `kkiapay_transaction_id`).
-- `router.py` — `POST/GET /etablissements/{id}/types-actes`, `POST /demandes-actes` (Élève ou Tuteur), `POST /demandes-actes/{id}/paiement/amorcer`, `POST /demandes-actes/{id}/traiter`. Expose aussi `paiements_router` : `POST /paiements/webhook/kkiapay` — URL **unique pour tout le compte** (pas par demande, correction d'une erreur de conception initiale), vérifie l'en-tête `x-kkiapay-secret` contre `settings.kkiapay_secret`.
+- `router.py` — `POST/GET /etablissements/{id}/types-actes`, `GET /mes-demandes-actes` (historique de l'élève ou de tous les enfants du tuteur, ajouté pour l'étape 6 frontend), `POST /demandes-actes` (Élève ou Tuteur), `POST /demandes-actes/{id}/paiement/amorcer`, `POST /demandes-actes/{id}/traiter`. Expose aussi `paiements_router` : `POST /paiements/webhook/kkiapay` — URL **unique pour tout le compte** (pas par demande, correction d'une erreur de conception initiale), vérifie l'en-tête `x-kkiapay-secret` contre `settings.kkiapay_secret`.
 
 ### alembic/versions/
 - `0001_identite_initial.py` — utilisateurs, tuteurs, otp_verifications.

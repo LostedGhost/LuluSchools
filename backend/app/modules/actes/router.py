@@ -83,6 +83,29 @@ def lister_types_actes(
     return db.query(TypeActeAcademique).filter(TypeActeAcademique.etablissement_id == etablissement_id).all()
 
 
+@router.get("/mes-demandes-actes", response_model=list[DemandeActeOut])
+def mes_demandes_actes(
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR)),
+) -> list[DemandeActeAcademique]:
+    """Permet a l'eleve ou a son tuteur de retrouver l'historique de ses demandes/
+    reclamations sans avoir a garder les identifiants de chaque demande cote client."""
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+        eleve_ids = [eleve.id] if eleve is not None else []
+    else:
+        eleve_ids = [e.id for e in db.query(Eleve).filter(Eleve.tuteur_id == utilisateur.id).all()]
+
+    if not eleve_ids:
+        return []
+    return (
+        db.query(DemandeActeAcademique)
+        .filter(DemandeActeAcademique.eleve_id.in_(eleve_ids))
+        .order_by(DemandeActeAcademique.created_at.desc())
+        .all()
+    )
+
+
 @router.post("/demandes-actes", response_model=DemandeActeOut, status_code=status.HTTP_201_CREATED)
 def soumettre_demande_acte(
     payload: DemandeActeCreate,

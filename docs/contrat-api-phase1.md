@@ -102,6 +102,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 |---|---|---|---|---|
 | POST | `/etablissements/{id}/types-actes` | A+ | UC-10 | Catalogue configurable : nom, prix, pièces requises (texte libre), condition d'éligibilité optionnelle |
 | GET | `/etablissements/{id}/types-actes` | tout utilisateur authentifié concerné | UC-10 | Lecture du catalogue |
+| GET | `/mes-demandes-actes` | Élève, Tuteur | UC-10 | Historique des demandes/réclamations de l'élève courant (ou de tous les enfants du tuteur courant), plus récentes d'abord |
 | POST | `/demandes-actes` | Élève (pour lui-même) ou Tuteur (avec `eleve_utilisateur_id`, doit être son enfant) | UC-10 | `est_reclamation: true` (gratuite, `reference_evaluation` obligatoire) **ou** `type_acte_id` (payant si `prix>0`, sinon `en_traitement` immédiat) |
 | GET | `/demandes-actes/{id}` | Élève propriétaire, son Tuteur, A+ de l'établissement courant de l'élève | UC-10 | Lecture |
 | POST | `/demandes-actes/{id}/traiter` | A+ | UC-10 | Accepte ou rejette (motif obligatoire) ; refusé (409) tant que le paiement n'est pas confirmé pour un acte payant |

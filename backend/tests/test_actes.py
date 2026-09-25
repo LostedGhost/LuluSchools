@@ -86,6 +86,24 @@ def test_type_acte_gratuit_va_directement_en_traitement(client, classe_avec_ense
     assert demande["statut"] == "en_traitement"
 
 
+def test_mes_demandes_actes_visibles_par_eleve_et_par_tuteur(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    client.post(
+        "/api/v1/demandes-actes",
+        json={"est_reclamation": True, "reference_evaluation": "devoir-123", "motif": "Erreur de note"},
+        headers=ctx["eleve_headers"],
+    )
+
+    vue_eleve = client.get("/api/v1/mes-demandes-actes", headers=ctx["eleve_headers"])
+    assert vue_eleve.status_code == 200
+    assert len(vue_eleve.json()) == 1
+
+    vue_tuteur = client.get("/api/v1/mes-demandes-actes", headers=ctx["tuteur_headers"])
+    assert vue_tuteur.status_code == 200
+    assert len(vue_tuteur.json()) == 1
+    assert vue_tuteur.json()[0]["id"] == vue_eleve.json()[0]["id"]
+
+
 def test_tuteur_peut_soumettre_pour_son_enfant(client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve
     eleve_utilisateur_id = client.get("/api/v1/me", headers=ctx["eleve_headers"]).json()["id"]
