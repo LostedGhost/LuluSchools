@@ -1,0 +1,63 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+# Le deploiement reste gere par Render (autoDeployTrigger: commit sur render.yaml) : ce
+# workflow ne fait qu'empecher un push casse d'atteindre main/Render.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    # Les tests eux-memes tournent sur SQLite in-memory (voir tests/conftest.py), mais
+    # les migrations Alembic ciblent Postgres (types/DDL non portables) : un vrai service
+    # Postgres est necessaire pour verifier qu'elles s'appliquent sans erreur.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: luluschools
+          POSTGRES_PASSWORD: luluschools
+          POSTGRES_DB: luluschools_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Installer les dependances
+        run: pip install -r requirements.txt
+
+      - name: Verifier que les migrations Alembic s'appliquent sans erreur (Postgres)
+        run: alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+psycopg://luluschools:luluschools@localhost:5432/luluschools_ci
+          JWT_SECRET_KEY: ci-only-secret
+          CASIER_JUDICIAIRE_ENCRYPTION_KEY: ci-only-secret
+
+      - name: Tests
+        run: pytest -q
+        env:
+          JWT_SECRET_KEY: ci-only-secret
+          CASIER_JUDICIAIRE_ENCRYPTION_KEY: ci-only-secret
