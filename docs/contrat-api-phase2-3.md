@@ -2,7 +2,7 @@
 
 Dérivé strictement de `docs/cas-utilisation-phase-2-3.md` (validé) et `docs/diagrammes-uml-phase2-3.md` (validé), étape 3 de la méthode `lucio-dev`. Mêmes conventions que `docs/contrat-api-phase1.md` (base `/api/v1`, JWT Bearer, pagination `?page=&page_size=`, enveloppe d'erreur `{"error": {...}}`, upload multipart + lien signé pour les fichiers) — non dupliquées ici.
 
-**UC-18 (micro-jobs + séquestre) est volontairement absent de ce contrat.** La vérification de la documentation Kkiapay (voir `docs/adr/ADR-008-kkiapay-pas-de-versement-tiers.md`) a révélé qu'elle ne supporte aucun versement programmable à un tiers — le mécanisme de séquestre tel que spécifié dans l'UC n'est donc pas réalisable tel quel. C'est un point structurant qui rouvre un principe déjà verrouillé du projet, posé à l'utilisateur plutôt que tranché seul. Le reste des Phases 2/3 (UC-11 à UC-17, UC-19) n'en dépend pas et est spécifié ci-dessous.
+**UC-18 (micro-jobs + séquestre) suit le modèle "Option A" décidé dans `docs/adr/ADR-008-kkiapay-pas-de-versement-tiers.md`** : le séquestre est un statut suivi par LuluSchools, pas un mécanisme Kkiapay natif — le reversement au prestataire est déclenché manuellement par un opérateur humain en V1 (voir tableau ci-dessous), en attendant une confirmation du support Kkiapay sur `setup_payout` qui pourrait automatiser cette dernière étape sans changer le contrat observable.
 
 ## Tickets de transport (UC-11)
 
@@ -101,9 +101,29 @@ Même structure qu'UC-11, entités et endpoints renommés :
 | GET | `/etablissements/{id}/visites-virtuelles` | tout utilisateur authentifié | Catalogue, y compris pour un public non-inscrit consultant la page de l'établissement |
 | DELETE | `/visites-virtuelles/{id}` | A+, A++ de l'établissement | Retrait |
 
+## Micro-jobs et séquestre (UC-18)
+
+Rôles autorisés à publier une offre (prestataire) ou l'accepter (client) : Enseignant, Tuteur, A+, A++ — le rôle Élève est structurellement exclu (délégué UC-18), aucune vérification d'âge dynamique n'est nécessaire.
+
+| Méthode | Chemin | Rôle | Notes |
+|---|---|---|---|
+| POST | `/micro-jobs/offres` | Enseignant, Tuteur, A+, A++ | `titre`, `description`, `prix` ; statut initial `ouverte` |
+| GET | `/micro-jobs/offres` | Enseignant, Tuteur, A+, A++ | Liste des offres `ouverte` |
+| GET | `/micro-jobs/offres/{id}` | Enseignant, Tuteur, A+, A++ | Lecture |
+| POST | `/micro-jobs/offres/{id}/accepter` | Enseignant, Tuteur, A+, A++ (autre que le prestataire) | Refusé (`409`) si l'offre n'est plus `ouverte` ; crée la `MissionMicroJob` (statut `en_cours`), offre passe `fermee` |
+| POST | `/missions-micro-job/{id}/paiement/amorcer` | client de la mission | Même mécanique `paiement/amorcer` que UC-10/UC-11/UC-17 : le compte Kkiapay unique de LuluSchools encaisse le prix. Le "séquestre" est purement un statut suivi par LuluSchools (Option A, ADR-008) — Kkiapay ne sait pas qu'il s'agit d'un séquestre |
+| POST | `/missions-micro-job/{id}/declarer-fin` | prestataire de la mission | `en_cours` → `terminee_declaree`, fixe `date_limite_validation` = +5 jours |
+| POST | `/missions-micro-job/{id}/valider` | client de la mission | `terminee_declaree` → `validee` (validation explicite) ; passé `date_limite_validation` sans action, un job périodique (ou calcul à la volée en lecture) considère la mission `validee` tacitement (délégué UC-18) |
+| POST | `/missions-micro-job/{id}/contester` | client de la mission | Uniquement avant `date_limite_validation`, `terminee_declaree` → `contestee` |
+| POST | `/contestations-micro-job/{id}/decision` | A+ de l'établissement du prestataire | `acceptee` (mission → `remboursee`, paiement rendu au client) ou `rejetee` (motif obligatoire, mission → `validee`) — même schéma que UC-04b |
+| POST | `/missions-micro-job/{id}/reverser-prestataire` | A+ ou compte d'exploitation LuluSchools (rôle à préciser à l'implémentation) | Autorisé seulement si `statut=validee`. Reversement manuel hors Kkiapay (mobile money direct vers le prestataire) ; `reference_paiement` (texte libre, preuve) obligatoire pour passer `validee` → `payee`. Point d'automatisation potentiel une fois `setup_payout` confirmé auprès du support Kkiapay (voir ADR-008) |
+| GET | `/mes-missions-micro-job` | Enseignant, Tuteur, A+, A++ | Historique, comme prestataire et comme client |
+
 ---
 
 ## Points laissés à l'implémentation (étape 4), sans impact sur ce contrat
 
 - Fournisseur/infra de diffusion pour `POST /sessions-live/{id}/demarrer` (WebRTC/SFU hébergé) — détail interne à la réponse de l'endpoint, pas sa forme.
 - Job de passage `achete` → `expire` pour les tickets/billets non validés après leur date (UC-11/UC-12/UC-17) : calcul à la volée en lecture vs tâche planifiée — n'affecte pas le contrat observable.
+- Job de validation tacite des missions micro-job après `date_limite_validation` (UC-18) : même remarque.
+- Avant de coder `POST /missions-micro-job/{id}/reverser-prestataire` (UC-18), contacter le support Kkiapay (support@kkiapay.me) pour confirmer si `setup_payout` peut automatiser ce reversement ponctuel — voir ADR-008. Si oui, l'implémentation change, pas le contrat.
