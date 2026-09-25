@@ -15,7 +15,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/actes/` — catalogue d'actes académiques par établissement, demandes (réclamation ou acte payant)
 - `alembic/` — migrations (une par évolution de schéma, jamais réécrites une fois appliquées)
 - `scripts/` — outils one-shot serveur (seed du tout premier compte A++)
-- `tests/` — pytest, SQLite en mémoire (`StaticPool` pour partager la connexion entre threads), Brevo mocké via `FakeEmailClient` — aucun appel réseau réel dans la suite
+- `tests/` — pytest, SQLite en mémoire (`StaticPool` pour partager la connexion entre threads), tous les services externes mockés (Brevo/FreeLLM/LuluFiles) — aucun appel réseau réel dans la suite. `test_e2e_parcours_complet.py` rejoue tout le parcours UC-01 à UC-10 dans l'ordre réel, en plus des tests unitaires par module
 
 ## Fichiers clés
 
@@ -84,7 +84,9 @@ Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** 
 - Compte provisionné (élève, admin établissement) = mot de passe temporaire envoyé par e-mail + `mot_de_passe_temporaire=True`.
 
 ## État d'avancement / zones instables
-Tous les modules de la Phase 1 (UC-01 à UC-10) sont faits et testés (67 tests) : `/health`, identité, établissements/classes, inscriptions, recrutement/contrats (avec reconduction et écran de révision manuelle), pédagogie (quiz généré par IA), évaluations (formulaires corrigés par IA, moyenne pondérée), actes académiques (avec webhook Kkiapay).
+Tous les modules de la Phase 1 (UC-01 à UC-10) sont faits, testés unitairement ET validés de bout en bout (68 tests, dont `test_e2e_parcours_complet.py` qui rejoue tout le parcours réel) : `/health`, identité, établissements/classes, inscriptions, recrutement/contrats (avec reconduction et écran de révision manuelle), pédagogie (quiz généré par IA), évaluations (formulaires corrigés par IA, moyenne pondérée), actes académiques (avec webhook Kkiapay). Le mot de passe temporaire est désormais réellement appliqué côté serveur (bloque l'écriture tant qu'il n'est pas changé).
+
+**Bug réel trouvé et corrigé par le test de bout en bout** : `CASIER_JUDICIAIRE_STORAGE_PATH` avec un chemin absolu style Linux (`/var/lib/...`) était mal interprété par `pathlib` sous Windows — créait les fichiers sous la racine du lecteur courant (`D:\var\lib\...`) au lieu d'échouer ou d'utiliser le bon chemin. Corrigé en local (`.env` pointe désormais vers un chemin Windows explicite) ; `.env.example` documente le piège pour la prochaine personne qui développe sous Windows. Le chemin `/var/lib/...` reste correct pour un déploiement réel sur VPS Linux.
 
 **Décisions définitives prises par l'utilisateur qui ferment d'anciens points ouverts :**
 - Signature du contrat enseignant (UC-05) : tracé dessiné au doigt/stylet sur un canvas côté client, exporté en PNG, stocké via LuluFiles — signature électronique simple (Art. 284-285), pas qualifiée. Voir ADR-004. Ce n'est plus un point ouvert, c'est le choix retenu.
@@ -102,4 +104,4 @@ Tous les modules de la Phase 1 (UC-01 à UC-10) sont faits et testés (67 tests)
 - `POST /inscriptions` par un élève (titulaire) suppose qu'il a déjà un compte (réinscription) — la toute première inscription reste réservée au tuteur.
 
 ## Dernière synchronisation
-2026-09-25 — signature par canvas (ADR-004), moyennes pondérées, quiz/formulaires générés et corrigés par IA, écrans de révision manuelle, habilitation du titulaire (élève) en plus du tuteur, correction du webhook Kkiapay (URL unique + secret).
+2026-09-25 — mot de passe temporaire réellement appliqué, délai de contestation en jours ouvrés, test de bout en bout (étape 5 du pipeline) écrit et passant, bug de chemin Windows trouvé et corrigé.

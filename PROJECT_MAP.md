@@ -23,7 +23,7 @@ API backend sous préfixe `/api/v1` — contrat complet et à jour dans `docs/co
 - Signature du contrat enseignant : tracé dessiné sur canvas (doigt/stylet), signature électronique simple, pas qualifiée — décision définitive de l'utilisateur (ADR-004).
 
 ## État d'avancement
-Étapes 1-3 du pipeline validées. Étape 4 (backend) : tous les modules de la Phase 1 (UC-01 à UC-10) faits et testés (67 tests), 10 migrations appliquées en réel. Décisions récentes qui ferment d'anciens points ouverts : signature par canvas (ADR-004), moyennes pondérées par les coefficients, quiz généré par IA et devoirs corrigés par IA (formulaires), écrans de révision manuelle, webhook Kkiapay corrigé (URL unique par compte + secret partagé). Détail dans `backend/PROJECT_MAP.md` (§ état d'avancement). Étape 5 (validation de bout en bout) pas encore commencée.
+Étapes 1-5 du pipeline validées pour la Phase 1. Étape 4 (backend) : tous les modules (UC-01 à UC-10) faits et testés (68 tests), 10 migrations appliquées en réel, mot de passe temporaire réellement appliqué côté serveur. Étape 5 (validation de bout en bout) : scénario automatisé rejouant tout le parcours réel dans l'ordre — a révélé et corrigé un vrai bug (chemin du casier judiciaire mal interprété sous Windows). Détail dans `backend/PROJECT_MAP.md`. Prochaine étape : 6 (frontend, page par page).
 
 ## Dernière synchronisation
-2026-09-25 — signature canvas, moyennes pondérées, quiz/formulaires IA, révision manuelle, webhook Kkiapay corrigé.
+2026-09-25 — durcissement du backend (mot de passe temporaire, délai en jours ouvrés) et validation de bout en bout (étape 5).
