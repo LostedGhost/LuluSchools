@@ -7,7 +7,7 @@ Construit avec la méthode spec-first [`lucio-dev`](https://github.com/LostedGho
 ## Stack
 
 - **Backend** : FastAPI (Python 3.12), SQLAlchemy 2.0 + Alembic, PostgreSQL
-- **Frontend** : React 18 + Vite + TypeScript, Tailwind CSS
+- **Frontend** : React 19 + Vite + TypeScript, Tailwind CSS v4
 - **Paiement** : Kkiapay
 - **Accès LLM** (notation automatique de documents, etc.) : [FreeLLM](https://github.com/LostedGhost/freellm-lucio), API compatible OpenAI
 - **Stockage de fichiers** : [LuluFiles](https://lulufiles-api.onrender.com) pour tout document sauf le casier judiciaire (resté local pour raisons légales, Art. 395)
@@ -47,8 +47,15 @@ pytest                       # lance la suite de tests (base SQLite en mémoire,
 uvicorn app.main:app --reload   # démarre l'API sur http://localhost:8000
 ```
 
-Le frontend n'existe pas encore (étape 6 du pipeline, après validation complète du backend).
+Dans un second terminal :
+
+```bash
+cd frontend
+cp .env.example .env   # renseigner VITE_KKIAPAY_PUBLIC_KEY
+npm install
+npm run dev              # démarre le frontend sur http://localhost:5173 (proxy /api vers le backend local)
+```
 
 ## Statut
 
-Étapes 1 à 5 de la méthode validées pour la Phase 1. Étape 4 (backend) : tous les modules (identité, établissements, inscriptions, recrutement/contrats, pédagogie, évaluations, actes académiques) faits et testés — 68 tests passants, 10 migrations appliquées, mot de passe temporaire réellement appliqué côté serveur. Étape 5 (validation de bout en bout) : un scénario automatisé rejoue tout le parcours réel (UC-01 à UC-10 dans l'ordre) — il a révélé et corrigé un vrai bug (chemin de stockage du casier judiciaire mal interprété sous Windows). Détail dans [backend/PROJECT_MAP.md](backend/PROJECT_MAP.md) et [docs/contrat-api-phase1.md](docs/contrat-api-phase1.md). Prochaine étape : 6 (frontend, page par page).
+Étapes 1 à 5 de la méthode validées pour la Phase 1. Étape 4 (backend) : tous les modules (identité, établissements, inscriptions, recrutement/contrats, pédagogie, évaluations, actes académiques) faits et testés — 71 tests passants, 12 migrations appliquées, mot de passe temporaire réellement appliqué côté serveur, notation/correction IA en arrière-plan (ADR-005). Étape 5 (validation de bout en bout) : un scénario automatisé rejoue tout le parcours réel (UC-01 à UC-10 dans l'ordre) — il a révélé et corrigé un vrai bug (chemin de stockage du casier judiciaire mal interprété sous Windows). Étape 6 (frontend) : le parcours Tuteur/Élève est construit et **validé en navigateur réel contre le backend réel**, sans mocks — ce test manuel a révélé et corrigé un second vrai bug (`DocumentCandidatureOut` sans `id`). Restent à construire : Enseignant, A+, A++. Détail dans [backend/PROJECT_MAP.md](backend/PROJECT_MAP.md), [frontend/PROJECT_MAP.md](frontend/PROJECT_MAP.md) et [docs/contrat-api-phase1.md](docs/contrat-api-phase1.md).
