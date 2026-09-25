@@ -1,0 +1,91 @@
+# Render Blueprint pour le backend LuluSchools (voir docs/adr/ADR-006-deploiement-render-vercel.md).
+#
+# Premier deploiement :
+#   1. Sur Render : New > Blueprint, pointer sur ce depot, branche main.
+#   2. Render demande les valeurs des variables marquees `sync: false` ci-dessous
+#      (cles FreeLLM/LuluFiles/Kkiapay/Brevo, jamais stockees dans ce fichier).
+#   3. Une fois le service en ligne, noter son URL reelle (https://<nom>.onrender.com)
+#      et mettre a jour :
+#        - frontend/vercel.json (destination des rewrites /api/*)
+#        - CORS_ALLOW_ORIGINS ci-dessous avec le domaine Vercel reel
+#        - l'URL de webhook dans le dashboard Kkiapay (Cles API > Webhook)
+#
+# Le disque persistant (`disk`) exige le plan "starter" ou superieur (indisponible sur
+# le plan gratuit) et n'est PAS partage entre plusieurs instances : ce service doit
+# rester a une seule instance tant que le casier judiciaire reste stocke localement
+# (Art. 395 de la loi n. 2017-20, voir ADR-003) - ne jamais activer l'autoscaling ici.
+
+services:
+  - type: web
+    name: luluschools-backend
+    runtime: python
+    plan: starter
+    region: frankfurt
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    autoDeployTrigger: commit
+    disk:
+      name: casier-judiciaire
+      mountPath: /var/data/casier-judiciaire
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+      - key: ENVIRONMENT
+        value: production
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: luluschools-db
+          property: connectionString
+
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: JWT_REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+
+      - key: FREELLM_BASE_URL
+        value: https://freellm-lucio.onrender.com/v1
+      - key: FREELLM_API_KEY
+        sync: false
+
+      - key: LULUFILES_BASE_URL
+        value: https://lulufiles-api.onrender.com
+      - key: LULUFILES_API_KEY
+        sync: false
+
+      - key: KKIAPAY_PUBLIC_KEY
+        sync: false
+      - key: KKIAPAY_PRIVATE_KEY
+        sync: false
+      - key: KKIAPAY_SECRET
+        sync: false
+      - key: KKIAPAY_SANDBOX
+        value: "false"
+
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: LuluSchools
+
+      # Chemin a l'interieur du disque persistant declare ci-dessus.
+      - key: CASIER_JUDICIAIRE_STORAGE_PATH
+        value: /var/data/casier-judiciaire
+
+      # A remplacer par le(s) domaine(s) Vercel reel(s) une fois connu(s), au format
+      # JSON (le champ est une liste cote backend) : ["https://luluschools.vercel.app"]
+      - key: CORS_ALLOW_ORIGINS
+        value: '["https://luluschools.vercel.app"]'
+
+databases:
+  - name: luluschools-db
+    plan: starter
+    region: frankfurt
+    databaseName: luluschools
+    user: luluschools

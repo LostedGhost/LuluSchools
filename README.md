@@ -11,7 +11,7 @@ Construit avec la méthode spec-first [`lucio-dev`](https://github.com/LostedGho
 - **Paiement** : Kkiapay
 - **Accès LLM** (notation automatique de documents, etc.) : [FreeLLM](https://github.com/LostedGhost/freellm-lucio), API compatible OpenAI
 - **Stockage de fichiers** : [LuluFiles](https://lulufiles-api.onrender.com) pour tout document sauf le casier judiciaire (resté local pour raisons légales, Art. 395)
-- **Déploiement** : VPS classique sans conteneurs — Nginx + Gunicorn/Uvicorn + systemd + PostgreSQL natif
+- **Déploiement** : Render (backend + PostgreSQL managé) et Vercel (frontend) — voir [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.md) et [ADR-006](docs/adr/ADR-006-deploiement-render-vercel.md)
 
 Détail complet et justification des choix : [docs/choix-technique-phase1.md](docs/choix-technique-phase1.md) et les ADR dans [docs/adr/](docs/adr/).
 
@@ -25,6 +25,7 @@ Détail complet et justification des choix : [docs/choix-technique-phase1.md](do
 | [docs/choix-technique-phase1.md](docs/choix-technique-phase1.md) | Stack technique complète |
 | [docs/contrat-api-phase1.md](docs/contrat-api-phase1.md) | Contrat d'API (ressources, méthodes, conventions) |
 | [docs/adr/](docs/adr/) | Décisions d'architecture (ADR) |
+| [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.md) | Étapes de déploiement (Render + Vercel) |
 
 ## Conformité
 

@@ -1,0 +1,25 @@
+# ADR-006 : Déploiement via Render (backend) et Vercel (frontend), pas de VPS
+
+## Statut
+Accepté (remplace le plan de déploiement décrit dans `docs/choix-technique-phase1.md` § Déploiement — VPS Linux + Nginx + Gunicorn + systemd + Certbot — décision explicite de l'utilisateur).
+
+## Contexte
+Le plan initial (étape 3, `docs/choix-technique-phase1.md`) prévoyait un déploiement sur VPS Linux classique. Aucun VPS n'a été provisionné à ce stade ; l'utilisateur préfère deux plateformes managées déjà utilisées ailleurs dans le projet (FreeLLM et LuluFiles tournent elles-mêmes sur Render) : **Render** pour le backend FastAPI, **Vercel** pour le frontend React (Vite). Objectif : éliminer la gestion manuelle de Nginx/systemd/Certbot pour une équipe d'un seul développeur.
+
+Deux contraintes techniques du projet entrent en tension avec ce choix et doivent être tranchées explicitement :
+1. **Casier judiciaire (Art. 395, ADR-003)** : stocké sur le disque local du serveur, jamais chez un tiers. Or les Web Services Render ont un disque **éphémère** par défaut (reset à chaque déploiement/redémarrage) — inacceptable pour des données qui doivent survivre dans le temps.
+2. **CORS** : le frontend (domaine `*.vercel.app` ou domaine personnalisé) et le backend (domaine `*.onrender.com`) sont sur des origines différentes, contrairement au VPS où Nginx aurait servi les deux depuis la même origine.
+
+## Décision
+- **Backend (Render, Web Service Python)** : `render.yaml` (Blueprint, racine du dépôt) définit le service, une base PostgreSQL managée Render, et un **disque persistant** (`disk`) monté sur le chemin de `CASIER_JUDICIAIRE_STORAGE_PATH`. Les disques persistants Render ne sont disponibles qu'à partir du plan payant "Starter" (pas sur le plan gratuit) et **ne sont pas partagés entre plusieurs instances** — ce service doit donc rester à une seule instance tant que le casier judiciaire reste sur disque local (pas d'autoscaling horizontal pour ce service ; cohérent avec le volume d'un pilote national par étapes). `startCommand` exécute `alembic upgrade head` avant de démarrer Uvicorn, pour ne jamais oublier une migration en production.
+- **Frontend (Vercel)** : `frontend/vercel.json` déclare une règle de **rewrite** : toute requête `/api/*` faite par le navigateur vers le domaine Vercel est transparentement proxyée vers le backend Render. Le code frontend n'a donc **aucun changement à faire** (le client axios utilise déjà `baseURL: "/api/v1"`, un chemin relatif) et le navigateur ne voit qu'une seule origine : **pas de CORS à gérer côté navigateur** pour le flux normal. `CORS_ALLOW_ORIGINS` reste configuré côté backend avec le domaine Vercel réel, en filet de sécurité pour tout appel direct (tests, debug).
+- Secrets (`FREELLM_API_KEY`, `LULUFILES_API_KEY`, `KKIAPAY_*`, `BREVO_API_KEY`) : déclarés dans `render.yaml` avec `sync: false` — Render les demande à la création du service sans jamais les stocker en clair dans le dépôt. `JWT_SECRET_KEY` est généré automatiquement par Render (`generateValue: true`).
+
+## Alternatives considérées
+- **VPS classique (plan initial)** : écarté — demande de maintenir Nginx/systemd/Certbot/mises à jour de sécurité OS manuellement, sans bénéfice pour un pilote à ce stade. Reste une option pour une Phase 2/3 à plus grande échelle si les coûts Render/Vercel deviennent prohibitifs.
+- **Casier judiciaire sur un bucket S3-compatible chiffré** plutôt qu'un disque Render : écarté pour l'instant — ADR-003 exclut déjà tout tiers pour cette donnée sensible (Art. 395, régime quasi-absolu) ; un disque Render reste un stockage "au nom du responsable de traitement", pas un service tiers autonome comme LuluFiles/S3. À réévaluer si Render ne convient plus.
+- **CORS ouvert (`allow_origins=["*"]`)** au lieu du rewrite Vercel : écarté — le rewrite Vercel supprime le problème à la racine (même origine du point de vue du navigateur) sans affaiblir la politique CORS du backend pour d'éventuels autres clients.
+
+## Conséquences
+Facilite : déploiement en quelques minutes (push Git → build automatique des deux côtés), pas de serveur à administrer, HTTPS géré automatiquement par les deux plateformes.
+Rend plus coûteux/risqué : le backend est **verrouillé à une seule instance** tant que le casier judiciaire reste sur disque local (documenté explicitly pour ne pas être oublié si quelqu'un active l'autoscaling plus tard) ; les disques persistants et la base PostgreSQL managée Render ont un coût mensuel dès le premier euro (pas de plan gratuit viable pour la production) ; le webhook Kkiapay et l'URL de callback doivent être mis à jour vers le domaine Render réel après le premier déploiement (l'URL exacte dépend de la disponibilité du nom `luluschools-backend` sur Render).

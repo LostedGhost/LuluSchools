@@ -34,8 +34,10 @@ Raisonnement complet dans `docs/adr/ADR-001-architecture-backend.md` et `docs/ad
 - **Style** : Tailwind CSS
 - Détails d'architecture (state management, data fetching, structure de dossiers) affinés à l'étape 6 avec le skill `react-architecture`, une fois le backend validé de bout en bout — pas avant, pour respecter l'ordre du pipeline.
 
-## Déploiement (aperçu — détaillé à l'étape 8)
-VPS Linux classique : Nginx en reverse proxy + service de fichiers statiques pour le build React, Gunicorn/Uvicorn pour FastAPI, PostgreSQL natif, systemd pour la supervision des process, Certbot pour le SSL. Aucune brique ne nécessite Docker.
+## Déploiement (étape 8)
+**Révisé par ADR-006** : le plan VPS ci-dessous a été abandonné au profit de deux plateformes managées — Render pour le backend (Web Service Python + PostgreSQL + disque persistant pour le casier judiciaire), Vercel pour le frontend (avec rewrite `/api/*` vers Render, pas de CORS côté navigateur). Voir `render.yaml`, `frontend/vercel.json` et `docs/adr/ADR-006-deploiement-render-vercel.md` pour le détail.
+
+~~VPS Linux classique : Nginx en reverse proxy + service de fichiers statiques pour le build React, Gunicorn/Uvicorn pour FastAPI, PostgreSQL natif, systemd pour la supervision des process, Certbot pour le SSL.~~ (plan initial, non retenu)
 
 ## Configuration et secrets
 Tout secret/paramètre d'environnement passe par `.env` (jamais commité — voir `.gitignore`) ; `.env.example` documente les clés attendues sans valeurs réelles.
