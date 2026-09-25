@@ -51,7 +51,8 @@ Même structure qu'UC-11, entités et endpoints renommés :
 | GET | `/classes/{id}/conversation` | membre de la classe (enseignant rattaché, élève inscrit, tuteur rattaché) | Le groupe de classe, créé automatiquement à la création de la `Classe` (aucun endpoint de création manuelle) |
 | GET | `/conversations/{id}/messages` | participant de la conversation | Pagination standard, plus récents en premier |
 | POST | `/conversations/{id}/messages` | participant de la conversation | `contenu` (texte, pas de pièce jointe — délégué UC-13) ; si un participant est Élève, le message est journalisé de façon inaltérable (Art. 519/521/550) |
-| POST | `/messages/{id}/signaler` | tout participant de la conversation du message | Notifie immédiatement l'A+ de l'établissement de l'élève concerné |
+| DELETE | `/messages/{id}` | participant de la conversation du message | Suppression non destructrice (oubliée du premier jet du contrat) : masque le message du point de vue de l'appelant uniquement (`masque_par`), jamais du stockage serveur — la journalisation pour preuve/signalement reste intacte |
+| POST | `/messages/{id}/signaler` | tout participant de la conversation du message | Rend le signalement visible à l'A+ concerné via `GET /etablissements/{id}/signalements` (écran de revue, même logique que les autres écrans de révision de la plateforme) |
 | GET | `/etablissements/{id}/signalements` | A+ | Signalements non traités pour les élèves de son établissement |
 | POST | `/signalements/{id}/traiter` | A+ | Marque traité, `decision` en texte libre conservée |
 

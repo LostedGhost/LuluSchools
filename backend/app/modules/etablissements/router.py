@@ -14,6 +14,7 @@ from app.modules.etablissements.schemas import (
     EtablissementOut,
 )
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+from app.modules.messagerie.models import Conversation, TypeConversation
 
 router = APIRouter(prefix="/etablissements", tags=["etablissements"])
 
@@ -150,6 +151,13 @@ def creer_classe(
     db.add(classe)
     db.commit()
     db.refresh(classe)
+
+    # UC-13 : le groupe de classe de messagerie est cree automatiquement, sa composition
+    # est calculee dynamiquement (voir app/modules/messagerie/models.py) - rien d'autre
+    # a synchroniser ici.
+    db.add(Conversation(type=TypeConversation.GROUPE_CLASSE, classe_id=classe.id))
+    db.commit()
+
     return classe
 
 

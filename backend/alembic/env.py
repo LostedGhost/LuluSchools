@@ -15,6 +15,7 @@ from app.modules.actes import models as actes_models  # noqa: F401
 from app.modules.controle_acces import models as controle_acces_models  # noqa: F401
 from app.modules.services_scolaires import models as services_scolaires_models  # noqa: F401
 from app.modules.billetterie import models as billetterie_models  # noqa: F401
+from app.modules.messagerie import models as messagerie_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

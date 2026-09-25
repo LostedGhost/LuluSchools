@@ -16,6 +16,7 @@ from app.modules.identite.router import auth_router, enseignant_router, me_route
 from app.modules.identite.router import router as identite_router
 from app.modules.inscriptions.router import mon_espace_router as inscriptions_mon_espace_router
 from app.modules.inscriptions.router import router as inscriptions_router
+from app.modules.messagerie.router import router as messagerie_router
 from app.modules.paiements.router import router as kkiapay_webhook_router
 from app.modules.recrutement.router import router as recrutement_router
 from app.modules.services_scolaires.router import router as services_scolaires_router
@@ -71,4 +72,5 @@ app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")
 app.include_router(services_scolaires_router, prefix="/api/v1")
 app.include_router(billetterie_router, prefix="/api/v1")
+app.include_router(messagerie_router, prefix="/api/v1")
 app.include_router(kkiapay_webhook_router, prefix="/api/v1")
