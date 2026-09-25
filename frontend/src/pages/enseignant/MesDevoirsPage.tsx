@@ -4,6 +4,7 @@ import {
   corrigerSoumission,
   creerDevoir,
   listerDevoirs,
+  questionsAvecBareme,
   soumissionsARevoir,
   type QuestionDevoirPayload,
 } from "../../api/evaluations";
@@ -21,6 +22,7 @@ export function MesDevoirsPage() {
   const [classeId, setClasseId] = useState("");
   const [devoirs, setDevoirs] = useState<DevoirOut[]>([]);
   const [aRevoirParDevoir, setARevoirParDevoir] = useState<Record<string, SoumissionOut[]>>({});
+  const [baremeParDevoir, setBaremeParDevoir] = useState<Record<string, Record<string, string>>>({});
 
   const [titre, setTitre] = useState("");
   const [matiere, setMatiere] = useState("");
@@ -63,7 +65,18 @@ export function MesDevoirsPage() {
         const entrees = await Promise.all(
           res.data.map(async (d) => [d.id, (await soumissionsARevoir(d.id)).data] as const),
         );
+        const devoirsARevoir = entrees.filter(([, soumissions]) => soumissions.length > 0);
         setARevoirParDevoir(Object.fromEntries(entrees));
+
+        // Bareme charge seulement pour les devoirs ayant reellement une revision en
+        // attente (endpoint reserve au proprietaire, evite des appels inutiles).
+        const baremeEntrees = await Promise.all(
+          devoirsARevoir.map(async ([devoirId]) => {
+            const bareme = await questionsAvecBareme(devoirId);
+            return [devoirId, Object.fromEntries(bareme.data.map((q) => [q.id, q.bareme_reponse]))] as const;
+          }),
+        );
+        setBaremeParDevoir(Object.fromEntries(baremeEntrees));
       })
       .catch((err) => setErreur(messageErreur(err)));
   };
@@ -268,6 +281,11 @@ export function MesDevoirsPage() {
                         return (
                           <div key={q.id} className="text-sm pb-3 border-b border-dashed last:border-0" style={{ borderColor: 'var(--border)' }}>
                             <p className="font-medium text-ink mb-2">{q.enonce}</p>
+                            {baremeParDevoir[devoir.id]?.[q.id] && (
+                              <p className="text-xs mb-2" style={{ color: 'var(--reward-deep)' }}>
+                                <strong>Barème attendu :</strong> {baremeParDevoir[devoir.id][q.id]}
+                              </p>
+                            )}
                             <div className="bg-slate-50 p-3 rounded mb-3 text-ink-soft italic">
                               {reponse?.texte_reponse || "Aucune réponse fournie"}
                             </div>

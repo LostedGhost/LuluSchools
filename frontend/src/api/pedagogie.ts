@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { CoursOut, QuizOut, TentativeQuizOut } from "../types/api";
+import type { CoursOut, LienFichierOut, QuizOut, TentativeQuizOut } from "../types/api";
 
 export function listerCours(classeId: string) {
   return api.get<CoursOut[]>(`/classes/${classeId}/cours`);
@@ -11,6 +11,10 @@ export function listerQuiz(coursId: string) {
 
 export function obtenirQuiz(quizId: string) {
   return api.get<QuizOut>(`/quiz/${quizId}`);
+}
+
+export function obtenirLienFichierCours(coursId: string) {
+  return api.get<LienFichierOut>(`/cours/${coursId}/lien-fichier`);
 }
 
 export function tenterQuiz(quizId: string, reponses: number[]) {
@@ -25,7 +29,7 @@ export function publierCours(
   classeId: string,
   titre: string,
   chapitre: string,
-  format: "texte" | "pdf" | "audio",
+  format: "texte" | "pdf" | "audio" | "video",
   contenuTexte?: string,
   fichier?: File,
 ) {

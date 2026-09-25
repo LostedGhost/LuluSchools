@@ -59,6 +59,18 @@ export function soumissionsARevoir(devoirId: string) {
   return api.get<SoumissionOut[]>(`/devoirs/${devoirId}/soumissions-a-revoir`);
 }
 
+export interface QuestionAvecBareme {
+  id: string;
+  ordre: number;
+  enonce: string;
+  bareme_reponse: string;
+  points_max: number;
+}
+
+export function questionsAvecBareme(devoirId: string) {
+  return api.get<QuestionAvecBareme[]>(`/devoirs/${devoirId}/questions-bareme`);
+}
+
 export interface CorrectionManuellePayload {
   question_id: string;
   points_obtenus: number;

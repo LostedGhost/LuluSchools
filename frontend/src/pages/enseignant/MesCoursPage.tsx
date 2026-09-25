@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { listerClasses, listerEtablissements } from "../../api/etablissements";
-import { creerQuiz, listerCours, listerQuiz, publierCours } from "../../api/pedagogie";
+import { creerQuiz, listerCours, listerQuiz, obtenirLienFichierCours, publierCours } from "../../api/pedagogie";
 import { mesContrats } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
 import type { ClasseOut, CoursOut, EtablissementOut, FormatCours, QuizOut } from "../../types/api";
@@ -16,7 +16,21 @@ import {
   EmptyState,
   Skeleton,
 } from "../../components/ui";
-import { School, BookOpen } from "lucide-react";
+import { School, BookOpen, ExternalLink } from "lucide-react";
+
+const LABEL_FORMAT: Record<FormatCours, string> = {
+  texte: "Texte",
+  pdf: "Document PDF",
+  audio: "Audio",
+  video: "Vidéo",
+};
+
+const ACCEPT_PAR_FORMAT: Record<FormatCours, string | undefined> = {
+  texte: undefined,
+  pdf: "application/pdf",
+  audio: "audio/*",
+  video: "video/*",
+};
 
 const MATIERES = [
   "Mathématiques",
@@ -45,8 +59,9 @@ export function MesCoursPage() {
 
   const [titre, setTitre] = useState("");
   const [chapitre, setChapitre] = useState("");
-  const format: FormatCours = "texte";
+  const [format, setFormat] = useState<FormatCours>("texte");
   const [contenuTexte, setContenuTexte] = useState("");
+  const [fichier, setFichier] = useState<File | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [formErreur, setFormErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
@@ -54,6 +69,7 @@ export function MesCoursPage() {
   const [generatingQuizId, setGeneratingQuizId] = useState<string | null>(null);
   const [viewingCoursId, setViewingCoursId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [chargementLienId, setChargementLienId] = useState<string | null>(null);
 
   useEffect(() => {
     mesContrats()
@@ -115,13 +131,30 @@ export function MesCoursPage() {
       setFormErreur("Veuillez sélectionner une classe.");
       return;
     }
+    if (format !== "texte" && !fichier) {
+      setFormErreur(`Veuillez joindre un fichier ${LABEL_FORMAT[format].toLowerCase()}.`);
+      return;
+    }
+    if (format === "texte" && !contenuTexte.trim()) {
+      setFormErreur("Veuillez saisir le contenu du cours.");
+      return;
+    }
     setFormErreur(null);
     setEnCours(true);
     try {
-      await publierCours(targetClasseId, titre, chapitre, format, contenuTexte || undefined);
+      await publierCours(
+        targetClasseId,
+        titre,
+        chapitre,
+        format,
+        format === "texte" ? contenuTexte : undefined,
+        format !== "texte" ? fichier ?? undefined : undefined,
+      );
       setTitre("");
       setChapitre("");
       setContenuTexte("");
+      setFichier(null);
+      setFormat("texte");
       setShowForm(false);
       if (classeId !== targetClasseId) {
         setClasseId(targetClasseId);
@@ -132,6 +165,19 @@ export function MesCoursPage() {
       setFormErreur(messageErreur(err, "Impossible de publier le cours."));
     } finally {
       setEnCours(false);
+    }
+  };
+
+  const voirFichier = async (coursId: string) => {
+    setChargementLienId(coursId);
+    setErreur(null);
+    try {
+      const res = await obtenirLienFichierCours(coursId);
+      window.open(res.data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'ouvrir ce fichier pour le moment."));
+    } finally {
+      setChargementLienId(null);
     }
   };
 
@@ -230,19 +276,56 @@ export function MesCoursPage() {
                 </Select>
               </Field>
 
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Field
-                  label="Contenu"
-                  helper="Le contenu texte servira de base à l'IA pour générer automatiquement des quiz d'évaluation."
+              <Field label="Format" required>
+                <Select
+                  value={format}
+                  onChange={(e: any) => {
+                    setFormat(e.target.value as FormatCours);
+                    setFichier(null);
+                    setFormErreur(null);
+                  }}
+                  required
                 >
-                  <TextArea
-                    rows={5}
-                    placeholder="Saisissez ou collez le contenu du cours..."
-                    value={contenuTexte}
-                    onChange={(e: any) => setContenuTexte(e.target.value)}
-                  />
-                </Field>
-              </div>
+                  {(Object.keys(LABEL_FORMAT) as FormatCours[]).map((f) => (
+                    <option key={f} value={f}>
+                      {LABEL_FORMAT[f]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              {format === "texte" ? (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Field
+                    label="Contenu"
+                    required
+                    helper="Le contenu texte servira de base à l'IA pour générer automatiquement des quiz d'évaluation."
+                  >
+                    <TextArea
+                      rows={5}
+                      placeholder="Saisissez ou collez le contenu du cours..."
+                      value={contenuTexte}
+                      onChange={(e: any) => setContenuTexte(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Field
+                    label={`Fichier ${LABEL_FORMAT[format].toLowerCase()}`}
+                    required
+                    helper="50 Mo max (200 Mo pour une vidéo)."
+                  >
+                    <input
+                      type="file"
+                      accept={ACCEPT_PAR_FORMAT[format]}
+                      onChange={(e) => setFichier(e.target.files?.[0] ?? null)}
+                      className="field-input"
+                      required
+                    />
+                  </Field>
+                </div>
+              )}
 
               <div
                 style={{
@@ -525,9 +608,17 @@ export function MesCoursPage() {
                         <strong>Classe :</strong> {nomClasse}
                       </p>
                       {c.lulufiles_file_id && (
-                        <p style={{ margin: "6px 0 0", color: "var(--ink-soft)" }}>
-                          <strong>Fichier associé :</strong> {c.lulufiles_file_id}
-                        </p>
+                        <div style={{ marginTop: "10px" }}>
+                          <Btn
+                            variant="outline"
+                            size="sm"
+                            loading={chargementLienId === c.id}
+                            onClick={() => voirFichier(c.id)}
+                            rightIcon={<ExternalLink size={14} />}
+                          >
+                            Voir le fichier
+                          </Btn>
+                        </div>
                       )}
                     </div>
                   </div>

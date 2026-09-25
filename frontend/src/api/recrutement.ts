@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { CandidatureOut, ContestationOut, ContratOut, PosteOut } from "../types/api";
+import type { CandidatureOut, ContestationOut, ContratOut, LienFichierOut, PosteOut } from "../types/api";
 
 export function listerPostes(etablissementId: string) {
   return api.get<PosteOut[]>(`/etablissements/${etablissementId}/postes`);
@@ -74,4 +74,12 @@ export function deciderContestation(contestationId: string, decision: "acceptee"
 
 export function creerContrat(candidatureId: string, syllabus: string, dateFin: string) {
   return api.post<ContratOut>(`/candidatures/${candidatureId}/contrat`, { syllabus, date_fin: dateFin });
+}
+
+export function obtenirLienDocumentCandidature(documentId: string) {
+  return api.get<LienFichierOut>(`/documents-candidature/${documentId}/lien`);
+}
+
+export function obtenirLienSignatureContrat(contratId: string) {
+  return api.get<LienFichierOut>(`/contrats/${contratId}/lien-signature`);
 }

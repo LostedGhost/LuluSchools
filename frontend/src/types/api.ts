@@ -92,7 +92,7 @@ export interface EleveMeOut {
   etablissement_id: string | null;
 }
 
-export type FormatCours = "texte" | "pdf" | "audio";
+export type FormatCours = "texte" | "pdf" | "audio" | "video";
 
 export interface CoursOut {
   id: string;
@@ -100,7 +100,12 @@ export interface CoursOut {
   titre: string;
   chapitre: string;
   format: FormatCours;
+  contenu_texte: string | null;
   lulufiles_file_id: string | null;
+}
+
+export interface LienFichierOut {
+  url: string;
 }
 
 export interface QuestionQuizPubliqueOut {
@@ -191,6 +196,7 @@ export interface DocumentCandidatureOut {
   type_document: string;
   note_ia: number | null;
   statut: StatutDocumentCandidature;
+  lulufiles_file_id: string | null;
 }
 
 export type StatutCandidature = "en_evaluation" | "retenue" | "rejetee";
@@ -200,6 +206,8 @@ export interface CandidatureOut {
   poste_id: string;
   statut: StatutCandidature;
   score: number | null;
+  enseignant_nom: string;
+  enseignant_prenom: string;
   documents: DocumentCandidatureOut[];
 }
 
@@ -240,6 +248,9 @@ export type StatutDemandeActe = "soumise" | "en_traitement" | "acceptee" | "reje
 export interface DemandeActeOut {
   id: string;
   eleve_id: string;
+  eleve_nom: string;
+  eleve_prenom: string;
+  eleve_matricule: string | null;
   type_acte_id: string | null;
   est_reclamation: boolean;
   statut: StatutDemandeActe;

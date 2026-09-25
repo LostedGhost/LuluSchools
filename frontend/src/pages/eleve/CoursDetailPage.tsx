@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { listerCours, listerQuiz } from "../../api/pedagogie";
+import { listerCours, listerQuiz, obtenirLienFichierCours } from "../../api/pedagogie";
 import { messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { CoursOut, QuizOut } from "../../types/api";
@@ -12,22 +12,37 @@ import {
   Btn,
   Skeleton
 } from "../../components/ui";
-import { Target } from "lucide-react";
+import { Target, FileText, Headphones, Video, ExternalLink } from "lucide-react";
 
+const LABEL_FORMAT: Record<CoursOut["format"], string> = {
+  texte: "Texte",
+  pdf: "Document PDF",
+  audio: "Audio",
+  video: "Vidéo",
+};
+
+const ICONE_FORMAT: Record<CoursOut["format"], typeof FileText> = {
+  texte: FileText,
+  pdf: FileText,
+  audio: Headphones,
+  video: Video,
+};
 
 export function CoursDetailPage() {
   const { coursId } = useParams<{ coursId: string }>();
   const profil = useEleveProfil();
   const navigate = useNavigate();
-  
+
   const [cours, setCours] = useState<CoursOut | null>(null);
   const [quizzes, setQuizzes] = useState<QuizOut[]>([]);
   const [erreur, setErreur] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lienFichier, setLienFichier] = useState<string | null>(null);
+  const [chargementLien, setChargementLien] = useState(false);
 
   useEffect(() => {
     if (!profil.classe_id || !coursId) return;
-    
+
     setLoading(true);
     listerCours(profil.classe_id)
       .then(async (res) => {
@@ -43,6 +58,21 @@ export function CoursDetailPage() {
       .catch((err) => setErreur(messageErreur(err)))
       .finally(() => setLoading(false));
   }, [profil.classe_id, coursId]);
+
+  const ouvrirFichier = async () => {
+    if (!cours) return;
+    setChargementLien(true);
+    setErreur(null);
+    try {
+      const res = await obtenirLienFichierCours(cours.id);
+      window.open(res.data.url, "_blank", "noopener,noreferrer");
+      setLienFichier(res.data.url);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'ouvrir ce fichier pour le moment."));
+    } finally {
+      setChargementLien(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -87,11 +117,31 @@ export function CoursDetailPage() {
         <Card variant="soft">
           <div style={{ padding: 'var(--space-4)' }}>
             {cours.format === "texte" ? (
-              <p style={{ color: 'var(--ink)' }}>Contenu texte non disponible (simulation de contenu pour {cours.titre}).</p>
+              cours.contenu_texte ? (
+                <p style={{ color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{cours.contenu_texte}</p>
+              ) : (
+                <p style={{ color: 'var(--ink-soft)' }}>Ce cours n'a pas encore de contenu texte renseigné.</p>
+              )
             ) : (
-              <p style={{ color: 'var(--ink)' }}>Format {cours.format} à télécharger / visualiser.</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                <div style={{
+                  width: '48px', height: '48px', borderRadius: 'var(--radius-md)',
+                  background: 'var(--primary-tint)', color: 'var(--primary-deep)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }} aria-hidden="true">
+                  {(() => { const Icone = ICONE_FORMAT[cours.format]; return <Icone size={22} />; })()}
+                </div>
+                <div style={{ flex: 1, minWidth: '160px' }}>
+                  <p style={{ color: 'var(--ink)', fontWeight: 600, marginBottom: '2px' }}>{LABEL_FORMAT[cours.format]}</p>
+                  <p style={{ color: 'var(--ink-soft)', fontSize: 'var(--text-sm)' }}>
+                    S'ouvre dans un nouvel onglet.
+                  </p>
+                </div>
+                <Btn variant="primary" onClick={ouvrirFichier} loading={chargementLien} rightIcon={<ExternalLink size={16} />}>
+                  {lienFichier ? "Rouvrir le fichier" : "Ouvrir le fichier"}
+                </Btn>
+              </div>
             )}
-            {/* Si c'était un vrai markdown on utiliserait un composant Markdown ici */}
           </div>
         </Card>
       </div>

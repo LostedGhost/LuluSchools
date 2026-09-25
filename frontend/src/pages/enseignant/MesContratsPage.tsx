@@ -1,16 +1,30 @@
 import { useEffect, useState } from "react";
-import { mesContrats, signerContrat } from "../../api/recrutement";
+import { mesContrats, obtenirLienSignatureContrat, signerContrat } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
 import type { ContratOut } from "../../types/api";
 import { Badge, Card, ErrorBanner, SectionHead, Btn, EmptyState } from "../../components/ui";
 import { SignatureCanvas } from "../../components/SignatureCanvas";
-import { PenLine } from "lucide-react";
+import { ExternalLink, PenLine } from "lucide-react";
 
 export function MesContratsPage() {
   const [contrats, setContrats] = useState<ContratOut[]>([]);
   const [contratASigner, setContratASigner] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [lienEnCoursId, setLienEnCoursId] = useState<string | null>(null);
+
+  const voirSignature = async (contratId: string) => {
+    setLienEnCoursId(contratId);
+    setErreur(null);
+    try {
+      const res = await obtenirLienSignatureContrat(contratId);
+      window.open(res.data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'ouvrir la signature pour le moment."));
+    } finally {
+      setLienEnCoursId(null);
+    }
+  };
 
   const charger = () => {
     mesContrats()
@@ -87,8 +101,14 @@ export function MesContratsPage() {
                   )
                 ) : (
                   <div className="flex justify-end gap-2">
-                    <Btn variant="outline" size="sm">
-                      Voir PDF
+                    <Btn
+                      variant="outline"
+                      size="sm"
+                      loading={lienEnCoursId === c.id}
+                      onClick={() => voirSignature(c.id)}
+                      rightIcon={<ExternalLink size={14} />}
+                    >
+                      Voir ma signature
                     </Btn>
                   </div>
                 )}

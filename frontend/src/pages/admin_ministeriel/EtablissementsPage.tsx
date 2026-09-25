@@ -2,10 +2,26 @@ import { useEffect, useState, type FormEvent } from "react";
 import { creerEtablissement, listerEtablissements } from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
 import type { EtablissementOut, TypeEtablissement } from "../../types/api";
-import { Badge, Card, ErrorBanner, Field, PageTitle, PrimaryButton, TextInput } from "../../components/ui";
+import {
+  Badge,
+  Btn,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Field,
+  PageTitle,
+  SectionHead,
+  Select,
+  SkeletonCard,
+  SuccessBanner,
+  TextInput,
+} from "../../components/ui";
+import { Building2 } from "lucide-react";
 
 export function EtablissementsPage() {
   const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
+  const [chargement, setChargement] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [nom, setNom] = useState("");
   const [type, setType] = useState<TypeEtablissement>("EP");
   const [statut, setStatut] = useState<"public" | "prive">("public");
@@ -17,9 +33,11 @@ export function EtablissementsPage() {
   const [enCours, setEnCours] = useState(false);
 
   const charger = () => {
+    setChargement(true);
     listerEtablissements()
       .then((res) => setEtablissements(res.data))
-      .catch((err) => setErreur(messageErreur(err)));
+      .catch((err) => setErreur(messageErreur(err)))
+      .finally(() => setChargement(false));
   };
 
   useEffect(charger, []);
@@ -36,83 +54,107 @@ export function EtablissementsPage() {
         statut,
         admin: { nom: adminNom, prenom: adminPrenom, email: adminEmail },
       });
-      setSucces(`Etablissement cree. Identifiants temporaires envoyes a ${adminEmail}.`);
+      setSucces(`Établissement créé. Identifiants temporaires envoyés à ${adminEmail}.`);
       setNom("");
       setAdminNom("");
       setAdminPrenom("");
       setAdminEmail("");
+      setShowForm(false);
       charger();
     } catch (err) {
-      setErreur(messageErreur(err, "Impossible de creer l'etablissement."));
+      setErreur(messageErreur(err, "Impossible de créer l'établissement."));
     } finally {
       setEnCours(false);
     }
   };
 
   return (
-    <div>
-      <PageTitle>Etablissements</PageTitle>
-      <ErrorBanner>{erreur}</ErrorBanner>
-      {succes && <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{succes}</p>}
-
-      <Card className="mb-4">
-        <p className="mb-3 font-medium text-slate-900">Creer un etablissement</p>
-        <form onSubmit={soumettre} className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Nom">
-              <TextInput value={nom} onChange={(e) => setNom(e.target.value)} required />
-            </Field>
-            <Field label="Type">
-              <select
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={type}
-                onChange={(e) => setType(e.target.value as TypeEtablissement)}
-              >
-                <option value="EP">Primaire (EP)</option>
-                <option value="ES">Secondaire (ES)</option>
-                <option value="UP">Universitaire (UP)</option>
-              </select>
-            </Field>
-            <Field label="Statut">
-              <select
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={statut}
-                onChange={(e) => setStatut(e.target.value as "public" | "prive")}
-              >
-                <option value="public">Public</option>
-                <option value="prive">Prive</option>
-              </select>
-            </Field>
-          </div>
-          <p className="text-sm font-medium text-slate-700">Administrateur de l'etablissement</p>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Nom">
-              <TextInput value={adminNom} onChange={(e) => setAdminNom(e.target.value)} required />
-            </Field>
-            <Field label="Prenom">
-              <TextInput value={adminPrenom} onChange={(e) => setAdminPrenom(e.target.value)} required />
-            </Field>
-            <Field label="E-mail">
-              <TextInput type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} required />
-            </Field>
-          </div>
-          <PrimaryButton type="submit" disabled={enCours}>
-            {enCours ? "Creation..." : "Creer l'etablissement"}
-          </PrimaryButton>
-        </form>
-      </Card>
-
-      <div className="space-y-2">
-        {etablissements.map((e) => (
-          <Card key={e.id} className="flex items-center justify-between">
-            <span>{e.nom}</span>
-            <div className="flex items-center gap-2">
-              <Badge tone="neutral">{e.code_etablissement}</Badge>
-              <Badge tone="info">{e.type}</Badge>
-            </div>
-          </Card>
-        ))}
+    <div className="page-content">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-4)" }}>
+        <PageTitle eyebrow="Espace ministériel">Établissements</PageTitle>
+        <Btn variant="primary" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? "Fermer" : "+ Créer un établissement"}
+        </Btn>
       </div>
+      <ErrorBanner>{erreur}</ErrorBanner>
+      {succes && (
+        <div className="mb-4">
+          <SuccessBanner>{succes}</SuccessBanner>
+        </div>
+      )}
+
+      {showForm && (
+        <Card className="mb-8 anim-slide-up" style={{ borderColor: "var(--primary)", borderWidth: "2px" }}>
+          <SectionHead title="Créer un établissement" desc="Provisionne aussi le premier compte A+, avec mot de passe temporaire envoyé par e-mail." />
+          <form onSubmit={soumettre} className="space-y-4" style={{ marginTop: "var(--space-4)" }}>
+            <div className="grid-3">
+              <Field label="Nom">
+                <TextInput value={nom} onChange={(e) => setNom(e.target.value)} required />
+              </Field>
+              <Field label="Type">
+                <Select value={type} onChange={(e) => setType(e.target.value as TypeEtablissement)}>
+                  <option value="EP">Primaire (EP)</option>
+                  <option value="ES">Secondaire (ES)</option>
+                  <option value="UP">Universitaire (UP)</option>
+                </Select>
+              </Field>
+              <Field label="Statut">
+                <Select value={statut} onChange={(e) => setStatut(e.target.value as "public" | "prive")}>
+                  <option value="public">Public</option>
+                  <option value="prive">Privé</option>
+                </Select>
+              </Field>
+            </div>
+            <p className="text-eyebrow">Administrateur de l'établissement</p>
+            <div className="grid-3">
+              <Field label="Nom">
+                <TextInput value={adminNom} onChange={(e) => setAdminNom(e.target.value)} required />
+              </Field>
+              <Field label="Prénom">
+                <TextInput value={adminPrenom} onChange={(e) => setAdminPrenom(e.target.value)} required />
+              </Field>
+              <Field label="E-mail">
+                <TextInput type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} required />
+              </Field>
+            </div>
+            <Btn type="submit" variant="primary" loading={enCours}>
+              Créer l'établissement
+            </Btn>
+          </form>
+        </Card>
+      )}
+
+      <SectionHead title="Établissements du réseau" />
+      {chargement ? (
+        <div className="grid-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : etablissements.length === 0 ? (
+        <EmptyState icon={<Building2 size={24} />} title="Aucun établissement" desc="Créez le premier établissement du réseau ci-dessus." />
+      ) : (
+        <div className="grid-3">
+          {etablissements.map((e) => (
+            <Card key={e.id}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}>
+                <div style={{
+                  width: "40px", height: "40px", borderRadius: "var(--radius-md)",
+                  background: "var(--primary-tint)", color: "var(--primary-deep)",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }} aria-hidden="true">
+                  <Building2 size={20} />
+                </div>
+                <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.nom}</span>
+              </div>
+              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                <Badge tone="neutral">{e.code_etablissement}</Badge>
+                <Badge tone="info">{e.type}</Badge>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
