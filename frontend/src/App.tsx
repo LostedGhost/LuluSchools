@@ -6,6 +6,7 @@ import { EleveProfileProvider } from "./eleve/EleveProfileContext";
 import { AdminEtabProvider } from "./admin/AdminEtabContext";
 
 import { LandingPage } from "./pages/LandingPage";
+import { EtablissementsAnnuairePage } from "./pages/EtablissementsAnnuairePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
@@ -49,6 +50,7 @@ function App() {
         <AppLayout>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/etablissements" element={<EtablissementsAnnuairePage />} />
             <Route path="/connexion" element={<LoginPage />} />
             <Route path="/inscription-tuteur" element={<SignupPage role="tuteur" />} />
             <Route path="/inscription-enseignant" element={<SignupPage role="enseignant" />} />

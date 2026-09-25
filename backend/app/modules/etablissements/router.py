@@ -1,17 +1,27 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
+from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.security import generate_temporary_password, hash_password
-from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
+from app.modules.etablissements.models import (
+    AdminEtablissement,
+    Classe,
+    Etablissement,
+    EtablissementPhoto,
+    TypeEtablissement,
+)
 from app.modules.etablissements.schemas import (
+    AnnuairePubliqueOut,
     ClasseCreate,
     ClasseOut,
     EtablissementCreate,
     EtablissementOut,
+    EtablissementPhotoOut,
+    EtablissementPhotoPubliqueOut,
     EtablissementVitrineOut,
     PosteVitrineOut,
     VitrinePubliqueOut,
@@ -110,24 +120,35 @@ def mon_etablissement(
     return etablissement
 
 
+def _compter_par_etablissement(items: list) -> dict[str, int]:
+    compteur: dict[str, int] = {}
+    for item in items:
+        compteur[item.etablissement_id] = compteur.get(item.etablissement_id, 0) + 1
+    return compteur
+
+
 @router.get("/vitrine-publique", response_model=VitrinePubliqueOut)
 def vitrine_publique(db: Session = Depends(get_db)) -> VitrinePubliqueOut:
-    """Endpoint public assume (aucune authentification) : alimente la vitrine marketing de la
-    landing page (etablissements partenaires, postes enseignants ouverts). Ne renvoie que des
-    champs non sensibles (pas de code_etablissement, pas d'email d'admin)."""
-    etablissements = db.query(Etablissement).order_by(Etablissement.created_at.desc()).all()
-    classes = db.query(Classe).all()
-    postes_ouverts_tous = (
-        db.query(Poste).filter(Poste.statut == StatutPoste.OUVERT).order_by(Poste.created_at.desc()).all()
+    """Endpoint public assume (aucune authentification) : teaser leger pour la landing page
+    (3 etablissements en avant, quelques postes ouverts, totaux globaux). La plateforme a
+    vocation nationale : la liste complete vit dans l'annuaire dedie (GET .../annuaire-public),
+    jamais sur la premiere page. Ne renvoie que des champs non sensibles."""
+    total_etablissements = db.query(func.count(Etablissement.id)).scalar() or 0
+    total_classes = db.query(func.count(Classe.id)).scalar() or 0
+    postes_ouverts_tous = db.query(Poste).filter(Poste.statut == StatutPoste.OUVERT).all()
+
+    # En avant : les etablissements qui ont le plus d'opportunites ouvertes en ce moment.
+    nb_postes_par_etab = _compter_par_etablissement(postes_ouverts_tous)
+    etablissements_en_avant = (
+        db.query(Etablissement)
+        .order_by(Etablissement.created_at.desc())
+        .limit(24)
+        .all()
     )
+    etablissements_en_avant.sort(key=lambda e: nb_postes_par_etab.get(e.id, 0), reverse=True)
+    etablissements_en_avant = etablissements_en_avant[:3]
 
-    nb_classes_par_etab: dict[str, int] = {}
-    for c in classes:
-        nb_classes_par_etab[c.etablissement_id] = nb_classes_par_etab.get(c.etablissement_id, 0) + 1
-
-    nb_postes_par_etab: dict[str, int] = {}
-    for p in postes_ouverts_tous:
-        nb_postes_par_etab[p.etablissement_id] = nb_postes_par_etab.get(p.etablissement_id, 0) + 1
+    classes_par_etab = _compter_par_etablissement(db.query(Classe).all())
 
     etablissements_out = [
         EtablissementVitrineOut(
@@ -135,13 +156,13 @@ def vitrine_publique(db: Session = Depends(get_db)) -> VitrinePubliqueOut:
             nom=e.nom,
             type=e.type,
             statut=e.statut,
-            nb_classes=nb_classes_par_etab.get(e.id, 0),
+            nb_classes=classes_par_etab.get(e.id, 0),
             nb_postes_ouverts=nb_postes_par_etab.get(e.id, 0),
         )
-        for e in etablissements
+        for e in etablissements_en_avant
     ]
 
-    etab_by_id = {e.id: e for e in etablissements}
+    etab_by_id = {e.id: e for e in etablissements_en_avant}
     postes_out = [
         PosteVitrineOut(
             id=p.id,
@@ -150,7 +171,7 @@ def vitrine_publique(db: Session = Depends(get_db)) -> VitrinePubliqueOut:
             etablissement_nom=etab_by_id[p.etablissement_id].nom,
             etablissement_type=etab_by_id[p.etablissement_id].type,
         )
-        for p in postes_ouverts_tous[:12]
+        for p in sorted(postes_ouverts_tous, key=lambda p: p.created_at, reverse=True)[:3]
         if p.etablissement_id in etab_by_id
     ]
 
@@ -158,11 +179,62 @@ def vitrine_publique(db: Session = Depends(get_db)) -> VitrinePubliqueOut:
         etablissements=etablissements_out,
         postes_ouverts=postes_out,
         totaux=VitrineTotauxOut(
-            etablissements=len(etablissements),
-            classes=len(classes),
+            etablissements=total_etablissements,
+            classes=total_classes,
             postes_ouverts=len(postes_ouverts_tous),
         ),
     )
+
+
+@router.get("/annuaire-public", response_model=AnnuairePubliqueOut)
+def annuaire_public(
+    type: TypeEtablissement | None = None,
+    q: str | None = None,
+    limit: int = 24,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+) -> AnnuairePubliqueOut:
+    """Endpoint public assume (aucune authentification) : annuaire complet et paginable des
+    etablissements, sur sa propre page dediee (jamais la landing page — voir vitrine_publique).
+    `limit` est plafonne cote serveur quel que soit ce qui est demande, pour ne jamais laisser
+    un client construire une reponse geante si le nombre d'etablissements grandit."""
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+
+    requete = db.query(Etablissement)
+    if type is not None:
+        requete = requete.filter(Etablissement.type == type)
+    if q:
+        requete = requete.filter(Etablissement.nom.ilike(f"%{q}%"))
+
+    total = requete.with_entities(func.count(Etablissement.id)).scalar() or 0
+    page = requete.order_by(Etablissement.nom.asc()).offset(offset).limit(limit).all()
+
+    ids_page = [e.id for e in page]
+    classes_page = db.query(Classe).filter(Classe.etablissement_id.in_(ids_page)).all() if ids_page else []
+    postes_page = (
+        db.query(Poste)
+        .filter(Poste.etablissement_id.in_(ids_page), Poste.statut == StatutPoste.OUVERT)
+        .all()
+        if ids_page
+        else []
+    )
+    classes_par_etab = _compter_par_etablissement(classes_page)
+    postes_par_etab = _compter_par_etablissement(postes_page)
+
+    items = [
+        EtablissementVitrineOut(
+            id=e.id,
+            nom=e.nom,
+            type=e.type,
+            statut=e.statut,
+            nb_classes=classes_par_etab.get(e.id, 0),
+            nb_postes_ouverts=postes_par_etab.get(e.id, 0),
+        )
+        for e in page
+    ]
+
+    return AnnuairePubliqueOut(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{etablissement_id}", response_model=EtablissementOut)
@@ -219,6 +291,84 @@ def creer_classe(
     db.commit()
 
     return classe
+
+
+@router.post(
+    "/{etablissement_id}/photos", response_model=EtablissementPhotoOut, status_code=status.HTTP_201_CREATED
+)
+async def ajouter_photo_etablissement(
+    etablissement_id: str,
+    fichier: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+    files_client: LuluFilesClient = Depends(get_files_client),
+) -> EtablissementPhoto:
+    if db.get(Etablissement, etablissement_id) is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+
+    nb_photos = (
+        db.query(func.count(EtablissementPhoto.id))
+        .filter(EtablissementPhoto.etablissement_id == etablissement_id)
+        .scalar()
+        or 0
+    )
+    if nb_photos >= 8:
+        raise api_error(status.HTTP_400_BAD_REQUEST, "limite_atteinte", "Maximum 8 photos par etablissement.")
+
+    contenu = await fichier.read()
+    try:
+        file_id = files_client.upload(
+            contenu, fichier.filename or "photo.jpg", fichier.content_type or "image/jpeg"
+        )
+    except FileStorageError as exc:
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "upload_echoue", "Impossible d'envoyer la photo.") from exc
+
+    photo = EtablissementPhoto(etablissement_id=etablissement_id, lulufiles_file_id=file_id, ordre=nb_photos)
+    db.add(photo)
+    db.commit()
+    db.refresh(photo)
+    return photo
+
+
+@router.delete("/{etablissement_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def supprimer_photo_etablissement(
+    etablissement_id: str,
+    photo_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> None:
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    photo = db.get(EtablissementPhoto, photo_id)
+    if photo is None or photo.etablissement_id != etablissement_id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Photo introuvable.")
+    db.delete(photo)
+    db.commit()
+
+
+@router.get("/{etablissement_id}/photos-publiques", response_model=list[EtablissementPhotoPubliqueOut])
+def photos_publiques_etablissement(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+) -> list[EtablissementPhotoPubliqueOut]:
+    """Endpoint public assume (aucune authentification) : resout les liens signes a la demande,
+    appele uniquement quand un visiteur ouvre une fiche etablissement precise (jamais en masse
+    sur la liste/annuaire, pour ne pas multiplier les appels reseau vers LuluFiles)."""
+    photos = (
+        db.query(EtablissementPhoto)
+        .filter(EtablissementPhoto.etablissement_id == etablissement_id)
+        .order_by(EtablissementPhoto.ordre.asc())
+        .all()
+    )
+    resultat: list[EtablissementPhotoPubliqueOut] = []
+    for photo in photos:
+        try:
+            url = files_client.get_signed_link(photo.lulufiles_file_id, disposition="inline")
+        except FileStorageError:
+            continue
+        resultat.append(EtablissementPhotoPubliqueOut(id=photo.id, url=url, ordre=photo.ordre))
+    return resultat
 
 
 @router.get("/{etablissement_id}/classes", response_model=list[ClasseOut])

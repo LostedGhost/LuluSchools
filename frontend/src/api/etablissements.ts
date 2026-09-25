@@ -60,3 +60,41 @@ export interface VitrinePublique {
 export function vitrinePublique() {
   return api.get<VitrinePublique>("/etablissements/vitrine-publique");
 }
+
+export interface AnnuairePublique {
+  items: EtablissementVitrine[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export function annuairePublic(params: { type?: "EP" | "ES" | "UP"; q?: string; limit?: number; offset?: number } = {}) {
+  return api.get<AnnuairePublique>("/etablissements/annuaire-public", { params });
+}
+
+export interface PhotoPublique {
+  id: string;
+  url: string;
+  ordre: number;
+}
+
+export function photosPubliques(etablissementId: string) {
+  return api.get<PhotoPublique[]>(`/etablissements/${etablissementId}/photos-publiques`);
+}
+
+export interface PhotoOut {
+  id: string;
+  ordre: number;
+}
+
+export function ajouterPhotoEtablissement(etablissementId: string, fichier: File) {
+  const formData = new FormData();
+  formData.append("fichier", fichier);
+  return api.post<PhotoOut>(`/etablissements/${etablissementId}/photos`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+export function supprimerPhotoEtablissement(etablissementId: string, photoId: string) {
+  return api.delete(`/etablissements/${etablissementId}/photos/${photoId}`);
+}

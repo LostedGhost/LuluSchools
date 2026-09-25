@@ -66,3 +66,19 @@ class Classe(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     etablissement: Mapped[Etablissement] = relationship(back_populates="classes")
+
+
+class EtablissementPhoto(Base):
+    """Photo d'un etablissement pour l'annuaire public (vitrine/marketplace). Le fichier
+    reel est stocke sur LuluFiles (ADR-003) : seul l'id du fichier est conserve ici, un
+    lien signe est genere a la demande (voir GET /etablissements/{id}/photos-publiques)."""
+
+    __tablename__ = "etablissement_photos"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    etablissement_id: Mapped[str] = mapped_column(ForeignKey("etablissements.id"), index=True)
+    lulufiles_file_id: Mapped[str] = mapped_column(String(100))
+    ordre: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    etablissement: Mapped[Etablissement] = relationship()

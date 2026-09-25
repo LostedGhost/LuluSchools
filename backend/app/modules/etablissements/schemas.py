@@ -81,8 +81,41 @@ class VitrineTotauxOut(BaseModel):
 
 
 class VitrinePubliqueOut(BaseModel):
+    """Teaser leger pour la landing page : quelques etablissements en avant, pas
+    l'annuaire complet (voir AnnuairePubliqueOut, qui lui est fait pour ca)."""
+
     model_config = ConfigDict(extra="forbid")
 
     etablissements: list[EtablissementVitrineOut]
     postes_ouverts: list[PosteVitrineOut]
     totaux: VitrineTotauxOut
+
+
+class EtablissementPhotoOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    ordre: int
+
+
+class EtablissementPhotoPubliqueOut(BaseModel):
+    """Version publique d'une photo : url signee resolue a la demande, jamais l'id LuluFiles brut."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    url: str
+    ordre: int
+
+
+class AnnuairePubliqueOut(BaseModel):
+    """Annuaire public paginable des etablissements (page dediee, pas la landing
+    page) : la plateforme a vocation nationale, le nombre d'etablissements ne
+    doit jamais etre suppose petit."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[EtablissementVitrineOut]
+    total: int
+    limit: int
+    offset: int

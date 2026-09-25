@@ -874,6 +874,93 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 .anim-rise-in { animation: rise-in .55s var(--ease-spring) both; }
 
 /* ═══════════════════════════════════════════════════════════════
+   SCÈNE 3D — Objets flottants du hero (CSS preserve-3d, pas de WebGL :
+   quelques faces suffisent à raconter le volume, et ces objets héritent
+   des jetons de couleur / du thème sombre — un canvas ne le ferait pas)
+   ═══════════════════════════════════════════════════════════════ */
+
+.obj-scene { perspective: 1000px; perspective-origin: 50% 40%; position: absolute; pointer-events: none; }
+.obj-3d { transform-style: preserve-3d; position: relative; }
+.obj-face { position: absolute; inset: 0; border-radius: inherit; backface-visibility: hidden; }
+
+/* Diplôme flottant : carte + ruban de sceau, tranche pour l'épaisseur */
+.diploma-card {
+  width: 108px;
+  height: 140px;
+  animation: drift-float-a 8s ease-in-out infinite;
+}
+.diploma-card .obj-face-front {
+  background: linear-gradient(155deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.diploma-card .obj-face-front i { display: block; height: 4px; border-radius: var(--radius-pill); background: var(--border-strong); opacity: 0.6; }
+.diploma-card .obj-face-front i:first-child { width: 60%; background: var(--reward-deep); opacity: 1; }
+.diploma-card .obj-seal {
+  margin-top: auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--reward-tint);
+  border: 2px solid var(--reward-deep);
+}
+.diploma-card .obj-face-side {
+  width: 9px;
+  left: auto;
+  right: -9px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--border-strong);
+  transform: rotateY(60deg);
+  transform-origin: left center;
+}
+.diploma-card .obj-face-bottom {
+  height: 9px;
+  top: auto;
+  bottom: -9px;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--border);
+  transform: rotateX(-60deg);
+  transform-origin: center top;
+}
+
+/* Médaille flottante : disque + anneau, effet pièce/médaille */
+.medal-3d {
+  width: 64px;
+  height: 64px;
+  animation: drift-float-b 7s ease-in-out infinite;
+}
+.medal-3d .obj-face-front {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--clr-amber-500, #d97706), var(--reward-deep));
+  border: 3px solid color-mix(in srgb, var(--reward-deep) 70%, black 10%);
+  box-shadow: var(--shadow-lg);
+}
+.medal-3d .obj-face-back {
+  border-radius: 50%;
+  background: var(--reward-deep);
+  transform: translateZ(-8px) scale(0.92);
+  opacity: 0.7;
+}
+
+@keyframes drift-float-a {
+  0%, 100% { transform: rotateX(10deg) rotateY(-18deg) translateY(0); }
+  50%      { transform: rotateX(14deg) rotateY(-12deg) translateY(-14px); }
+}
+@keyframes drift-float-b {
+  0%, 100% { transform: rotateX(-8deg) rotateY(16deg) translateY(0) translateZ(0); }
+  50%      { transform: rotateX(-4deg) rotateY(24deg) translateY(12px) translateZ(10px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diploma-card, .medal-3d { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    UTILITAIRES — Divers
    ═══════════════════════════════════════════════════════════════ */
 
