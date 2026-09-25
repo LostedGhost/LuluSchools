@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.modules.inscriptions.models import StatutInscription
+from app.modules.inscriptions.models import Nationalite, StatutInscription
 
 
 class InscriptionCreate(BaseModel):
@@ -12,6 +12,7 @@ class InscriptionCreate(BaseModel):
     prenom: str
     date_naissance: date
     classe_id: str
+    nationalite: Nationalite = Nationalite.NATIONALE
     consentement_parental_donne: bool = False
 
 

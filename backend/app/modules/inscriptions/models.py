@@ -23,6 +23,11 @@ class StatutInscription(str, enum.Enum):
     REJETEE = "rejetee"
 
 
+class Nationalite(str, enum.Enum):
+    NATIONALE = "nationale"
+    ETRANGERE = "etrangere"
+
+
 class Eleve(Base):
     __tablename__ = "eleves"
 
@@ -30,6 +35,7 @@ class Eleve(Base):
     nom: Mapped[str] = mapped_column(String(100))
     prenom: Mapped[str] = mapped_column(String(100))
     date_naissance: Mapped[date] = mapped_column(Date)
+    nationalite: Mapped[Nationalite] = mapped_column(Enum(Nationalite), default=Nationalite.NATIONALE)
     matricule: Mapped[str | None] = mapped_column(String(30), unique=True, index=True, nullable=True)
     tuteur_id: Mapped[str | None] = mapped_column(ForeignKey("tuteurs.utilisateur_id"), nullable=True)
     utilisateur_id: Mapped[str | None] = mapped_column(

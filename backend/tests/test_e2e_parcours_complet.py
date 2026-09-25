@@ -138,7 +138,9 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
     identifiants_eleve = next(
         m for m in fake_email_client.sent if "login_id" in m and m.get("to_email") == "awa.dossou.e2e@example.com"
     )
-    assert identifiants_eleve["login_id"].startswith(f"BJ-{etablissement['code_etablissement']}-")
+    # Format matricule EP (proposition) : 7 (cycle EP) + 1 (national) + 00001 (sequence) + annee.
+    assert len(identifiants_eleve["login_id"]) == 9
+    assert identifiants_eleve["login_id"].startswith("71")
 
     eleve_headers, login_eleve = _login(client, identifiants_eleve["login_id"], identifiants_eleve["mot_de_passe"])
     assert login_eleve["doit_changer_mot_de_passe"] is True

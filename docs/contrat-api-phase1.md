@@ -43,9 +43,9 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/inscriptions` | Tuteur | UC-02 | Statut initial `soumise` ou `en_attente_consentement_parental` selon l'âge (peut être court-circuité par `consentement_parental_donne: true` à la soumission). **Limitation Phase 1** : l'auto-inscription directe par un élève ≥16 ans sans tuteur n'est pas implémentée (nécessiterait un flux de compte dédié, symétrique à UC-01) — seul un tuteur peut soumettre pour l'instant. |
+| POST | `/inscriptions` | Tuteur, ou Élève titulaire (réinscription sur son propre compte déjà existant) | UC-02 | Corps : `nom`, `prenom`, `date_naissance`, `classe_id`, `nationalite` (`nationale` \| `etrangere`, défaut `nationale`), `consentement_parental_donne`. Statut initial `soumise` ou `en_attente_consentement_parental` selon l'âge (peut être court-circuité par `consentement_parental_donne: true` à la soumission). |
 | POST | `/inscriptions/{id}/consentement-parental` | Tuteur rattaché | UC-02 | Débloque une inscription en attente de consentement |
-| POST | `/inscriptions/{id}/valider` | A+ (de l'établissement de la classe) | UC-02, UC-03 | Refusé (409) si consentement manquant ou classe complète (capacité atteinte, compte les inscriptions déjà `validee`). Génère le matricule (`BJ-{code_etab}-{annee}-{sequence}`) et le compte élève (mot de passe temporaire envoyé au tuteur par e-mail). |
+| POST | `/inscriptions/{id}/valider` | A+ (de l'établissement de la classe) | UC-02, UC-03 | Refusé (409) si consentement manquant ou classe complète (capacité atteinte, compte les inscriptions déjà `validee`). Génère le matricule (voir UC-03 : format universitaire `[nationalite:1][sequence:5][annee:2]` sur 8 caractères, format EP/ES `[cycle:1][nationalite:1][sequence:5][annee:2]` sur 9 caractères) et le compte élève (mot de passe temporaire envoyé au tuteur par e-mail). |
 | POST | `/inscriptions/{id}/rejeter` | A+ | UC-02 | Motif obligatoire |
 | GET | `/inscriptions/{id}` | Tuteur rattaché, ou A+ de l'établissement de la classe | UC-02 | Lecture (contrôle d'accès vérifié, pas seulement l'authentification — anti-IDOR) |
 

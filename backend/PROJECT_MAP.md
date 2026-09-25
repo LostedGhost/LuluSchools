@@ -38,8 +38,9 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `router.py` — `POST/GET /etablissements` (A++ seul pour créer, provisionne aussi le premier compte A+ avec mot de passe temporaire), `POST/GET /etablissements/{id}/classes` (A+, avec vérification stricte que l'admin administre bien CET établissement — anti-IDOR).
 
 ### app/modules/inscriptions/
-- `models.py` — `Eleve` (identité de l'élève, `utilisateur_id` nullable tant que non validée), `Inscription` (`statut` : en_attente_consentement_parental/soumise/validee/rejetee), enum `StatutInscription`.
-- `router.py` — `POST /inscriptions` (Tuteur seul en Phase 1 — l'auto-inscription ≥16 ans sans tuteur n'est pas implémentée, nécessiterait un flux de compte dédié), branche d'âge Art. 446 (16 ans), `POST .../consentement-parental`, `POST .../valider` (A+, vérifie la capacité de la classe et génère matricule + compte élève), `POST .../rejeter`, `GET /inscriptions/{id}`.
+- `models.py` — `Eleve` (identité de l'élève, `nationalite` enum NATIONALE/ETRANGERE, `utilisateur_id` nullable tant que non validée), `Inscription` (`statut` : en_attente_consentement_parental/soumise/validee/rejetee), enums `StatutInscription`, `Nationalite`.
+- `router.py` — `POST /inscriptions` (Tuteur, ou Élève titulaire pour une réinscription sur son propre compte), branche d'âge Art. 446 (16 ans), `POST .../consentement-parental`, `POST .../valider` (A+, vérifie la capacité de la classe et génère le matricule via `_generer_matricule` + compte élève), `POST .../rejeter`, `GET /inscriptions/{id}`.
+- Matricule : format universitaire (UP) verrouillé `[nationalite:1][sequence:5][annee:2]` (8 car.) ; EP/ES proposé dans le même esprit `[cycle:1][nationalite:1][sequence:5][annee:2]` (9 car., cycle 7=EP/8=ES) — séquence = compteur national par `(cycle, nationalite, annee)`, calculé par pattern SQL `LIKE` à longueur fixe.
 
 ### app/modules/recrutement/
 - `models.py` — `Poste`, `CritereDocumentPoste` (coefficient + seuil par type de document), `Candidature`, `DocumentCandidature` (note IA), `VerificationCasierJudiciaire` (1-1, hors pipeline IA, fichier local — voir docstring, Art. 395), `Contestation`, `Contrat` (+ `date_fin`, + `signature_image_lulufiles_id`), `PropositionReconduction`.
@@ -69,6 +70,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `0008_pedagogie_evaluations_actes.py` — cours, quiz, tentatives_quiz, devoirs, soumissions, referentiels_coefficients, bulletins, types_acte_academique, demandes_acte_academique.
 - `0009_contrats_signature_image.py` — ajoute `signature_image_lulufiles_id` sur `contrats` (signature dessinée, remplace le nom tapé — ADR-004).
 - `0010_formulaires_llm.py` — recrée `soumissions` en formulaire de réponses (plus de fichier joint), ajoute `questions_devoir`/`reponses_soumission`/`questions_quiz`, `matiere` sur `devoirs`, `reponses` sur `tentatives_quiz`, `kkiapay_transaction_id` sur `demandes_acte_academique`. **Note** : recrée la table `soumissions` plutôt que d'altérer l'enum Postgres en place — acceptable uniquement parce qu'aucune donnée réelle n'existait encore dans ces tables ; ne pas reproduire ce pattern une fois des données réelles présentes.
+- `0011_eleves_nationalite.py` — ajoute `nationalite` (enum NATIONALE/ETRANGERE) sur `eleves`, nécessaire au nouveau format de matricule. **Note** : crée explicitement le type enum Postgres via `nationalite_enum.create(op.get_bind(), checkfirst=True)` avant le `ADD COLUMN` — `op.add_column` seul ne déclenche pas la création automatique du type (contrairement à une `Table` gérée par les métadonnées SQLAlchemy).
 Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** downgrade validés manuellement pour 0001).
 
 ### scripts/

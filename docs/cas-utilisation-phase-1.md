@@ -35,8 +35,16 @@ A++ (admin ministériel, actif) · A+ (admin établissement, actif) · A- (admin
 
 > En tant que système, je veux générer un matricule unique à la validation d'une inscription, afin d'identifier l'élève de façon pérenne dans le système éducatif national.
 
-- 🔓 Format provisoire par défaut : `BJ-[CODE_ETABLISSEMENT:4]-[ANNEE_ENTREE:4]-[SEQUENCE:5]` (ex. `BJ-EP12-2026-00347`). **En attente de la nomenclature officielle à fournir par l'utilisateur.**
-- Code établissement attribué une seule fois par le ministère (A++) à la création de l'établissement.
+- **Format universitaire (UP)** — fourni par l'utilisateur, verrouillé, 8 caractères : `[NATIONALITE:1][SEQUENCE:5][ANNEE:2]` (ex. premier élève national inscrit en 2026 → `10000126`).
+  - `NATIONALITE` : `1` = national, `2` = étranger.
+  - `SEQUENCE` : compteur incrémental national (tous établissements universitaires confondus), scoping par `(nationalité, année)`, jamais réutilisé.
+  - `ANNEE` : 2 derniers chiffres de l'année de première validation de l'inscription.
+- **Format EP/ES — proposition dans le même esprit** (à confirmer), 9 caractères : `[CYCLE:1][NATIONALITE:1][SEQUENCE:5][ANNEE:2]`.
+  - `CYCLE` : `7` = enseignement primaire (EP), `8` = enseignement secondaire (ES). Choisis pour ne jamais entrer en collision avec le format universitaire (qui n'a pas de chiffre de cycle et fait 8 caractères, contre 9 ici) ni avec les chiffres de nationalité (`1`/`2`).
+  - `NATIONALITE`, `SEQUENCE`, `ANNEE` : même sémantique que ci-dessus, compteur national par cycle.
+  - Exemple : premier élève national inscrit en EP en 2026 → `710000126`.
+- Le champ `nationalite` de l'élève est saisi à l'inscription (`POST /inscriptions`), par défaut `nationale`.
+- Code établissement attribué une seule fois par le ministère (A++) à la création de l'établissement (utilisé pour d'autres besoins d'identification, mais n'entre plus dans le matricule).
 - Le matricule est conservé à vie, y compris en cas de changement d'établissement (reconduction, jamais régénéré).
 
 ## UC-04 — Candidature enseignant
@@ -131,7 +139,7 @@ A++ (admin ministériel, actif) · A+ (admin établissement, actif) · A- (admin
 
 ## Points encore ouverts avant validation finale de la Phase 1
 
-1. Nomenclature officielle du matricule élève (UC-03) — à fournir par l'utilisateur.
+1. Nomenclature du matricule élève (UC-03) — format universitaire (UP) verrouillé par l'utilisateur ; format EP/ES proposé dans le même esprit, en attente de confirmation.
 2. Texte réglementaire couvrant la vérification du casier judiciaire pour le recrutement enseignant (UC-04) — action ministérielle.
 3. Délai de recevabilité d'une réclamation de note (UC-10) — confirmer la proposition par défaut.
 

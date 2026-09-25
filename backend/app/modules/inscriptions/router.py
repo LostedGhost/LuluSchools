@@ -8,9 +8,9 @@ from app.core.database import get_db
 from app.core.deps import api_error, require_roles
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.security import generate_temporary_password, hash_password
-from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
+from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement, TypeEtablissement
 from app.modules.identite.models import RoleUtilisateur, Tuteur, Utilisateur
-from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
+from app.modules.inscriptions.models import Eleve, Inscription, Nationalite, StatutInscription
 from app.modules.inscriptions.schemas import (
     InscriptionCreate,
     InscriptionOut,
@@ -30,12 +30,31 @@ def _age_a(date_naissance: date) -> int:
     return age
 
 
-def _generer_matricule(db: Session, code_etablissement: str) -> str:
-    annee = date.today().year
-    sequence = db.query(func.count(Inscription.id)).filter(
-        Inscription.statut == StatutInscription.VALIDEE
-    ).scalar()
-    return f"BJ-{code_etablissement}-{annee}-{sequence + 1:05d}"
+# Format universitaire fourni par l'utilisateur (8 caracteres, verrouille) :
+# [1 chiffre nationalite][5 chiffres sequence][2 chiffres annee]
+#   - nationalite : 1 = national, 2 = etranger
+#   - sequence : incrementee nationalement (tous etablissements du meme cycle confondus),
+#     par (cycle, nationalite, annee) - jamais reutilisee, le matricule n'est jamais regenere
+#   - annee : 2 derniers chiffres de l'annee de premiere validation
+# EP/ES : proposition dans le meme esprit (a confirmer), avec un chiffre de cycle en
+# tete pour garantir l'unicite globale sans jamais pouvoir entrer en collision avec le
+# format universitaire (8 caracteres, sans chiffre de cycle) : 7=EP, 8=ES -> 9 caracteres.
+_PREFIXES_CYCLE_MATRICULE = {
+    TypeEtablissement.EP: "7",
+    TypeEtablissement.ES: "8",
+    TypeEtablissement.UP: "",
+}
+
+
+def _generer_matricule(db: Session, type_etablissement: TypeEtablissement, nationalite: Nationalite) -> str:
+    chiffre_nationalite = "1" if nationalite == Nationalite.NATIONALE else "2"
+    annee_suffixe = f"{date.today().year % 100:02d}"
+    prefixe_cycle = _PREFIXES_CYCLE_MATRICULE[type_etablissement]
+
+    motif = f"{prefixe_cycle}{chiffre_nationalite}_____{annee_suffixe}"
+    deja_attribues = db.query(func.count(Eleve.id)).filter(Eleve.matricule.like(motif)).scalar()
+    sequence = f"{deja_attribues + 1:05d}"
+    return f"{prefixe_cycle}{chiffre_nationalite}{sequence}{annee_suffixe}"
 
 
 @router.post("", response_model=InscriptionOut, status_code=status.HTTP_201_CREATED)
@@ -59,6 +78,7 @@ def creer_inscription(
             nom=payload.nom,
             prenom=payload.prenom,
             date_naissance=payload.date_naissance,
+            nationalite=payload.nationalite,
             tuteur_id=utilisateur.id,
         )
         db.add(eleve)
@@ -156,7 +176,7 @@ def valider_inscription(
 
     eleve = db.get(Eleve, inscription.eleve_id)
     etablissement = db.get(Etablissement, classe.etablissement_id)
-    matricule = _generer_matricule(db, etablissement.code_etablissement)
+    matricule = _generer_matricule(db, etablissement.type, eleve.nationalite)
     mot_de_passe_temporaire = generate_temporary_password()
 
     utilisateur_eleve = Utilisateur(
