@@ -267,3 +267,68 @@ def test_tuteur_non_habilite_ne_peut_pas_soumettre_une_demande_sans_lien(
         headers=admin_ministeriel_headers,
     )
     assert response.status_code == 403
+
+
+def test_tuteur_retrouve_ses_enfants_et_leurs_inscriptions(
+    client, tuteur_headers, etablissement_avec_classe
+):
+    client.post(
+        "/api/v1/inscriptions",
+        json={
+            "nom": "Dossou",
+            "prenom": "Kofi",
+            "date_naissance": _date_naissance_pour_age(10),
+            "classe_id": etablissement_avec_classe["classe"]["id"],
+        },
+        headers=tuteur_headers,
+    )
+
+    mes_inscriptions = client.get("/api/v1/tuteurs/me/inscriptions", headers=tuteur_headers)
+    assert mes_inscriptions.status_code == 200
+    body = mes_inscriptions.json()
+    assert len(body) == 1
+    assert body[0]["eleve_prenom"] == "Kofi"
+    assert body[0]["statut"] == "en_attente_consentement_parental"
+    assert body[0]["eleve_matricule"] is None  # pas encore validee
+
+
+def test_eleve_retrouve_son_profil_et_sa_classe_actuelle(
+    client, fake_email_client, tuteur_headers, etablissement_avec_classe
+):
+    inscription = client.post(
+        "/api/v1/inscriptions",
+        json={
+            "nom": "Dossou",
+            "prenom": "Aisha",
+            "date_naissance": _date_naissance_pour_age(17),
+            "classe_id": etablissement_avec_classe["classe"]["id"],
+        },
+        headers=tuteur_headers,
+    ).json()
+    client.post(
+        f"/api/v1/inscriptions/{inscription['id']}/valider",
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+
+    tuteur_apres = client.get("/api/v1/tuteurs/me/inscriptions", headers=tuteur_headers).json()
+    assert tuteur_apres[0]["eleve_matricule"] is not None
+
+    identifiants = next(m for m in reversed(fake_email_client.sent) if "login_id" in m)
+    login_eleve = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": identifiants["login_id"], "mot_de_passe": identifiants["mot_de_passe"]},
+    ).json()
+    eleve_headers = {"Authorization": f"Bearer {login_eleve['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": identifiants["mot_de_passe"], "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=eleve_headers,
+    )
+
+    profil = client.get("/api/v1/eleves/me", headers=eleve_headers)
+    assert profil.status_code == 200
+    body = profil.json()
+    assert body["prenom"] == "Aisha"
+    assert body["matricule"] == tuteur_apres[0]["eleve_matricule"]
+    assert body["classe_id"] == etablissement_avec_classe["classe"]["id"]
+    assert body["niveau"] == etablissement_avec_classe["classe"]["niveau"]

@@ -12,12 +12,15 @@ from app.modules.etablissements.models import AdminEtablissement, Classe, Etabli
 from app.modules.identite.models import RoleUtilisateur, Tuteur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, Nationalite, StatutInscription
 from app.modules.inscriptions.schemas import (
+    EleveMeOut,
+    InscriptionAvecEleveOut,
     InscriptionCreate,
     InscriptionOut,
     RejetInscriptionRequest,
 )
 
 router = APIRouter(prefix="/inscriptions", tags=["inscriptions"])
+mon_espace_router = APIRouter(tags=["inscriptions"])
 
 AGE_MAJORITE_NUMERIQUE = 16
 
@@ -269,3 +272,66 @@ def obtenir_inscription(
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
 
     return inscription
+
+
+@mon_espace_router.get("/tuteurs/me/inscriptions", response_model=list[InscriptionAvecEleveOut])
+def mes_inscriptions(
+    db: Session = Depends(get_db), tuteur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR))
+) -> list[dict]:
+    """Permet au tuteur de retrouver ses enfants et l'avancement de leurs demarches sans
+    avoir a garder les identifiants d'inscription cote client."""
+    inscriptions = (
+        db.query(Inscription)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .filter(Eleve.tuteur_id == tuteur.id)
+        .order_by(Inscription.created_at.desc())
+        .all()
+    )
+    resultat = []
+    for inscription in inscriptions:
+        eleve = db.get(Eleve, inscription.eleve_id)
+        resultat.append(
+            {
+                "id": inscription.id,
+                "eleve_id": inscription.eleve_id,
+                "classe_id": inscription.classe_id,
+                "statut": inscription.statut,
+                "consentement_parental_horodatage": inscription.consentement_parental_horodatage,
+                "motif_rejet": inscription.motif_rejet,
+                "eleve_nom": eleve.nom,
+                "eleve_prenom": eleve.prenom,
+                "eleve_matricule": eleve.matricule,
+            }
+        )
+    return resultat
+
+
+@mon_espace_router.get("/eleves/me", response_model=EleveMeOut)
+def mon_profil_eleve(
+    db: Session = Depends(get_db), eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE))
+) -> dict:
+    """Point d'entree du frontend eleve : matricule, nationalite et classe actuelle (via
+    la derniere inscription validee), sans quoi il n'y a aucun moyen de savoir dans
+    quelle classe naviguer (cours/devoirs/quiz/bulletin)."""
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur.id).first()
+    if eleve is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Compte eleve introuvable.")
+
+    inscription_validee = (
+        db.query(Inscription)
+        .filter(Inscription.eleve_id == eleve.id, Inscription.statut == StatutInscription.VALIDEE)
+        .order_by(Inscription.created_at.desc())
+        .first()
+    )
+    classe = db.get(Classe, inscription_validee.classe_id) if inscription_validee else None
+
+    return {
+        "id": eleve.utilisateur_id,
+        "nom": eleve.nom,
+        "prenom": eleve.prenom,
+        "matricule": eleve.matricule,
+        "nationalite": eleve.nationalite,
+        "classe_id": classe.id if classe else None,
+        "niveau": classe.niveau if classe else None,
+        "etablissement_id": classe.etablissement_id if classe else None,
+    }

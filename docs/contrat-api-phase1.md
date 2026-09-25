@@ -48,6 +48,8 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | POST | `/inscriptions/{id}/valider` | A+ (de l'établissement de la classe) | UC-02, UC-03 | Refusé (409) si consentement manquant ou classe complète (capacité atteinte, compte les inscriptions déjà `validee`). Génère le matricule (voir UC-03 : format universitaire `[nationalite:1][sequence:5][annee:2]` sur 8 caractères, format EP/ES `[cycle:1][nationalite:1][sequence:5][annee:2]` sur 9 caractères) et le compte élève (mot de passe temporaire envoyé au tuteur par e-mail). |
 | POST | `/inscriptions/{id}/rejeter` | A+ | UC-02 | Motif obligatoire |
 | GET | `/inscriptions/{id}` | Tuteur rattaché, ou A+ de l'établissement de la classe | UC-02 | Lecture (contrôle d'accès vérifié, pas seulement l'authentification — anti-IDOR) |
+| GET | `/tuteurs/me/inscriptions` | Tuteur | UC-02 | Liste les enfants du tuteur courant et le statut de leurs démarches (nom/prénom/matricule inclus, pas d'aller-retour par enfant) |
+| GET | `/eleves/me` | Élève | UC-02 | Profil de l'élève courant : matricule, nationalité, et classe actuelle (déduite de la dernière inscription validée) — point d'entrée du frontend élève |
 
 ## Recrutement et contrats
 
