@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import Base, get_db
+from app.core.database import Base, get_db, get_session_factory
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
 from app.core.llm import CorrectionError, DocumentScoringError, QuizGenerationError, get_llm_client
@@ -124,11 +124,20 @@ def fake_llm_client() -> FakeLLMClient:
 
 
 @pytest.fixture()
-def client(db_session, fake_email_client, fake_files_client, fake_llm_client):
+def test_session_factory(db_session):
+    """Sessionmaker lie au MEME moteur (StaticPool) que db_session, pour que les
+    BackgroundTasks (qui ouvrent leur propre session via get_session_factory, la session
+    de la requete etant deja fermee) voient les memes donnees en test."""
+    return sessionmaker(autocommit=False, autoflush=False, bind=db_session.get_bind())
+
+
+@pytest.fixture()
+def client(db_session, test_session_factory, fake_email_client, fake_files_client, fake_llm_client):
     def _override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_session_factory] = lambda: test_session_factory
     app.dependency_overrides[get_email_client] = lambda: fake_email_client
     app.dependency_overrides[get_files_client] = lambda: fake_files_client
     app.dependency_overrides[get_llm_client] = lambda: fake_llm_client

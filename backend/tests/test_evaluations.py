@@ -38,12 +38,22 @@ def _soumettre(client, ctx, devoir):
     )
 
 
+def _soumettre_et_relire(client, ctx, devoir):
+    """La correction IA part desormais en arriere-plan (BackgroundTasks) : la reponse de
+    POST reflete l'etat juste avant traitement (statut=en_correction). Le test relit la
+    soumission ensuite (avec TestClient, la tache d'arriere-plan s'execute avant que ce
+    GET ne soit atteint)."""
+    response = _soumettre(client, ctx, devoir)
+    assert response.status_code == 201
+    return client.get(f"/api/v1/soumissions/{response.json()['id']}", headers=ctx["eleve_headers"])
+
+
 def test_soumission_corrigee_automatiquement_par_le_llm(client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve
     devoir = _creer_devoir(client, ctx, datetime.now(timezone.utc) + timedelta(days=1))
 
-    soumission = _soumettre(client, ctx, devoir)
-    assert soumission.status_code == 201
+    soumission = _soumettre_et_relire(client, ctx, devoir)
+    assert soumission.status_code == 200
     body = soumission.json()
     assert body["statut"] == "corrigee"
     assert body["note"] == 20.0  # 2 questions x 10 points, le fake LLM accorde tous les points
@@ -54,7 +64,7 @@ def test_revision_manuelle_apres_echec_de_correction(client, fake_llm_client, cl
     devoir = _creer_devoir(client, ctx, datetime.now(timezone.utc) + timedelta(days=1))
     fake_llm_client.questions_en_echec_correction = {"Combien font 1+1 ?"}
 
-    soumission = _soumettre(client, ctx, devoir).json()
+    soumission = _soumettre_et_relire(client, ctx, devoir).json()
     assert soumission["statut"] == "echec_correction"
     assert soumission["note"] is None
 

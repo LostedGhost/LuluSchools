@@ -2,11 +2,11 @@ import hashlib
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, get_session_factory
 from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import DocumentScoringError, FreeLLMClient, get_llm_client
@@ -115,12 +115,14 @@ def obtenir_poste(
 )
 def postuler(
     poste_id: str,
+    background_tasks: BackgroundTasks,
     types: list[str] = Form(...),
     fichiers: list[UploadFile] = File(...),
     casier_judiciaire: UploadFile = File(...),
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
     llm_client: FreeLLMClient = Depends(get_llm_client),
+    session_factory: sessionmaker = Depends(get_session_factory),
     enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
 ) -> Candidature:
     poste = db.get(Poste, poste_id)
@@ -143,6 +145,7 @@ def postuler(
     db.add(candidature)
     db.flush()
 
+    documents_a_noter = []
     for type_document, fichier in zip(types, fichiers):
         contenu = fichier.file.read()
         try:
@@ -161,18 +164,23 @@ def postuler(
             lulufiles_file_id=lulufiles_file_id,
             statut=StatutDocument.EN_ATTENTE,
         )
-        try:
-            image_bytes, image_content_type = convertir_en_image(
-                contenu, fichier.content_type or "application/octet-stream"
-            )
-            note = llm_client.noter_document(
-                image_bytes, image_content_type, critere=f"conformite du document '{type_document}'"
-            )
-            document.note_ia = note
-            document.statut = StatutDocument.NOTE
-        except DocumentScoringError:
-            document.statut = StatutDocument.ECHEC_NOTATION
         db.add(document)
+        db.flush()
+
+        # Conversion locale (PyMuPDF, pas de reseau) : reste synchrone, rapide et
+        # deterministe. Seul l'appel reseau vers FreeLLM (noter_document, potentiellement
+        # plusieurs secondes x N documents, ADR-002 sans SLA) part en arriere-plan.
+        image_bytes, image_content_type = convertir_en_image(
+            contenu, fichier.content_type or "application/octet-stream"
+        )
+        documents_a_noter.append(
+            {
+                "document_id": document.id,
+                "image_bytes": image_bytes,
+                "image_content_type": image_content_type,
+                "type_document": type_document,
+            }
+        )
 
     contenu_casier = casier_judiciaire.file.read()
     dossier_casier = Path(settings.casier_judiciaire_storage_path)
@@ -188,12 +196,47 @@ def postuler(
         )
     )
 
-    db.flush()
-    _reevaluer_candidature(db, candidature, criteres_par_type)
-
     db.commit()
     db.refresh(candidature)
+
+    background_tasks.add_task(
+        _noter_candidature_en_arriere_plan, candidature.id, documents_a_noter, llm_client, session_factory
+    )
     return candidature
+
+
+def _noter_candidature_en_arriere_plan(
+    candidature_id: str, documents_a_noter: list[dict], llm_client: FreeLLMClient, session_factory: sessionmaker
+) -> None:
+    """Execute apres l'envoi de la reponse HTTP (voir BackgroundTasks sur postuler) :
+    ouvre sa propre session DB via session_factory (celle de la requete est deja fermee).
+    llm_client et session_factory sont ceux deja resolus par Depends au moment de la
+    requete (donc les fakes injectes par les tests en environnement de test), jamais
+    reconstruits ici - pas d'appel reseau reel ni de moteur DB different hors de ceux-la."""
+    db = session_factory()
+    try:
+        for item in documents_a_noter:
+            document = db.get(DocumentCandidature, item["document_id"])
+            if document is None:
+                continue
+            try:
+                note = llm_client.noter_document(
+                    item["image_bytes"], item["image_content_type"],
+                    critere=f"conformite du document '{item['type_document']}'",
+                )
+                document.note_ia = note
+                document.statut = StatutDocument.NOTE
+            except DocumentScoringError:
+                document.statut = StatutDocument.ECHEC_NOTATION
+        db.commit()
+
+        candidature = db.get(Candidature, candidature_id)
+        poste = db.get(Poste, candidature.poste_id)
+        criteres_par_type = {c.type_document: c for c in poste.criteres}
+        _reevaluer_candidature(db, candidature, criteres_par_type)
+        db.commit()
+    finally:
+        db.close()
 
 
 def _reevaluer_candidature(db: Session, candidature: Candidature, criteres_par_type: dict) -> None:

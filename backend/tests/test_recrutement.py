@@ -51,15 +51,24 @@ def _postuler(client, enseignant_headers, poste_id, casier_bytes=b"casier"):
     )
 
 
+def _postuler_et_relire(client, enseignant_headers, poste_id, casier_bytes=b"casier"):
+    """La notation IA part desormais en arriere-plan (BackgroundTasks) : la reponse de
+    POST reflete l'etat juste avant traitement (documents en_attente). Le test relit la
+    candidature ensuite pour observer le resultat une fois la notation terminee (avec
+    TestClient, la tache d'arriere-plan s'execute avant que ce GET ne soit atteint)."""
+    response = _postuler(client, enseignant_headers, poste_id, casier_bytes)
+    assert response.status_code == 201
+    candidature_id = response.json()["id"]
+    return client.get(f"/api/v1/candidatures/{candidature_id}", headers=enseignant_headers)
+
+
 def test_candidature_avec_scores_au_dessus_du_seuil_calcule_le_score(
     client, fake_llm_client, enseignant_headers, etablissement_avec_classe
 ):
     poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
     fake_llm_client.score_par_defaut = 80.0
 
-    response = _postuler(client, enseignant_headers, poste["id"])
-    assert response.status_code == 201
-    body = response.json()
+    body = _postuler_et_relire(client, enseignant_headers, poste["id"]).json()
     assert body["score"] == 80.0
     assert body["statut"] == "en_evaluation"
     assert all(d["statut"] == "note" for d in body["documents"])
@@ -71,9 +80,8 @@ def test_candidature_sous_le_seuil_est_rejetee(
     poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
     fake_llm_client.scores_par_type = {"cv": 40.0, "diplome": 90.0}
 
-    response = _postuler(client, enseignant_headers, poste["id"])
-    assert response.status_code == 201
-    assert response.json()["statut"] == "rejetee"
+    body = _postuler_et_relire(client, enseignant_headers, poste["id"]).json()
+    assert body["statut"] == "rejetee"
 
 
 def test_candidature_avec_echec_notation_reste_en_evaluation_sans_score(
@@ -82,9 +90,7 @@ def test_candidature_avec_echec_notation_reste_en_evaluation_sans_score(
     poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
     fake_llm_client.types_en_echec = {"cv"}
 
-    response = _postuler(client, enseignant_headers, poste["id"])
-    assert response.status_code == 201
-    body = response.json()
+    body = _postuler_et_relire(client, enseignant_headers, poste["id"]).json()
     assert body["score"] is None
     assert body["statut"] == "en_evaluation"
     document_cv = next(d for d in body["documents"] if d["type_document"] == "cv")
@@ -112,7 +118,7 @@ def test_contestation_puis_acceptation_reintegre_la_candidature(
 ):
     poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
     fake_llm_client.scores_par_type = {"cv": 40.0, "diplome": 90.0}
-    candidature = _postuler(client, enseignant_headers, poste["id"]).json()
+    candidature = _postuler_et_relire(client, enseignant_headers, poste["id"]).json()
     assert candidature["statut"] == "rejetee"
 
     contestation = client.post(

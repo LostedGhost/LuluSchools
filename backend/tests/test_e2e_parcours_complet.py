@@ -179,7 +179,10 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
         headers=enseignant_headers,
     )
     assert candidature.status_code == 201
-    candidature = candidature.json()
+    candidature_id = candidature.json()["id"]
+    # La notation IA part en arriere-plan (BackgroundTasks) : on relit la candidature
+    # (avec TestClient, la tache d'arriere-plan s'execute avant que ce GET ne soit atteint).
+    candidature = client.get(f"/api/v1/candidatures/{candidature_id}", headers=enseignant_headers).json()
     assert candidature["statut"] == "en_evaluation"
     assert candidature["score"] == 85.0
     # Seuls les 2 documents notes par l'IA passent par LuluFiles ; le casier judiciaire n'y transite jamais (Art. 395).
@@ -291,6 +294,9 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
         headers=eleve_headers,
     )
     assert soumission.status_code == 201
+    # La correction IA part en arriere-plan (BackgroundTasks) : on relit la soumission
+    # (avec TestClient, la tache d'arriere-plan s'execute avant que ce GET ne soit atteint).
+    soumission = client.get(f"/api/v1/soumissions/{soumission.json()['id']}", headers=eleve_headers)
     assert soumission.json()["statut"] == "corrigee"
     assert soumission.json()["note"] == 20.0  # 2 x 10 points, l'IA (fake) accorde tous les points
 

@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, status
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import get_db
+from app.core.database import get_db, get_session_factory
 from app.core.deps import api_error, require_roles
 from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Classe
@@ -93,8 +93,10 @@ def obtenir_devoir(
 def soumettre_devoir(
     devoir_id: str,
     payload: SoumissionCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     llm_client: FreeLLMClient = Depends(get_llm_client),
+    session_factory: sessionmaker = Depends(get_session_factory),
     eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
 ) -> Soumission:
     devoir = db.get(Devoir, devoir_id)
@@ -120,38 +122,97 @@ def soumettre_devoir(
             "Une reponse est attendue pour chaque question du devoir, exactement.",
         )
 
-    soumission = Soumission(devoir_id=devoir_id, eleve_id=eleve.id, statut=StatutSoumission.CORRIGEE)
+    soumission = Soumission(devoir_id=devoir_id, eleve_id=eleve.id, statut=StatutSoumission.EN_CORRECTION)
     db.add(soumission)
     db.flush()
 
-    echec = False
-    reponses_orm = []
     for reponse in payload.reponses:
         question = questions_par_id[reponse.question_id]
-        reponse_orm = ReponseSoumission(
-            soumission_id=soumission.id, question_id=question.id, texte_reponse=reponse.texte_reponse
-        )
-        try:
-            reponse_orm.points_obtenus = llm_client.corriger_reponse(
-                question.enonce,
-                question.bareme_reponse,
-                question.points_max,
-                reponse.texte_reponse,
-                strict=(devoir.bareme.value == "rigide"),
+        db.add(
+            ReponseSoumission(
+                soumission_id=soumission.id, question_id=question.id, texte_reponse=reponse.texte_reponse
             )
-        except CorrectionError:
-            echec = True
-        db.add(reponse_orm)
-        reponses_orm.append(reponse_orm)
-
-    if echec:
-        soumission.statut = StatutSoumission.ECHEC_CORRECTION
-        soumission.note = None
-    else:
-        soumission.note = sum(r.points_obtenus for r in reponses_orm)
+        )
 
     db.commit()
     db.refresh(soumission)
+
+    background_tasks.add_task(
+        _corriger_soumission_en_arriere_plan,
+        soumission.id,
+        llm_client,
+        devoir.bareme.value == "rigide",
+        session_factory,
+    )
+    return soumission
+
+
+def _corriger_soumission_en_arriere_plan(
+    soumission_id: str, llm_client: FreeLLMClient, strict: bool, session_factory: sessionmaker
+) -> None:
+    """Execute apres l'envoi de la reponse HTTP (voir BackgroundTasks sur
+    soumettre_devoir) : ouvre sa propre session DB via session_factory (celle de la
+    requete est deja fermee). llm_client et session_factory sont ceux deja resolus par
+    Depends au moment de la requete (donc les fakes injectes par les tests en
+    environnement de test), jamais reconstruits ici."""
+    db = session_factory()
+    try:
+        soumission = db.get(Soumission, soumission_id)
+        if soumission is None:
+            return
+        devoir = db.get(Devoir, soumission.devoir_id)
+        questions_par_id = {q.id: q for q in devoir.questions}
+
+        echec = False
+        for reponse_orm in soumission.reponses:
+            question = questions_par_id[reponse_orm.question_id]
+            try:
+                reponse_orm.points_obtenus = llm_client.corriger_reponse(
+                    question.enonce, question.bareme_reponse, question.points_max,
+                    reponse_orm.texte_reponse, strict=strict,
+                )
+            except CorrectionError:
+                echec = True
+
+        if echec:
+            soumission.statut = StatutSoumission.ECHEC_CORRECTION
+            soumission.note = None
+        else:
+            soumission.statut = StatutSoumission.CORRIGEE
+            soumission.note = sum(r.points_obtenus for r in soumission.reponses)
+        db.commit()
+    finally:
+        db.close()
+
+
+@router.get("/soumissions/{soumission_id}", response_model=SoumissionOut)
+def obtenir_soumission(
+    soumission_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+    ),
+) -> Soumission:
+    """Permet a l'eleve de suivre l'avancement de la correction (statut=en_correction
+    tant que le traitement en arriere-plan n'est pas termine)."""
+    soumission = db.get(Soumission, soumission_id)
+    if soumission is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Soumission introuvable.")
+    devoir = db.get(Devoir, soumission.devoir_id)
+
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+        if eleve is None or soumission.eleve_id != eleve.id:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette soumission ne vous appartient pas.")
+    elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
+        if devoir.enseignant_id != utilisateur.id:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
+    else:
+        classe = db.get(Classe, devoir.classe_id)
+        lien = db.get(AdminEtablissement, utilisateur.id)
+        if lien is None or lien.etablissement_id != classe.etablissement_id:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+
     return soumission
 
 

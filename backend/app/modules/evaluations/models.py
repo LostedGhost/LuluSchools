@@ -22,6 +22,7 @@ class BaremeDevoir(str, enum.Enum):
 
 
 class StatutSoumission(str, enum.Enum):
+    EN_CORRECTION = "en_correction"
     CORRIGEE = "corrigee"
     ECHEC_CORRECTION = "echec_correction"
 
@@ -67,9 +68,13 @@ class Soumission(Base):
     """Pas de ligne = pas de soumission = compte pour 0 au calcul de la moyenne (UC-08 :
     absence de soumission a l'echeance = note zero automatique, sans derogation) - pas
     besoin d'un job planifie pour materialiser ce zero, il est calcule a la volee. La
-    correction est automatique (LLM, selon le bareme de chaque question) ; en cas
-    d'echec (FreeLLM indisponible, ADR-002), statut=echec_correction et la soumission
-    attend une revision manuelle via POST /soumissions/{id}/corriger."""
+    correction est automatique (LLM, selon le bareme de chaque question) et EXECUTEE EN
+    ARRIERE-PLAN (BackgroundTasks) apres la reponse HTTP de soumission : FreeLLM n'a
+    aucun SLA (ADR-002) et une correction porte sur N questions (N appels), donc
+    potentiellement plusieurs secondes - ne doit jamais bloquer la requete de l'eleve.
+    statut=en_correction tant que le traitement n'est pas termine, puis corrigee ou
+    echec_correction (en cas d'echec, la soumission attend une revision manuelle via
+    POST /soumissions/{id}/corriger)."""
 
     __tablename__ = "soumissions"
 
