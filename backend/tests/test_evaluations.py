@@ -58,6 +58,14 @@ def test_soumission_corrigee_automatiquement_par_le_llm(client, classe_avec_ense
     assert body["statut"] == "corrigee"
     assert body["note"] == 20.0  # 2 questions x 10 points, le fake LLM accorde tous les points
 
+    liste = client.get(f"/api/v1/classes/{ctx['classe']['id']}/devoirs", headers=ctx["eleve_headers"])
+    assert liste.status_code == 200
+    assert len(liste.json()) == 1
+
+    ma_soumission = client.get(f"/api/v1/devoirs/{devoir['id']}/ma-soumission", headers=ctx["eleve_headers"])
+    assert ma_soumission.status_code == 200
+    assert ma_soumission.json()["id"] == body["id"]
+
 
 def test_revision_manuelle_apres_echec_de_correction(client, fake_llm_client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve

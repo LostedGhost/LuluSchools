@@ -116,6 +116,18 @@ def lister_cours(
     return db.query(Cours).filter(Cours.classe_id == classe_id).all()
 
 
+@router.get("/cours/{cours_id}/quiz", response_model=list[QuizOut])
+def lister_quiz(
+    cours_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_user)
+) -> list[Quiz]:
+    cours = db.get(Cours, cours_id)
+    if cours is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        _verifier_eleve_inscrit(db, utilisateur.id, cours.classe_id)
+    return db.query(Quiz).filter(Quiz.cours_id == cours_id).all()
+
+
 @router.post("/cours/{cours_id}/quiz", response_model=QuizOut, status_code=status.HTTP_201_CREATED)
 def creer_quiz(
     cours_id: str,
@@ -212,3 +224,20 @@ def tenter_quiz(
     db.commit()
     db.refresh(tentative)
     return tentative
+
+
+@router.get("/quiz/{quiz_id}/mes-tentatives", response_model=list[TentativeQuizOut])
+def lister_mes_tentatives(
+    quiz_id: str, db: Session = Depends(get_db), eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE))
+) -> list[TentativeQuiz]:
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Quiz introuvable.")
+    cours = db.get(Cours, quiz.cours_id)
+    eleve = _verifier_eleve_inscrit(db, eleve_utilisateur.id, cours.classe_id)
+    return (
+        db.query(TentativeQuiz)
+        .filter(TentativeQuiz.quiz_id == quiz_id, TentativeQuiz.eleve_id == eleve.id)
+        .order_by(TentativeQuiz.created_at.desc())
+        .all()
+    )

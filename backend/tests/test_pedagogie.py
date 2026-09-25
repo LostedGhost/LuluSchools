@@ -114,6 +114,14 @@ def test_quiz_genere_par_le_llm_et_tentative_illimitee(client, fake_llm_client, 
     assert reussite.json()["score"] == 100.0
     assert reussite.json()["reussie"] is True
 
+    liste_quiz = client.get(f"/api/v1/cours/{cours['id']}/quiz", headers=ctx["eleve_headers"])
+    assert liste_quiz.status_code == 200
+    assert len(liste_quiz.json()) == 1
+
+    mes_tentatives = client.get(f"/api/v1/quiz/{quiz['id']}/mes-tentatives", headers=ctx["eleve_headers"])
+    assert mes_tentatives.status_code == 200
+    assert [t["score"] for t in mes_tentatives.json()] == [100.0, 0.0]  # plus recente d'abord
+
 
 def test_generation_quiz_sans_contenu_texte_est_refusee(client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve

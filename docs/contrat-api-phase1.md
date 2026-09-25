@@ -71,15 +71,19 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 |---|---|---|---|---|
 | POST | `/classes/{id}/cours` | Enseignant rattaché (contrat `signe` avec l'établissement de la classe) | UC-06 | `multipart/form-data` (titre, chapitre, format, contenu_texte ou fichier). 50 Mo max, upload vers LuluFiles si fichier fourni |
 | GET | `/classes/{id}/cours` | Élève inscrit (`inscription validee`), Enseignant rattaché, A+ | UC-06 | Lecture |
+| GET | `/cours/{id}/quiz` | tout utilisateur authentifié (élève inscrit vérifié) | UC-07 | Liste les quiz du cours |
 | POST | `/cours/{id}/quiz` | Enseignant propriétaire du cours | UC-07 | Questions **générées par FreeLLM** (QCM à 4 choix) à partir de `cours.contenu_texte` (obligatoire, sinon 422) ; seuil de réussite configurable, défaut 80% |
 | GET | `/quiz/{id}` | Élève inscrit | UC-07 | Questions sans la bonne réponse (jamais exposée avant la tentative) |
 | POST | `/quiz/{id}/tentatives` | Élève inscrit | UC-07 | `reponses: [index, ...]`, une par question, dans l'ordre. Tentatives illimitées ; score = % de bonnes réponses |
+| GET | `/quiz/{id}/mes-tentatives` | Élève inscrit | UC-07 | Historique des tentatives de l'élève courant sur ce quiz, plus récente d'abord |
 
 ## Devoirs, évaluations, bulletins
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
+| GET | `/classes/{id}/devoirs` | Élève inscrit, Enseignant rattaché, A+ | UC-08 | Liste les devoirs de la classe |
 | POST | `/classes/{id}/devoirs` | Enseignant rattaché | UC-08 | Formulaire : `matiere`, `bareme: rigide|flexible`, `questions: [{enonce, bareme_reponse, points_max}, ...]` |
+| GET | `/devoirs/{id}/ma-soumission` | Élève | UC-08 | La soumission de l'élève courant pour ce devoir (404 si pas encore soumis) |
 | POST | `/devoirs/{id}/soumissions` | Élève inscrit | UC-08 | `reponses: [{question_id, texte_reponse}, ...]`, une par question exactement. Rejetée (409) si la date limite est dépassée. Correction **automatique par FreeLLM**, exécutée **en arrière-plan** (`BackgroundTasks`, un appel réseau par question — pas de SLA, ADR-002) : la réponse renvoie `statut=en_correction`, à relire via `GET /soumissions/{id}` une fois le traitement terminé (rigide = tout ou rien, flexible = crédit partiel) ; en cas d'échec, `statut=echec_correction` et la soumission attend une révision manuelle |
 | GET | `/soumissions/{id}` | Élève propriétaire, Enseignant du devoir, A+ | UC-08 | Permet de suivre l'avancement de la correction en arrière-plan |
 | GET | `/devoirs/{id}/soumissions-a-revoir` | Enseignant propriétaire | UC-08 | Écran de révision manuelle : soumissions en `echec_correction` |

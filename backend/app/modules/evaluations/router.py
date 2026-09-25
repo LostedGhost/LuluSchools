@@ -87,6 +87,48 @@ def obtenir_devoir(
     return devoir
 
 
+@router.get("/classes/{classe_id}/devoirs", response_model=list[DevoirOut])
+def lister_devoirs(
+    classe_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+    ),
+) -> list[Devoir]:
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
+    elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
+        _verifier_enseignant_rattache(db, utilisateur, classe.etablissement_id)
+    else:
+        lien = db.get(AdminEtablissement, utilisateur.id)
+        if lien is None or lien.etablissement_id != classe.etablissement_id:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+    return db.query(Devoir).filter(Devoir.classe_id == classe_id).all()
+
+
+@router.get("/devoirs/{devoir_id}/ma-soumission", response_model=SoumissionOut)
+def obtenir_ma_soumission(
+    devoir_id: str,
+    db: Session = Depends(get_db),
+    eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
+) -> Soumission:
+    devoir = db.get(Devoir, devoir_id)
+    if devoir is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur.id).first()
+    soumission = (
+        db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first()
+        if eleve is not None
+        else None
+    )
+    if soumission is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucune soumission pour ce devoir.")
+    return soumission
+
+
 @router.post(
     "/devoirs/{devoir_id}/soumissions", response_model=SoumissionOut, status_code=status.HTTP_201_CREATED
 )
