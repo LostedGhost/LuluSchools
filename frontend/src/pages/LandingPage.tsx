@@ -1,6 +1,8 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FloatingXPBadge, ProgressCard3D, XPBar } from "../components/gamification";
 import { Tilt3D } from "../components/Tilt3D";
+import { vitrinePublique, type VitrinePublique } from "../api/etablissements";
 import {
   ChevronRight,
   Zap,
@@ -11,7 +13,24 @@ import {
   FileCheck,
   BookOpen,
   Flame,
+  Building2,
+  Briefcase,
+  Landmark,
+  GraduationCap,
+  School,
 } from "lucide-react";
+
+const TYPE_LABEL: Record<string, string> = {
+  EP: "Primaire",
+  ES: "Secondaire",
+  UP: "Supérieur",
+};
+
+const TYPE_ICON: Record<string, ReactNode> = {
+  EP: <School size={22} />,
+  ES: <Building2 size={22} />,
+  UP: <GraduationCap size={22} />,
+};
 
 /* ═══════════════════════════════════════════════════════════════
    Landing Page — LuluSchools
@@ -90,6 +109,15 @@ const DEMO_MEDALS = [
 ];
 
 export function LandingPage() {
+  const [vitrine, setVitrine] = useState<VitrinePublique | null>(null);
+  const [vitrineErreur, setVitrineErreur] = useState(false);
+
+  useEffect(() => {
+    vitrinePublique()
+      .then((res) => setVitrine(res.data))
+      .catch(() => setVitrineErreur(true));
+  }, []);
+
   return (
     <div style={{ background: "var(--bg)", color: "var(--ink)", minHeight: "100dvh" }}>
       {/* ── Topbar ── */}
@@ -193,7 +221,11 @@ export function LandingPage() {
       </header>
 
       {/* ── Hero ── */}
-      <section style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
+      <section style={{ position: "relative", overflow: "hidden" }}>
+        <div className="dot-grid-bg" style={{ position: "absolute", inset: 0, opacity: 0.5, maskImage: "radial-gradient(ellipse 70% 60% at 50% 20%, black 0%, transparent 75%)" }} aria-hidden="true" />
+        <div className="hero-glow" style={{ width: "480px", height: "480px", top: "-160px", left: "-120px", background: "color-mix(in srgb, var(--primary) 22%, transparent)" }} aria-hidden="true" />
+        <div className="hero-glow" style={{ width: "360px", height: "360px", top: "60px", right: "-100px", background: "color-mix(in srgb, var(--reward) 18%, transparent)" }} aria-hidden="true" />
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px", position: "relative", zIndex: 1 }}>
         <div className="landing-hero">
           {/* Texte */}
           <div className="anim-float-in">
@@ -205,11 +237,11 @@ export function LandingPage() {
               style={{ margin: "0 0 20px", color: "var(--ink)" }}
             >
               L'école qui suit{" "}
-              <span style={{ color: "var(--primary)" }}>chaque élève,</span>
+              <span className="text-gradient">chaque élève,</span>
               <br />
               du premier badge
               <br />
-              <span style={{ color: "var(--primary)" }}>au diplôme.</span>
+              <span className="text-gradient">au diplôme.</span>
             </h1>
             <p
               style={{
@@ -288,6 +320,7 @@ export function LandingPage() {
             </div>
           </Tilt3D>
         </div>
+        </div>
       </section>
 
       {/* ── Features ── */}
@@ -358,12 +391,145 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* ── Vitrine : établissements & opportunités ── */}
+      <section id="vitrine" style={{ maxWidth: "1200px", margin: "0 auto", padding: "80px 24px" }}>
+        <div style={{ textAlign: "center", marginBottom: "48px" }}>
+          <p className="text-eyebrow" style={{ marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+            <Landmark size={14} aria-hidden="true" /> Ouvert en ce moment
+          </p>
+          <h2 className="text-headline" style={{ margin: "0 0 12px", color: "var(--ink)" }}>
+            Des établissements vous ouvrent leurs portes
+          </h2>
+          <p style={{ color: "var(--ink-soft)", maxWidth: "56ch", margin: "0 auto", fontSize: "var(--text-lg)" }}>
+            Campagnes d'inscription et postes d'enseignant ouverts, directement depuis les établissements partenaires de la plateforme.
+          </p>
+        </div>
+
+        {!vitrine && !vitrineErreur && (
+          <div className="grid-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="vitrine-card">
+                <div className="skeleton" style={{ height: "44px", width: "44px", borderRadius: "var(--radius-md)", marginBottom: "16px" }} />
+                <div className="skeleton" style={{ height: "18px", width: "70%", marginBottom: "10px" }} />
+                <div className="skeleton" style={{ height: "14px", width: "50%" }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(vitrineErreur || (vitrine && vitrine.etablissements.length === 0)) && (
+          <div className="card-soft" style={{ textAlign: "center", padding: "48px 24px" }}>
+            <Building2 size={28} style={{ color: "var(--ink-faint)", marginBottom: "12px" }} aria-hidden="true" />
+            <p style={{ color: "var(--ink-soft)", margin: 0 }}>
+              Les premiers établissements rejoignent la plateforme — revenez bientôt pour découvrir les campagnes d'inscription et les postes ouverts.
+            </p>
+          </div>
+        )}
+
+        {vitrine && vitrine.etablissements.length > 0 && (
+          <>
+            <div className="grid-3">
+              {vitrine.etablissements.slice(0, 6).map((e, i) => (
+                <Tilt3D key={e.id} maxTilt={4} style={{ animationDelay: `${i * 70}ms` }} className="anim-rise-in">
+                  <div className="vitrine-card">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                      <div
+                        style={{
+                          width: "44px",
+                          height: "44px",
+                          borderRadius: "var(--radius-md)",
+                          background: "var(--primary-tint)",
+                          color: "var(--primary-deep)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        aria-hidden="true"
+                      >
+                        {TYPE_ICON[e.type]}
+                      </div>
+                      <span className="chip chip-neutral" style={{ fontSize: "11px" }}>
+                        {TYPE_LABEL[e.type]}
+                      </span>
+                    </div>
+                    <h3 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", fontWeight: 700, margin: "0 0 6px", color: "var(--ink)" }}>
+                      {e.nom}
+                    </h3>
+                    <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)", margin: "0 0 16px" }}>
+                      {e.statut === "public" ? "Établissement public" : "Établissement privé"} · {e.nb_classes} classe{e.nb_classes > 1 ? "s" : ""}
+                    </p>
+                    {e.nb_postes_ouverts > 0 ? (
+                      <Link
+                        to="/inscription-enseignant"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--primary-deep)", textDecoration: "none" }}
+                      >
+                        <Briefcase size={14} aria-hidden="true" /> {e.nb_postes_ouverts} poste{e.nb_postes_ouverts > 1 ? "s" : ""} ouvert{e.nb_postes_ouverts > 1 ? "s" : ""}
+                      </Link>
+                    ) : (
+                      <Link
+                        to="/inscription-tuteur"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--ink-soft)", textDecoration: "none" }}
+                      >
+                        Inscriptions ouvertes <ChevronRight size={14} aria-hidden="true" />
+                      </Link>
+                    )}
+                  </div>
+                </Tilt3D>
+              ))}
+            </div>
+
+            {vitrine.postes_ouverts.length > 0 && (
+              <div style={{ marginTop: "56px" }}>
+                <h3
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--text-xl)",
+                    fontWeight: 700,
+                    color: "var(--ink)",
+                    margin: "0 0 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <Briefcase size={20} style={{ color: "var(--primary-deep)" }} aria-hidden="true" />
+                  Postes d'enseignant ouverts en ce moment
+                </h3>
+                <div className="grid-3">
+                  {vitrine.postes_ouverts.slice(0, 6).map((p, i) => (
+                    <Link
+                      key={p.id}
+                      to="/inscription-enseignant"
+                      className="vitrine-card anim-rise-in"
+                      style={{ display: "block", textDecoration: "none", color: "inherit", animationDelay: `${i * 70}ms` }}
+                    >
+                      <p className="text-eyebrow" style={{ marginBottom: "8px", display: "block" }}>
+                        {TYPE_LABEL[p.etablissement_type]}
+                      </p>
+                      <h4 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-base)", fontWeight: 700, margin: "0 0 6px", color: "var(--ink)" }}>
+                        {p.titre}
+                      </h4>
+                      <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)", margin: "0 0 14px" }}>
+                        {p.etablissement_nom}
+                      </p>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--primary-deep)" }}>
+                        Postuler <ChevronRight size={14} aria-hidden="true" />
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
       {/* ── XP Demo strip ── */}
       <section style={{ maxWidth: "1200px", margin: "0 auto", padding: "80px 24px" }}>
         <div
           style={{
             background: "var(--surface)",
-            border: "2.5px solid var(--border-strong)",
+            border: "1px solid var(--border)",
             borderRadius: "var(--radius-xl)",
             padding: "48px",
             boxShadow: "var(--shadow-xl)",

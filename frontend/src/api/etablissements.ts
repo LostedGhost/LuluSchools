@@ -33,3 +33,30 @@ export function creerClasse(etablissementId: string, payload: ClassePayload) {
 export function monEtablissement() {
   return api.get<EtablissementOut>("/etablissements/mon-etablissement");
 }
+
+export interface EtablissementVitrine {
+  id: string;
+  nom: string;
+  type: "EP" | "ES" | "UP";
+  statut: "public" | "prive";
+  nb_classes: number;
+  nb_postes_ouverts: number;
+}
+
+export interface PosteVitrine {
+  id: string;
+  titre: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  etablissement_type: "EP" | "ES" | "UP";
+}
+
+export interface VitrinePublique {
+  etablissements: EtablissementVitrine[];
+  postes_ouverts: PosteVitrine[];
+  totaux: { etablissements: number; classes: number; postes_ouverts: number };
+}
+
+export function vitrinePublique() {
+  return api.get<VitrinePublique>("/etablissements/vitrine-publique");
+}

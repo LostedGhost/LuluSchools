@@ -420,7 +420,7 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 }
 
 .card-hover:hover {
-  transform: translateY(-3px);
+  transform: translateY(-5px) scale(1.01);
   box-shadow: var(--shadow-lg);
   border-color: var(--border-strong);
 }
@@ -831,6 +831,47 @@ button, a, [role="button"], select, summary { cursor: pointer; }
   .landing-hero { grid-template-columns: 1fr; }
   .hero-stage { display: none; }
 }
+
+/* Relief & personnalité — texture de fond, halos, texte en degrade */
+.dot-grid-bg {
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--ink) 16%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.hero-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.text-gradient {
+  background: linear-gradient(120deg, var(--primary) 10%, var(--primary-deep) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.vitrine-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-normal) var(--ease-spring),
+              box-shadow var(--dur-normal) var(--ease-spring),
+              border-color var(--dur-normal) ease;
+  height: 100%;
+}
+.vitrine-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+@keyframes rise-in { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.anim-rise-in { animation: rise-in .55s var(--ease-spring) both; }
 
 /* ═══════════════════════════════════════════════════════════════
    UTILITAIRES — Divers

@@ -12,9 +12,14 @@ from app.modules.etablissements.schemas import (
     ClasseOut,
     EtablissementCreate,
     EtablissementOut,
+    EtablissementVitrineOut,
+    PosteVitrineOut,
+    VitrinePubliqueOut,
+    VitrineTotauxOut,
 )
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.messagerie.models import Conversation, TypeConversation
+from app.modules.recrutement.models import Poste, StatutPoste
 
 router = APIRouter(prefix="/etablissements", tags=["etablissements"])
 
@@ -103,6 +108,61 @@ def mon_etablissement(
     if etablissement is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
     return etablissement
+
+
+@router.get("/vitrine-publique", response_model=VitrinePubliqueOut)
+def vitrine_publique(db: Session = Depends(get_db)) -> VitrinePubliqueOut:
+    """Endpoint public assume (aucune authentification) : alimente la vitrine marketing de la
+    landing page (etablissements partenaires, postes enseignants ouverts). Ne renvoie que des
+    champs non sensibles (pas de code_etablissement, pas d'email d'admin)."""
+    etablissements = db.query(Etablissement).order_by(Etablissement.created_at.desc()).all()
+    classes = db.query(Classe).all()
+    postes_ouverts_tous = (
+        db.query(Poste).filter(Poste.statut == StatutPoste.OUVERT).order_by(Poste.created_at.desc()).all()
+    )
+
+    nb_classes_par_etab: dict[str, int] = {}
+    for c in classes:
+        nb_classes_par_etab[c.etablissement_id] = nb_classes_par_etab.get(c.etablissement_id, 0) + 1
+
+    nb_postes_par_etab: dict[str, int] = {}
+    for p in postes_ouverts_tous:
+        nb_postes_par_etab[p.etablissement_id] = nb_postes_par_etab.get(p.etablissement_id, 0) + 1
+
+    etablissements_out = [
+        EtablissementVitrineOut(
+            id=e.id,
+            nom=e.nom,
+            type=e.type,
+            statut=e.statut,
+            nb_classes=nb_classes_par_etab.get(e.id, 0),
+            nb_postes_ouverts=nb_postes_par_etab.get(e.id, 0),
+        )
+        for e in etablissements
+    ]
+
+    etab_by_id = {e.id: e for e in etablissements}
+    postes_out = [
+        PosteVitrineOut(
+            id=p.id,
+            titre=p.titre,
+            etablissement_id=p.etablissement_id,
+            etablissement_nom=etab_by_id[p.etablissement_id].nom,
+            etablissement_type=etab_by_id[p.etablissement_id].type,
+        )
+        for p in postes_ouverts_tous[:12]
+        if p.etablissement_id in etab_by_id
+    ]
+
+    return VitrinePubliqueOut(
+        etablissements=etablissements_out,
+        postes_ouverts=postes_out,
+        totaux=VitrineTotauxOut(
+            etablissements=len(etablissements),
+            classes=len(classes),
+            postes_ouverts=len(postes_ouverts_tous),
+        ),
+    )
 
 
 @router.get("/{etablissement_id}", response_model=EtablissementOut)
