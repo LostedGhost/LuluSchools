@@ -1,7 +1,8 @@
 # Render Blueprint pour le backend LuluSchools (voir docs/adr/ADR-006-deploiement-render-vercel.md).
 #
 # Premier deploiement :
-#   1. Sur Render : New > Blueprint, pointer sur ce depot, branche main.
+#   1. Sur Render : New > Blueprint, pointer sur ce depot, branche main. Render lit ce
+#      fichier et cree a la fois le service web et la base PostgreSQL ci-dessous.
 #   2. Render demande les valeurs des variables marquees `sync: false` ci-dessous
 #      (cles FreeLLM/LuluFiles/Kkiapay/Brevo, jamais stockees dans ce fichier).
 #   3. Une fois le service en ligne, noter son URL reelle (https://<nom>.onrender.com)
@@ -10,10 +11,16 @@
 #        - CORS_ALLOW_ORIGINS ci-dessous avec le domaine Vercel reel
 #        - l'URL de webhook dans le dashboard Kkiapay (Cles API > Webhook)
 #
-# Le disque persistant (`disk`) exige le plan "starter" ou superieur (indisponible sur
-# le plan gratuit) et n'est PAS partage entre plusieurs instances : ce service doit
-# rester a une seule instance tant que le casier judiciaire reste stocke localement
-# (Art. 395 de la loi n. 2017-20, voir ADR-003) - ne jamais activer l'autoscaling ici.
+# Limites du plan gratuit (voir docs/deploiement-render-vercel.md) :
+#   - Pas de disque persistant (`disk`) : le casier judiciaire n'est donc jamais ecrit
+#     sur le disque local du service (perdu a chaque redemarrage/veille) mais chiffre
+#     (Fernet, cle CASIER_JUDICIAIRE_ENCRYPTION_KEY) et stocke dans la base Postgres.
+#   - Le service web se met en veille apres 15 min sans trafic (premiere requete
+#     suivante ~50s plus lente le temps du reveil).
+#   - La base PostgreSQL gratuite expire 30 jours apres sa creation (14 jours de grace
+#     avant suppression definitive, pas de sauvegarde automatique) : passer sur un plan
+#     payant ou exporter/reimporter (`pg_dump`/`psql`) avant l'echeance pour tout usage
+#     au-dela d'une demo/pilote courte.
 
 services:
   - type: web
@@ -33,7 +40,9 @@ services:
         value: production
 
       - key: DATABASE_URL
-        value: postgresql://luluschools_user:WroJ3HKDzBNnJc44IKuTPMRTkshtU9T3@dpg-darcdls9v7es73e39440-a/luluschools
+        fromDatabase:
+          name: luluschools-db
+          property: connectionString
 
       - key: JWT_SECRET_KEY
         generateValue: true
@@ -68,11 +77,20 @@ services:
       - key: BREVO_SENDER_NAME
         value: LuluSchools
 
-      # Chemin a l'interieur du disque persistant declare ci-dessus.
-      - key: CASIER_JUDICIAIRE_STORAGE_PATH
-        value: /var/data/casier-judiciaire
+      # Chiffre le contenu du casier judiciaire stocke en base (voir
+      # VerificationCasierJudiciaire.contenu_chiffre) - genere une fois par Render,
+      # jamais visible dans ce depot.
+      - key: CASIER_JUDICIAIRE_ENCRYPTION_KEY
+        generateValue: true
 
       # A remplacer par le(s) domaine(s) Vercel reel(s) une fois connu(s), au format
       # JSON (le champ est une liste cote backend) : ["https://luluschools.vercel.app"]
       - key: CORS_ALLOW_ORIGINS
         value: '["https://luluschools.vercel.app"]'
+
+databases:
+  - name: luluschools-db
+    plan: free
+    region: frankfurt
+    databaseName: luluschools
+    user: luluschools_user
