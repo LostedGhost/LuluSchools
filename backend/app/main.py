@@ -17,6 +17,7 @@ from app.modules.inscriptions.router import mon_espace_router as inscriptions_mo
 from app.modules.inscriptions.router import router as inscriptions_router
 from app.modules.paiements.router import router as kkiapay_webhook_router
 from app.modules.recrutement.router import router as recrutement_router
+from app.modules.services_scolaires.router import router as services_scolaires_router
 from app.system.router import router as system_router
 
 app = FastAPI(title="LuluSchools API", version="0.1.0")
@@ -67,4 +68,5 @@ app.include_router(pedagogie_router, prefix="/api/v1")
 app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")
+app.include_router(services_scolaires_router, prefix="/api/v1")
 app.include_router(kkiapay_webhook_router, prefix="/api/v1")

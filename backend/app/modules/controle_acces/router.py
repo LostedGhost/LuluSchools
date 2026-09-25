@@ -11,7 +11,7 @@ from app.modules.identite.models import RoleUtilisateur, Utilisateur
 router = APIRouter(tags=["controle-acces"])
 
 
-def _verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
+def verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
     if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
     lien = db.get(AdminEtablissement, utilisateur.id)
@@ -47,7 +47,7 @@ def designer_controleur(
 ) -> DesignationControleur:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
-    _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    verifier_admin_de_l_etablissement(db, admin, etablissement_id)
 
     if db.get(Utilisateur, payload.utilisateur_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur a designer introuvable.")
@@ -72,7 +72,7 @@ def lister_controleurs(
     db: Session = Depends(get_db),
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
 ) -> list[DesignationControleur]:
-    _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    verifier_admin_de_l_etablissement(db, admin, etablissement_id)
     return (
         db.query(DesignationControleur)
         .filter(DesignationControleur.etablissement_id == etablissement_id)
@@ -89,6 +89,6 @@ def revoquer_controleur(
     designation = db.get(DesignationControleur, designation_id)
     if designation is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Designation introuvable.")
-    _verifier_admin_de_l_etablissement(db, admin, designation.etablissement_id)
+    verifier_admin_de_l_etablissement(db, admin, designation.etablissement_id)
     db.delete(designation)
     db.commit()

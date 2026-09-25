@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.deps import api_error
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe
 from app.modules.paiements.schemas import KkiapayWebhookPayload
+from app.modules.services_scolaires.models import StatutTicket, TicketCantine, TicketTransport
 
 router = APIRouter(tags=["paiements"])
 
@@ -22,6 +23,26 @@ def _confirmer_demande_acte(db: Session, transaction_id: str) -> bool:
         return False
     demande.paiement_confirme = True
     demande.statut = StatutDemandeActe.EN_TRAITEMENT
+    db.commit()
+    return True
+
+
+def _confirmer_ticket_transport(db: Session, transaction_id: str) -> bool:
+    ticket = (
+        db.query(TicketTransport).filter(TicketTransport.kkiapay_transaction_id == transaction_id).first()
+    )
+    if ticket is None or ticket.statut != StatutTicket.ACHETE or ticket.paiement_confirme:
+        return False
+    ticket.paiement_confirme = True
+    db.commit()
+    return True
+
+
+def _confirmer_ticket_cantine(db: Session, transaction_id: str) -> bool:
+    ticket = db.query(TicketCantine).filter(TicketCantine.kkiapay_transaction_id == transaction_id).first()
+    if ticket is None or ticket.statut != StatutTicket.ACHETE or ticket.paiement_confirme:
+        return False
+    ticket.paiement_confirme = True
     db.commit()
     return True
 
@@ -43,6 +64,10 @@ def webhook_kkiapay(
         raise api_error(status.HTTP_401_UNAUTHORIZED, "secret_invalide", "Secret webhook invalide.")
 
     if payload.event == "transaction.success" and payload.isPaymentSucces:
-        _confirmer_demande_acte(db, payload.transactionId)
+        (
+            _confirmer_demande_acte(db, payload.transactionId)
+            or _confirmer_ticket_transport(db, payload.transactionId)
+            or _confirmer_ticket_cantine(db, payload.transactionId)
+        )
 
     return {"ok": True}
