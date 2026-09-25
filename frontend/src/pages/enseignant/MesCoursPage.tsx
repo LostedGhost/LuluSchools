@@ -17,6 +17,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { School, BookOpen, ExternalLink } from "lucide-react";
+import { estRempli } from "../../utils/validation";
 
 const LABEL_FORMAT: Record<FormatCours, string> = {
   texte: "Texte",
@@ -126,6 +127,14 @@ export function MesCoursPage() {
 
   const soumettre = async (e: FormEvent) => {
     e.preventDefault();
+    if (!estRempli(titre)) {
+      setFormErreur("Veuillez saisir un titre pour le cours.");
+      return;
+    }
+    if (!estRempli(chapitre)) {
+      setFormErreur("Veuillez sélectionner une matière.");
+      return;
+    }
     const targetClasseId = formClasseId || classeId;
     if (!targetClasseId) {
       setFormErreur("Veuillez sélectionner une classe.");
