@@ -228,20 +228,25 @@ def test_lien_document_candidature_visible_par_le_candidat_et_l_admin(
     assert lien_admin.status_code == 200
 
 
-def test_casier_judiciaire_stocke_localement_pas_sur_lulufiles(
-    client, fake_llm_client, fake_files_client, enseignant_headers, etablissement_avec_classe, tmp_path, monkeypatch
+def test_casier_judiciaire_stocke_chiffre_en_base_pas_sur_lulufiles(
+    client, db_session, fake_llm_client, fake_files_client, enseignant_headers, etablissement_avec_classe
 ):
-    from app.core.config import settings
+    from app.core.crypto import dechiffrer_bytes
+    from app.modules.recrutement.models import VerificationCasierJudiciaire
 
-    monkeypatch.setattr(settings, "casier_judiciaire_storage_path", str(tmp_path))
     poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
 
     response = _postuler(client, enseignant_headers, poste["id"], casier_bytes=b"contenu sensible du casier")
     assert response.status_code == 201
+    candidature_id = response.json()["id"]
 
-    fichiers_ecrits = list(tmp_path.iterdir())
-    assert len(fichiers_ecrits) == 1
-    assert fichiers_ecrits[0].read_bytes() == b"contenu sensible du casier"
+    verification = (
+        db_session.query(VerificationCasierJudiciaire)
+        .filter_by(candidature_id=candidature_id)
+        .one()
+    )
+    assert verification.contenu_chiffre != b"contenu sensible du casier"  # jamais en clair en base
+    assert dechiffrer_bytes(verification.contenu_chiffre) == b"contenu sensible du casier"
     # Seuls les 2 documents scores (cv, diplome) doivent avoir transite par LuluFiles.
     assert len(fake_files_client.uploaded) == 2
 

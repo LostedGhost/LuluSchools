@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -125,15 +125,19 @@ class DocumentCandidature(Base):
 
 class VerificationCasierJudiciaire(Base):
     """Ecarte du pipeline de notation IA generique (Art. 395 - regime restreint des
-    donnees penales) : fichier garde localement, jamais sur LuluFiles/Telegram, acces
-    reserve aux personnes designees par l'A+ (a appliquer au niveau de l'endpoint de
-    lecture, pas encore construit - voir rapport final)."""
+    donnees penales) : jamais sur LuluFiles/Telegram, acces reserve aux personnes
+    designees par l'A+ (a appliquer au niveau de l'endpoint de lecture, pas encore
+    construit - voir rapport final). Contenu chiffre (Fernet, cle hors depot) stocke en
+    base plutot que sur disque local : le plan Render gratuit ne fournit pas de disque
+    persistant (voir render.yaml / ADR-006), donc un fichier local serait perdu a chaque
+    redemarrage du service (veille apres 15 min d'inactivite incluse)."""
 
     __tablename__ = "verifications_casier_judiciaire"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     candidature_id: Mapped[str] = mapped_column(ForeignKey("candidatures.id"), unique=True)
-    chemin_fichier_local: Mapped[str] = mapped_column(String(500))
+    contenu_chiffre: Mapped[bytes] = mapped_column(LargeBinary)
+    nom_fichier: Mapped[str] = mapped_column(String(255))
     statut: Mapped[StatutVerificationCasier] = mapped_column(
         Enum(StatutVerificationCasier), default=StatutVerificationCasier.EN_ATTENTE
     )

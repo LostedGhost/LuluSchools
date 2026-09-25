@@ -1,5 +1,7 @@
+import secrets
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/core/config.py -> parents[3] = racine du depot (a cote de .env.example)
@@ -34,7 +36,12 @@ class Settings(BaseSettings):
     brevo_sender_email: str = "no-reply@luluschools.example"
     brevo_sender_name: str = "LuluSchools"
 
-    casier_judiciaire_storage_path: str = "./casier-judiciaire"
+    # Secret chiffrant le contenu du casier judiciaire stocke en base (voir
+    # app/core/crypto.py, VerificationCasierJudiciaire.contenu_chiffre) - jamais
+    # commite, genere par Render (generateValue: true) en production. Le
+    # default_factory tire une valeur aleatoire differente a chaque demarrage en
+    # dev/tests (jamais la meme valeur committee ici).
+    casier_judiciaire_encryption_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
 
     cors_allow_origins: list[str] = ["http://localhost:5173"]
 

@@ -3,9 +3,10 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.modules.inscriptions.models import Eleve
 
 
 def _new_uuid() -> str:
@@ -54,3 +55,20 @@ class DemandeActeAcademique(Base):
     kkiapay_transaction_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     motif_rejet: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    eleve: Mapped[Eleve] = relationship()
+
+    @property
+    def eleve_nom(self) -> str:
+        """Bug reel corrige (audit frontend, 2026-09-25) : DemandeActeOut ne renvoyait
+        que eleve_id, l'A+ ne pouvait pas identifier qui avait soumis une demande sans
+        aller la chercher ailleurs (meme constat que sur CandidatureOut)."""
+        return self.eleve.nom
+
+    @property
+    def eleve_prenom(self) -> str:
+        return self.eleve.prenom
+
+    @property
+    def eleve_matricule(self) -> str | None:
+        return self.eleve.matricule

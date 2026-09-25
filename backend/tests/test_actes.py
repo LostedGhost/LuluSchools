@@ -8,6 +8,10 @@ def test_reclamation_gratuite_va_directement_en_traitement(client, classe_avec_e
     assert response.status_code == 201
     assert response.json()["statut"] == "en_traitement"
     assert response.json()["paiement_confirme"] is True
+    # Bug reel corrige : une demande reduite a un eleve_id etait inexploitable pour l'A+
+    # charge de la traiter, qui ne pouvait pas savoir qui l'avait soumise.
+    assert response.json()["eleve_nom"] == "Dossou"
+    assert response.json()["eleve_matricule"] is not None
 
 
 def test_acte_payant_attend_le_paiement_avant_traitement(client, classe_avec_enseignant_et_eleve, monkeypatch):

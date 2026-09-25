@@ -1,11 +1,11 @@
 import hashlib
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
+from app.core.crypto import chiffrer_bytes
 from app.core.database import get_db, get_session_factory
 from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
@@ -190,7 +190,7 @@ def postuler(
     criteres_par_type = {c.type_document: c for c in poste.criteres}
     if len(types) != len(fichiers) or set(types) != set(criteres_par_type.keys()):
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
             "documents_incomplets",
             "Les documents fournis ne correspondent pas exactement aux criteres du poste.",
         )
@@ -239,15 +239,11 @@ def postuler(
         )
 
     contenu_casier = casier_judiciaire.file.read()
-    dossier_casier = Path(settings.casier_judiciaire_storage_path)
-    dossier_casier.mkdir(parents=True, exist_ok=True)
-    extension = Path(casier_judiciaire.filename or "").suffix or ".bin"
-    chemin_casier = dossier_casier / f"{candidature.id}{extension}"
-    chemin_casier.write_bytes(contenu_casier)
     db.add(
         VerificationCasierJudiciaire(
             candidature_id=candidature.id,
-            chemin_fichier_local=str(chemin_casier),
+            contenu_chiffre=chiffrer_bytes(contenu_casier),
+            nom_fichier=casier_judiciaire.filename or f"{candidature.id}.bin",
             statut=StatutVerificationCasier.EN_ATTENTE,
         )
     )
@@ -459,7 +455,7 @@ def decider_contestation(
 
     if payload.decision == StatutContestation.REJETEE and not payload.motif_decision:
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, "motif_requis", "Un motif est requis en cas de rejet."
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet."
         )
 
     contestation.statut = payload.decision
@@ -535,7 +531,7 @@ def signer_contrat(
 
     contenu_image = signature_image.file.read()
     if not contenu_image:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "signature_vide", "Aucun trace de signature recu.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "signature_vide", "Aucun trace de signature recu.")
     try:
         signature_image_id = files_client.upload(
             contenu_image, signature_image.filename or "signature.png", signature_image.content_type or "image/png"

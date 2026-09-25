@@ -49,6 +49,9 @@ class DemandeActeOut(BaseModel):
 
     id: str
     eleve_id: str
+    eleve_nom: str
+    eleve_prenom: str
+    eleve_matricule: str | None
     type_acte_id: str | None
     est_reclamation: bool
     statut: StatutDemandeActe
