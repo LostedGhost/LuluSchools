@@ -4,7 +4,6 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import settings
 from app.core.crypto import chiffrer_bytes
 from app.core.database import get_db, get_session_factory
 from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles

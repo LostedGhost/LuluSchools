@@ -160,7 +160,7 @@ def soumettre_devoir(
     questions_par_id = {q.id: q for q in devoir.questions}
     if {r.question_id for r in payload.reponses} != set(questions_par_id.keys()):
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
             "reponses_incompletes",
             "Une reponse est attendue pour chaque question du devoir, exactement.",
         )
@@ -280,10 +280,10 @@ def corriger_soumission(
     reponses_par_id = {r.question_id: r for r in soumission.reponses}
     for correction in payload.reponses:
         if correction.question_id not in reponses_par_id:
-            raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "question_inconnue", "Question hors de ce devoir.")
+            raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "question_inconnue", "Question hors de ce devoir.")
         if correction.points_obtenus > points_max_par_question[correction.question_id]:
             raise api_error(
-                status.HTTP_422_UNPROCESSABLE_CONTENT, "points_hors_bareme", "points_obtenus depasse points_max."
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "points_hors_bareme", "points_obtenus depasse points_max."
             )
         reponses_par_id[correction.question_id].points_obtenus = correction.points_obtenus
 

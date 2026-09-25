@@ -40,7 +40,7 @@ def _resoudre_beneficiaire(db: Session, utilisateur: Utilisateur, eleve_utilisat
         return utilisateur
     if not eleve_utilisateur_id:
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, "eleve_requis", "eleve_utilisateur_id est requis pour un tuteur."
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "eleve_requis", "eleve_utilisateur_id est requis pour un tuteur."
         )
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != utilisateur.id:

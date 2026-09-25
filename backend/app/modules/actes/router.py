@@ -138,7 +138,7 @@ def soumettre_demande_acte(
     else:
         if not payload.eleve_utilisateur_id:
             raise api_error(
-                status.HTTP_422_UNPROCESSABLE_CONTENT, "eleve_requis", "eleve_utilisateur_id est requis pour un tuteur."
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "eleve_requis", "eleve_utilisateur_id est requis pour un tuteur."
             )
         eleve = db.query(Eleve).filter(Eleve.utilisateur_id == payload.eleve_utilisateur_id).first()
         if eleve is not None and eleve.tuteur_id != utilisateur.id:
@@ -239,7 +239,7 @@ def traiter_demande_acte(
             status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande n'est pas prete a etre traitee (paiement manquant ?)."
         )
     if payload.decision == StatutDemandeActe.REJETEE and not payload.motif_rejet:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "motif_requis", "Un motif est requis en cas de rejet.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet.")
 
     demande.statut = payload.decision
     demande.motif_rejet = payload.motif_rejet

@@ -149,7 +149,7 @@ def creer_conversation_dm(
     if autre is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur introuvable.")
     if autre.id == utilisateur.id:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "cible_invalide", "Impossible de se contacter soi-meme.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "cible_invalide", "Impossible de se contacter soi-meme.")
 
     roles = {utilisateur.role, autre.role}
     if RoleUtilisateur.ELEVE in roles and roles & _ROLES_ADULTES_STAFF:

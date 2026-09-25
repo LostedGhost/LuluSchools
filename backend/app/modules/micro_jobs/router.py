@@ -210,9 +210,9 @@ def decider_contestation(
     if contestation.statut != StatutContestationMicroJob.EN_ATTENTE:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette contestation a deja ete tranchee.")
     if payload.decision == StatutContestationMicroJob.REJETEE and not payload.decision_motif:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "motif_requis", "Un motif est requis en cas de rejet.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet.")
     if payload.decision not in (StatutContestationMicroJob.ACCEPTEE, StatutContestationMicroJob.REJETEE):
-        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "decision_invalide", "Decision invalide.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Decision invalide.")
 
     mission = db.get(MissionMicroJob, contestation.mission_id)
     contestation.statut = payload.decision

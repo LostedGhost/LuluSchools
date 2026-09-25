@@ -191,7 +191,7 @@ def creer_quiz(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce cours ne vous appartient pas.")
     if not cours.contenu_texte:
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
             "contenu_texte_requis",
             "Le cours doit avoir un contenu_texte pour generer un quiz.",
         )
@@ -250,7 +250,7 @@ def tenter_quiz(
     questions = sorted(quiz.questions, key=lambda q: q.ordre)
     if len(payload.reponses) != len(questions):
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
             "reponses_incompletes",
             f"Attendu {len(questions)} reponses, recu {len(payload.reponses)}.",
         )
