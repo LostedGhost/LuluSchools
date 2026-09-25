@@ -1,9 +1,6 @@
-import hmac
-
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
@@ -11,7 +8,6 @@ from app.modules.actes.schemas import (
     AmorcerPaiementRequest,
     DemandeActeCreate,
     DemandeActeOut,
-    KkiapayWebhookPayload,
     TraiterDemandeRequest,
     TypeActeCreate,
     TypeActeOut,
@@ -200,36 +196,6 @@ def amorcer_paiement(
     db.commit()
     db.refresh(demande)
     return demande
-
-
-paiements_router = APIRouter(tags=["actes"])
-
-
-@paiements_router.post("/paiements/webhook/kkiapay", include_in_schema=False)
-def webhook_kkiapay(
-    payload: KkiapayWebhookPayload,
-    db: Session = Depends(get_db),
-    x_kkiapay_secret: str | None = Header(default=None),
-) -> dict:
-    """URL UNIQUE et fixe a renseigner une fois dans le tableau de bord Kkiapay (Cles
-    API > Webhook), pas une par demande - voir docs/contrat-api-phase1.md. Verifie le
-    secret partage (choisi par nous dans le dashboard Kkiapay, stocke dans
-    KKIAPAY_SECRET) renvoye tel quel dans l'en-tete x-kkiapay-secret."""
-    if not x_kkiapay_secret or not hmac.compare_digest(x_kkiapay_secret, settings.kkiapay_secret):
-        raise api_error(status.HTTP_401_UNAUTHORIZED, "secret_invalide", "Secret webhook invalide.")
-
-    if payload.event == "transaction.success" and payload.isPaymentSucces:
-        demande = (
-            db.query(DemandeActeAcademique)
-            .filter(DemandeActeAcademique.kkiapay_transaction_id == payload.transactionId)
-            .first()
-        )
-        if demande is not None and demande.statut == StatutDemandeActe.SOUMISE:
-            demande.paiement_confirme = True
-            demande.statut = StatutDemandeActe.EN_TRAITEMENT
-            db.commit()
-
-    return {"ok": True}
 
 
 @router.get("/demandes-actes/{demande_id}", response_model=DemandeActeOut)

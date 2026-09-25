@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.actes.models import StatutDemandeActe
+from app.modules.paiements.schemas import AmorcerPaiementRequest  # noqa: F401 (reexporte pour compat)
 
 
 class TypeActeCreate(BaseModel):
@@ -53,20 +54,6 @@ class DemandeActeOut(BaseModel):
     statut: StatutDemandeActe
     paiement_confirme: bool
     motif_rejet: str | None
-
-
-class AmorcerPaiementRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    transaction_id: str
-
-
-class KkiapayWebhookPayload(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Kkiapay envoie d'autres champs (amount, fees, method...)
-
-    transactionId: str
-    isPaymentSucces: bool
-    event: str
 
 
 class TraiterDemandeRequest(BaseModel):

@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.modules.actes.router import paiements_router as kkiapay_webhook_router
 from app.modules.actes.router import router as actes_router
 from app.modules.etablissements.router import router as etablissements_router
 from app.modules.evaluations.router import router as evaluations_router
@@ -15,6 +14,7 @@ from app.modules.identite.router import auth_router, enseignant_router, me_route
 from app.modules.identite.router import router as identite_router
 from app.modules.inscriptions.router import mon_espace_router as inscriptions_mon_espace_router
 from app.modules.inscriptions.router import router as inscriptions_router
+from app.modules.paiements.router import router as kkiapay_webhook_router
 from app.modules.recrutement.router import router as recrutement_router
 from app.system.router import router as system_router
 
