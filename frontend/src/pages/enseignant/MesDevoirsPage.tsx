@@ -10,7 +10,8 @@ import {
 import { mesContrats } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
 import type { BaremeDevoir, ClasseOut, DevoirOut, EtablissementOut, SoumissionOut } from "../../types/api";
-import { Card, ErrorBanner, Field, PageTitle, PrimaryButton, SecondaryButton, TextInput } from "../../components/ui";
+import { Card, ErrorBanner, Field, SectionHead, Btn, TextInput, Select, EmptyState } from "../../components/ui";
+import { AIBadge } from "../../components/gamification";
 
 export function MesDevoirsPage() {
   const [etablissementIds, setEtablissementIds] = useState<string[]>([]);
@@ -31,6 +32,7 @@ export function MesDevoirsPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [pointsParReponse, setPointsParReponse] = useState<Record<string, number>>({});
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     mesContrats()
@@ -89,9 +91,10 @@ export function MesDevoirsPage() {
       setMatiere("");
       setDateLimite("");
       setQuestions([{ enonce: "", bareme_reponse: "", points_max: 10 }]);
+      setIsCreating(false);
       chargerDevoirs();
     } catch (err) {
-      setErreur(messageErreur(err, "Impossible de creer le devoir."));
+      setErreur(messageErreur(err, "Impossible de créer le devoir."));
     } finally {
       setEnCours(false);
     }
@@ -111,81 +114,100 @@ export function MesDevoirsPage() {
   };
 
   return (
-    <div>
-      <PageTitle>Mes devoirs</PageTitle>
-      <ErrorBanner>{erreur}</ErrorBanner>
-
-      <div className="mb-4 flex gap-3">
-        <select
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          value={etablissementId}
-          onChange={(e) => {
-            setEtablissementId(e.target.value);
-            setClasseId("");
-          }}
-        >
-          <option value="">Etablissement...</option>
-          {etablissementIds.map((id) => (
-            <option key={id} value={id}>
-              {etablissements.find((e) => e.id === id)?.nom ?? id}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          value={classeId}
-          onChange={(e) => setClasseId(e.target.value)}
-          disabled={!etablissementId}
-        >
-          <option value="">Classe...</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.niveau}
-            </option>
-          ))}
-        </select>
+    <div className="page-content">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <SectionHead 
+          title="Mes devoirs"
+          desc="Gérez vos devoirs et supervisez les corrections IA." 
+        />
+        {classeId && (
+          <Btn variant="primary" onClick={() => setIsCreating(!isCreating)}>
+            {isCreating ? "Annuler la création" : "+ Créer un devoir"}
+          </Btn>
+        )}
       </div>
 
-      {classeId && (
-        <>
-          <Card className="mb-4">
-            <p className="mb-3 font-medium text-slate-900">Creer un nouveau devoir</p>
-            <form onSubmit={soumettre} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Titre">
-                  <TextInput value={titre} onChange={(e) => setTitre(e.target.value)} required />
-                </Field>
-                <Field label="Matiere">
-                  <TextInput value={matiere} onChange={(e) => setMatiere(e.target.value)} required />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Date limite">
-                  <TextInput
-                    type="datetime-local"
-                    value={dateLimite}
-                    onChange={(e) => setDateLimite(e.target.value)}
-                    required
-                  />
-                </Field>
-                <Field label="Bareme">
-                  <select
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    value={bareme}
-                    onChange={(e) => setBareme(e.target.value as BaremeDevoir)}
-                  >
-                    <option value="flexible">Flexible (credit partiel)</option>
-                    <option value="rigide">Rigide (tout ou rien)</option>
-                  </select>
-                </Field>
-              </div>
+      <ErrorBanner>{erreur}</ErrorBanner>
 
+      <Card className="mb-8 card-soft">
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-[200px]">
+            <Field label="Établissement">
+              <Select
+                value={etablissementId}
+                onChange={(e) => {
+                  setEtablissementId(e.target.value);
+                  setClasseId("");
+                }}
+              >
+                <option value="">Sélectionner...</option>
+                {etablissementIds.map((id) => (
+                  <option key={id} value={id}>
+                    {etablissements.find((e) => e.id === id)?.nom ?? id}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <Field label="Classe">
+              <Select
+                value={classeId}
+                onChange={(e) => setClasseId(e.target.value)}
+                disabled={!etablissementId}
+              >
+                <option value="">Sélectionner...</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.niveau}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        </div>
+      </Card>
+
+      {classeId && isCreating && (
+        <Card className="mb-8 anim-slide-up border-2" style={{ borderColor: 'var(--primary)' }}>
+          <h3 className="text-title text-ink mb-4">Créer un nouveau devoir</h3>
+          <form onSubmit={soumettre} className="space-y-6">
+            <div className="grid-2">
+              <Field label="Titre">
+                <TextInput value={titre} onChange={(e) => setTitre(e.target.value)} required />
+              </Field>
+              <Field label="Matière">
+                <TextInput value={matiere} onChange={(e) => setMatiere(e.target.value)} required />
+              </Field>
+            </div>
+            <div className="grid-2">
+              <Field label="Date limite">
+                <TextInput
+                  type="datetime-local"
+                  value={dateLimite}
+                  onChange={(e) => setDateLimite(e.target.value)}
+                  required
+                />
+              </Field>
+              <Field label="Barème">
+                <Select
+                  value={bareme}
+                  onChange={(e) => setBareme(e.target.value as BaremeDevoir)}
+                >
+                  <option value="flexible">Flexible (crédit partiel)</option>
+                  <option value="rigide">Rigide (tout ou rien)</option>
+                </Select>
+              </Field>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-bold text-ink text-eyebrow">Questions</h4>
               {questions.map((q, i) => (
-                <div key={i} className="space-y-2 rounded-lg border border-slate-200 p-3">
+                <div key={i} className="space-y-3 rounded-lg p-4 bg-slate-50 border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface-2)' }}>
                   <Field label={`Question ${i + 1}`}>
                     <TextInput value={q.enonce} onChange={(e) => majQuestion(i, "enonce", e.target.value)} required />
                   </Field>
-                  <Field label="Bareme de correction (instruction pour l'IA)">
+                  <Field label="Barème de correction (instruction pour l'IA)">
                     <TextInput
                       value={q.bareme_reponse}
                       onChange={(e) => majQuestion(i, "bareme_reponse", e.target.value)}
@@ -195,68 +217,94 @@ export function MesDevoirsPage() {
                   <Field label="Points max">
                     <TextInput
                       type="number"
-                      value={q.points_max}
+                      value={q.points_max.toString()}
                       onChange={(e) => majQuestion(i, "points_max", e.target.value)}
                       required
                     />
                   </Field>
                 </div>
               ))}
-              <SecondaryButton type="button" onClick={ajouterQuestion}>
+              <Btn type="button" variant="ghost" onClick={ajouterQuestion}>
                 + Ajouter une question
-              </SecondaryButton>
-              <div>
-                <PrimaryButton type="submit" disabled={enCours}>
-                  {enCours ? "Creation..." : "Creer le devoir"}
-                </PrimaryButton>
-              </div>
-            </form>
-          </Card>
+              </Btn>
+            </div>
+            <div className="flex justify-end border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+              <Btn type="submit" variant="primary" disabled={enCours} loading={enCours}>
+                {enCours ? "Création..." : "Créer le devoir"}
+              </Btn>
+            </div>
+          </form>
+        </Card>
+      )}
 
-          <div className="space-y-3">
-            {devoirs.map((devoir) => (
-              <Card key={devoir.id}>
-                <p className="font-medium text-slate-900">{devoir.titre}</p>
-                <p className="mb-2 text-sm text-slate-500">{devoir.matiere}</p>
-                {(aRevoirParDevoir[devoir.id] ?? []).length > 0 && (
-                  <div className="mt-2 space-y-3">
-                    <p className="text-sm font-medium text-red-600">Soumissions en echec de correction IA :</p>
-                    {aRevoirParDevoir[devoir.id].map((s) => (
-                      <div key={s.id} className="space-y-2 rounded-lg bg-red-50 p-3">
-                        {devoir.questions.map((q) => {
-                          const reponse = s.reponses.find((r) => r.question_id === q.id);
-                          const cle = `${s.id}:${q.id}`;
-                          return (
-                            <div key={q.id} className="text-sm">
-                              <p className="text-slate-700">{q.enonce}</p>
-                              <p className="mb-1 text-slate-600">{reponse?.texte_reponse}</p>
-                              <div className="flex items-center gap-2">
-                                <TextInput
-                                  type="number"
-                                  min={0}
-                                  max={q.points_max}
-                                  value={pointsParReponse[cle] ?? ""}
-                                  onChange={(e) =>
-                                    setPointsParReponse((prev) => ({ ...prev, [cle]: Number(e.target.value) }))
-                                  }
-                                  className="w-24"
-                                />
-                                <span className="text-slate-500">/ {q.points_max} points</span>
-                              </div>
+      {classeId && !isCreating && devoirs.length === 0 && (
+        <EmptyState title="Aucun devoir" desc="Créez votre premier devoir pour cette classe." />
+      )}
+
+      {classeId && devoirs.length > 0 && (
+        <div className="space-y-6">
+          {devoirs.map((devoir, idx) => (
+            <Card key={devoir.id} className={`anim-float-in delay-${(idx % 5) + 1}`}>
+              <div className="flex justify-between items-start mb-4 border-b pb-4" style={{ borderColor: 'var(--border)' }}>
+                <div>
+                  <h3 className="text-title text-ink mb-1">{devoir.titre}</h3>
+                  <p className="text-sm text-ink-soft">{devoir.matiere}</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <AIBadge status={(aRevoirParDevoir[devoir.id] ?? []).length > 0 ? "error" : "done"} />
+                </div>
+              </div>
+              
+              {(aRevoirParDevoir[devoir.id] ?? []).length > 0 ? (
+                <div className="mt-4 space-y-4">
+                  <h4 className="text-sm font-medium" style={{ color: 'var(--action-deep)' }}>
+                    Soumissions nécessitant une correction manuelle :
+                  </h4>
+                  {aRevoirParDevoir[devoir.id].map((s) => (
+                    <div key={s.id} className="space-y-4 rounded-lg p-4 border" style={{ borderColor: 'var(--action-tint)', backgroundColor: 'var(--surface)' }}>
+                      {devoir.questions.map((q) => {
+                        const reponse = s.reponses.find((r) => r.question_id === q.id);
+                        const cle = `${s.id}:${q.id}`;
+                        return (
+                          <div key={q.id} className="text-sm pb-3 border-b border-dashed last:border-0" style={{ borderColor: 'var(--border)' }}>
+                            <p className="font-medium text-ink mb-2">{q.enonce}</p>
+                            <div className="bg-slate-50 p-3 rounded mb-3 text-ink-soft italic">
+                              {reponse?.texte_reponse || "Aucune réponse fournie"}
                             </div>
-                          );
-                        })}
-                        <SecondaryButton type="button" onClick={() => corrigerManuel(s, devoir)}>
+                            <div className="flex items-center gap-3">
+                              <Field label="Note">
+                                <div className="flex items-center gap-2">
+                                  <TextInput
+                                    type="number"
+                                    min={0}
+                                    max={q.points_max}
+                                    value={pointsParReponse[cle] ?? ""}
+                                    onChange={(e) =>
+                                      setPointsParReponse((prev) => ({ ...prev, [cle]: Number(e.target.value) }))
+                                    }
+                                    className="w-24"
+                                  />
+                                  <span className="text-ink-soft font-mono">/ {q.points_max} pts</span>
+                                </div>
+                              </Field>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-end pt-2">
+                        <Btn type="button" variant="action" onClick={() => corrigerManuel(s, devoir)}>
                           Valider la correction
-                        </SecondaryButton>
+                        </Btn>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            ))}
-          </div>
-        </>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-ink-soft">Toutes les soumissions ont été corrigées avec succès par l'IA.</p>
+              )}
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

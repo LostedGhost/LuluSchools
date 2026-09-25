@@ -107,8 +107,8 @@ export function EtablissementsPage() {
           <Card key={e.id} className="flex items-center justify-between">
             <span>{e.nom}</span>
             <div className="flex items-center gap-2">
-              <Badge tone="gray">{e.code_etablissement}</Badge>
-              <Badge tone="blue">{e.type}</Badge>
+              <Badge tone="neutral">{e.code_etablissement}</Badge>
+              <Badge tone="info">{e.type}</Badge>
             </div>
           </Card>
         ))}

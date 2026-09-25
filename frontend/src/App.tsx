@@ -1,10 +1,11 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
-import { AppLayout } from "./layout/AppLayout";
+import { AppLayout, ThemeProvider } from "./layout/AppLayout";
 import { EleveProfileProvider } from "./eleve/EleveProfileContext";
 import { AdminEtabProvider } from "./admin/AdminEtabContext";
 
+import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
@@ -43,9 +44,11 @@ import { ReferentielsPage } from "./pages/admin_ministeriel/ReferentielsPage";
 function App() {
   return (
     <BrowserRouter>
+      <ThemeProvider>
       <AuthProvider>
         <AppLayout>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
             <Route path="/connexion" element={<LoginPage />} />
             <Route path="/inscription-tuteur" element={<SignupPage role="tuteur" />} />
             <Route path="/inscription-enseignant" element={<SignupPage role="enseignant" />} />
@@ -57,7 +60,7 @@ function App() {
                 </RequireAuth>
               }
             />
-            <Route path="/" element={<DashboardRedirect />} />
+            <Route path="/dashboard" element={<DashboardRedirect />} />
 
             {/* Tuteur */}
             <Route
@@ -293,6 +296,7 @@ function App() {
           </Routes>
         </AppLayout>
       </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

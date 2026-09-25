@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { mesContrats, signerContrat } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
 import type { ContratOut } from "../../types/api";
-import { Badge, Card, ErrorBanner, PageTitle } from "../../components/ui";
+import { Badge, Card, ErrorBanner, SectionHead, Btn, EmptyState } from "../../components/ui";
 import { SignatureCanvas } from "../../components/SignatureCanvas";
+import { PenLine } from "lucide-react";
 
 export function MesContratsPage() {
   const [contrats, setContrats] = useState<ContratOut[]>([]);
@@ -34,35 +35,68 @@ export function MesContratsPage() {
   };
 
   return (
-    <div>
-      <PageTitle>Mes contrats</PageTitle>
+    <div className="page-content">
+      <SectionHead 
+        title="Mes contrats"
+        desc="Gérez vos contrats et signatures avec les différents établissements." 
+      />
+      
       <ErrorBanner>{erreur}</ErrorBanner>
-      {contrats.length === 0 && <p className="text-slate-500">Aucun contrat pour l'instant.</p>}
-      <div className="space-y-3">
-        {contrats.map((c) => (
-          <Card key={c.id}>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="font-medium text-slate-900">Contrat jusqu'au {c.date_fin}</p>
-              <Badge tone={c.statut === "signe" ? "green" : "amber"}>
-                {c.statut === "signe" ? "Signe" : "En attente de signature"}
-              </Badge>
-            </div>
-            <p className="mb-2 text-sm text-slate-600">{c.syllabus}</p>
-            {c.statut === "en_attente_signature" &&
-              (contratASigner === c.id ? (
-                <SignatureCanvas enCours={enCours} onSigner={(blob) => signer(c.id, blob)} />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setContratASigner(c.id)}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                >
-                  Signer ce contrat
-                </button>
-              ))}
-          </Card>
-        ))}
-      </div>
+      
+      {contrats.length === 0 ? (
+        <EmptyState 
+          title="Aucun contrat" 
+          desc="Vous n'avez pas de contrats pour le moment." 
+        />
+      ) : (
+        <div className="grid-2">
+          {contrats.map((c, idx) => (
+            <Card key={c.id} className={`anim-slide-up delay-${(idx % 5) + 1} flex flex-col`}>
+              <div className="mb-4 flex items-center justify-between border-b pb-4" style={{ borderColor: 'var(--border)' }}>
+                <div>
+                  <h3 className="text-title text-ink">Contrat Enseignant</h3>
+                  <p className="text-sm text-ink-soft">Jusqu'au {c.date_fin}</p>
+                </div>
+                <Badge tone={c.statut === "signe" ? "success" : "pending"}>
+                  {c.statut === "signe" ? "Signé" : "En attente"}
+                </Badge>
+              </div>
+              
+              <div className="mb-6 flex-1">
+                <p className="text-sm text-ink-soft bg-slate-50 p-3 rounded-lg" style={{ backgroundColor: 'var(--surface-2)' }}>
+                  {c.syllabus}
+                </p>
+              </div>
+              
+              <div className="mt-auto border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+                {c.statut === "en_attente_signature" ? (
+                  contratASigner === c.id ? (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-ink">Signez ci-dessous :</p>
+                      <SignatureCanvas enCours={enCours} onSigner={(blob) => signer(c.id, blob)} />
+                      <Btn variant="ghost" size="sm" onClick={() => setContratASigner(null)} disabled={enCours}>
+                        Annuler
+                      </Btn>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Btn variant="reward" onClick={() => setContratASigner(c.id)} className="w-full" leftIcon={<PenLine size={16} />}>
+                        Signer ce contrat
+                      </Btn>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex justify-end gap-2">
+                    <Btn variant="outline" size="sm">
+                      Voir PDF
+                    </Btn>
+                  </div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

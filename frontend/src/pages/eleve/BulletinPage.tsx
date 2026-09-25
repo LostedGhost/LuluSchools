@@ -3,7 +3,9 @@ import { obtenirBulletin } from "../../api/evaluations";
 import { messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { BulletinOut } from "../../types/api";
-import { Card, ErrorBanner, PageTitle } from "../../components/ui";
+import { Card, ErrorBanner, EmptyState, Btn } from "../../components/ui";
+import { ScoreBurst } from "../../components/gamification";
+import { BarChart3 } from "lucide-react";
 
 const PERIODES = ["trimestre1", "trimestre2", "trimestre3"];
 
@@ -26,41 +28,82 @@ export function BulletinPage() {
   }, [profil.classe_id, profil.id, periode]);
 
   return (
-    <div className="mx-auto max-w-lg">
-      <PageTitle>Mon bulletin</PageTitle>
+    <div className="page-content">
+      <div style={{ marginBottom: "32px" }}>
+        <p className="text-eyebrow">Année scolaire en cours</p>
+        <h1 className="text-headline" style={{ color: "var(--ink)", margin: 0 }}>Mon bulletin</h1>
+      </div>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-6 flex gap-2">
         {PERIODES.map((p) => (
-          <button
+          <Btn
             key={p}
-            type="button"
+            variant={periode === p ? "primary" : "ghost"}
+            size="md"
             onClick={() => setPeriode(p)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-              periode === p ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-300"
-            }`}
           >
             {p.replace("trimestre", "Trimestre ")}
-          </button>
+          </Btn>
         ))}
       </div>
 
       {chargement && <p className="text-slate-500">Chargement...</p>}
       {erreur && <ErrorBanner>{erreur}</ErrorBanner>}
 
+      {!chargement && !erreur && !bulletin && (
+        <EmptyState
+          icon={<BarChart3 size={24} />}
+          title="Aucun bulletin disponible"
+          desc="Les moyennes pour ce trimestre ne sont pas encore publiées."
+        />
+      )}
+
       {bulletin && (
-        <Card>
-          <p className="text-sm text-slate-500">Moyenne generale</p>
-          <p className="mb-4 text-3xl font-semibold text-indigo-700">
-            {bulletin.moyenne_generale.toFixed(2)} / 100
-          </p>
-          {bulletin.valide_par_conseil ? (
-            <p className="text-sm text-slate-700">
-              Decision du conseil : <strong>{bulletin.decision_passage}</strong>
-            </p>
-          ) : (
-            <p className="text-sm text-slate-500">En attente de la decision du conseil de classe.</p>
+        <div className="grid-2">
+          <Card className="text-center anim-pop-in">
+            <p className="text-label" style={{ color: "var(--ink-soft)", marginBottom: "8px" }}>Moyenne générale</p>
+            <ScoreBurst
+              score={bulletin.moyenne_generale}
+              max={100}
+              label="/ 100"
+              tone={bulletin.moyenne_generale >= 50 ? "success" : "error"}
+            />
+          </Card>
+          
+          <Card variant="soft" className="anim-pop-in delay-1">
+            <p className="text-label" style={{ color: "var(--ink-soft)", marginBottom: "8px" }}>Appréciation générale</p>
+            {bulletin.valide_par_conseil ? (
+              <p className="text-title" style={{ color: "var(--ink)" }}>
+                {bulletin.decision_passage}
+              </p>
+            ) : (
+              <p style={{ color: "var(--ink-faint)" }}>
+                En attente de la décision du conseil de classe.
+              </p>
+            )}
+          </Card>
+
+          {/* Subject breakdown fallback if available in the API response */}
+          {(bulletin as any).lignes && Array.isArray((bulletin as any).lignes) && (
+            <div style={{ gridColumn: "1 / -1", marginTop: "16px" }}>
+              <p className="text-title" style={{ marginBottom: "16px" }}>Détails par matière</p>
+              <div style={{ display: "grid", gap: "8px" }}>
+                {((bulletin as any).lignes).map((ligne: any, i: number) => {
+                  const isGood = ligne.note >= 14;
+                  const isOk = ligne.note >= 10 && ligne.note < 14;
+                  const color = isGood ? "var(--success-tint)" : isOk ? "var(--warning-tint)" : "var(--error-tint)";
+                  return (
+                    <Card key={i} variant="flat" style={{ backgroundColor: color, display: "flex", justifyContent: "space-between" }}>
+                      <span className="font-bold">{ligne.matiere}</span>
+                      <span>{ligne.note} / 20</span>
+                      <span style={{ fontStyle: "italic" }}>{ligne.appreciation}</span>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
           )}
-        </Card>
+        </div>
       )}
     </div>
   );

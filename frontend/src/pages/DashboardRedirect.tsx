@@ -3,7 +3,7 @@ import { useAuth } from "../auth/AuthContext";
 
 export function DashboardRedirect() {
   const { utilisateur } = useAuth();
-  if (!utilisateur) return <Navigate to="/connexion" replace />;
+  if (!utilisateur) return <Navigate to="/" replace />;
   if (utilisateur.role === "tuteur") return <Navigate to="/tuteur" replace />;
   if (utilisateur.role === "eleve") return <Navigate to="/eleve" replace />;
   if (utilisateur.role === "enseignant") return <Navigate to="/enseignant" replace />;

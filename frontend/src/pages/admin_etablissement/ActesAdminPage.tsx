@@ -105,7 +105,7 @@ export function ActesAdminPage() {
               <div key={d.id} className="rounded-lg border border-slate-200 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span>{d.est_reclamation ? "Reclamation de note" : "Demande d'acte"}</span>
-                  <Badge tone="blue">{d.statut}</Badge>
+                  <Badge tone="info">{d.statut}</Badge>
                 </div>
                 <div className="flex items-center gap-2">
                   <PrimaryButton type="button" onClick={() => traiter(d.id, "acceptee")}>

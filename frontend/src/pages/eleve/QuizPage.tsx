@@ -3,7 +3,8 @@ import { useParams } from "react-router-dom";
 import { mesTentatives, obtenirQuiz, tenterQuiz } from "../../api/pedagogie";
 import { messageErreur } from "../../api/client";
 import type { QuizOut, TentativeQuizOut } from "../../types/api";
-import { Badge, Card, ErrorBanner, PageTitle, PrimaryButton } from "../../components/ui";
+import { Badge, Card, ErrorBanner, Btn } from "../../components/ui";
+import { ScoreBurst } from "../../components/gamification";
 
 export function QuizPage() {
   const { quizId } = useParams<{ quizId: string }>();
@@ -34,7 +35,7 @@ export function QuizPage() {
     if (!quiz || !quizId) return;
     const questionsTriees = [...quiz.questions].sort((a, b) => a.ordre - b.ordre);
     if (questionsTriees.some((q) => reponses[q.id] === undefined)) {
-      setErreur("Veuillez repondre a toutes les questions.");
+      setErreur("Veuillez répondre à toutes les questions.");
       return;
     }
     setErreur(null);
@@ -54,70 +55,115 @@ export function QuizPage() {
     }
   };
 
-  if (!quiz) return <ErrorBanner>{erreur}</ErrorBanner>;
+  if (!quiz) return <div className="page-content page-content-narrow"><ErrorBanner>{erreur}</ErrorBanner></div>;
 
   const questionsTriees = [...quiz.questions].sort((a, b) => a.ordre - b.ordre);
+  const totalQuestions = questionsTriees.length;
+  const repondues = Object.keys(reponses).length;
+  const progressPercent = totalQuestions > 0 ? (repondues / totalQuestions) * 100 : 0;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <PageTitle>Quiz ({quiz.questions.length} questions)</PageTitle>
-      <p className="mb-4 text-sm text-slate-500">Seuil de reussite : {quiz.seuil_reussite}%</p>
+    <div className="page-content page-content-narrow">
+      <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <p className="text-eyebrow">Évaluation Continue</p>
+          <h1 className="text-headline" style={{ color: "var(--ink)", margin: 0 }}>Quiz ({totalQuestions} questions)</h1>
+        </div>
+        <Badge tone="magic">Terminer = +25 XP</Badge>
+      </div>
+
+      <div style={{ width: "100%", height: "8px", backgroundColor: "var(--surface-2)", borderRadius: "var(--radius-pill)", overflow: "hidden", marginBottom: "24px" }}>
+        <div style={{ width: `${progressPercent}%`, height: "100%", backgroundColor: "var(--primary)", transition: "width 0.3s ease" }}></div>
+      </div>
+      <p className="text-sm" style={{ color: "var(--ink-soft)", marginBottom: "32px" }}>Seuil de réussite : {quiz.seuil_reussite}%</p>
 
       {resultat && (
-        <Card className="mb-4">
-          <p className="text-lg font-semibold">
-            Score : {resultat.score.toFixed(0)}%{" "}
-            <Badge tone={resultat.reussie ? "green" : "red"}>
-              {resultat.reussie ? "Reussi" : "Non reussi"}
+        <Card className="anim-burst" style={{ marginBottom: "32px", textAlign: "center", border: "2px solid var(--primary)" }}>
+          <ScoreBurst
+            score={resultat.score}
+            max={100}
+            label="/ 100"
+            tone={resultat.reussie ? "success" : "error"}
+          />
+          <div style={{ marginTop: "16px" }}>
+            <Badge tone={resultat.reussie ? "success" : "error"}>
+              {resultat.reussie ? "Réussi — bien joué !" : "Non réussi, continue tes efforts !"}
             </Badge>
-          </p>
+          </div>
         </Card>
       )}
 
-      {tentatives.length > 0 && (
-        <Card className="mb-4">
-          <p className="mb-2 text-sm font-medium text-slate-700">Mes tentatives precedentes</p>
-          <ul className="space-y-1 text-sm text-slate-600">
+      {tentatives.length > 0 && !resultat && (
+        <Card variant="soft" style={{ marginBottom: "32px" }}>
+          <p className="text-label" style={{ marginBottom: "12px", color: "var(--ink-soft)" }}>Mes tentatives précédentes</p>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {tentatives.map((t) => (
               <li key={t.id}>
-                {t.score.toFixed(0)}% — {t.reussie ? "reussi" : "non reussi"}
+                <Badge tone={t.reussie ? "success" : "error"}>{t.score.toFixed(0)}%</Badge>
               </li>
             ))}
           </ul>
         </Card>
       )}
 
-      <Card>
-        <div className="space-y-6">
-          {questionsTriees.map((question, idx) => (
-            <div key={question.id}>
-              <p className="mb-2 font-medium text-slate-900">
-                {idx + 1}. {question.enonce}
-              </p>
-              <div className="space-y-2">
-                {question.choix.map((choix, choixIdx) => (
-                  <label
+      <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
+        {questionsTriees.map((question, idx) => (
+          <Card key={question.id} className="anim-slide-up" style={{ animationDelay: `${idx * 0.1}s` }}>
+            <p className="text-display" style={{ fontSize: "2rem", color: "var(--primary-tint)", marginBottom: "16px", opacity: 0.5 }}>
+              Q{idx + 1}
+            </p>
+            <p className="text-title" style={{ marginBottom: "24px" }}>
+              {question.enonce}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {question.choix.map((choix, choixIdx) => {
+                const isSelected = reponses[question.id] === choixIdx;
+                return (
+                  <button
                     key={choixIdx}
-                    className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
+                    type="button"
+                    onClick={() => choisir(question.id, choixIdx)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "16px",
+                      borderRadius: "var(--radius-md)",
+                      border: isSelected ? "2px solid var(--primary)" : "2px solid var(--border)",
+                      backgroundColor: isSelected ? "var(--primary-tint)" : "var(--surface)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "all 0.2s ease"
+                    }}
                   >
-                    <input
-                      type="radio"
-                      name={question.id}
-                      checked={reponses[question.id] === choixIdx}
-                      onChange={() => choisir(question.id, choixIdx)}
-                    />
-                    {choix}
-                  </label>
-                ))}
-              </div>
+                    <div style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      border: isSelected ? "6px solid var(--primary)" : "2px solid var(--border)",
+                      flexShrink: 0
+                    }} />
+                    <span style={{ fontWeight: isSelected ? "600" : "400", color: "var(--ink)" }}>{choix}</span>
+                  </button>
+                );
+              })}
             </div>
-          ))}
-        </div>
-        <ErrorBanner>{erreur}</ErrorBanner>
-        <PrimaryButton type="button" onClick={soumettre} disabled={enCours} className="mt-4 w-full">
-          {enCours ? "Envoi..." : "Valider mes reponses"}
-        </PrimaryButton>
-      </Card>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ marginTop: "32px" }}>
+        {erreur && <ErrorBanner>{erreur}</ErrorBanner>}
+        <Btn
+          variant="primary"
+          size="lg"
+          loading={enCours}
+          onClick={soumettre}
+          style={{ width: "100%", marginTop: "16px" }}
+        >
+          Valider mes réponses
+        </Btn>
+      </div>
     </div>
   );
 }

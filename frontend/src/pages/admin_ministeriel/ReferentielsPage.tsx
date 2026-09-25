@@ -81,7 +81,7 @@ export function ReferentielsPage() {
               {r.niveau} — {r.matiere} — coefficient {r.coefficient}
             </span>
             <div className="flex items-center gap-2">
-              <Badge tone={r.statut === "valide" ? "green" : r.statut === "proposition_en_attente" ? "amber" : "gray"}>
+              <Badge tone={r.statut === "valide" ? "success" : r.statut === "proposition_en_attente" ? "pending" : "neutral"}>
                 {r.statut}
               </Badge>
               {r.statut === "proposition_en_attente" && (

@@ -1,21 +1,189 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode } from "react";
+import type {
+  ButtonHTMLAttributes,
+  CSSProperties,
+  InputHTMLAttributes,
+  LabelHTMLAttributes,
+  ReactNode,
+  TextareaHTMLAttributes,
+  SelectHTMLAttributes,
+} from "react";
+import { AlertTriangle, Inbox } from "lucide-react";
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+/* ═══════════════════════════════════════════════════════════════
+   Card
+   ═══════════════════════════════════════════════════════════════ */
+
+export function Card({
+  children,
+  className = "",
+  hover = false,
+  variant = "default",
+  style,
+  onClick,
+  id,
+}: {
+  children: ReactNode;
+  className?: string;
+  hover?: boolean;
+  variant?: "default" | "soft" | "flat";
+  style?: CSSProperties;
+  onClick?: () => void;
+  id?: string;
+}) {
+  const base =
+    variant === "soft"
+      ? "card-soft"
+      : variant === "flat"
+      ? "rounded-[var(--radius-lg)] bg-[var(--surface-2)] p-6"
+      : "card";
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}>{children}</div>
+    <div
+      id={id}
+      className={`${base} ${hover ? "card-hover cursor-pointer" : ""} ${className}`}
+      style={style}
+      onClick={onClick}
+    >
+      {children}
+    </div>
   );
 }
 
-export function PageTitle({ children }: { children: ReactNode }) {
-  return <h1 className="mb-4 text-2xl font-semibold text-slate-900">{children}</h1>;
+/* ═══════════════════════════════════════════════════════════════
+   PageTitle
+   ═══════════════════════════════════════════════════════════════ */
+
+export function PageTitle({
+  children,
+  eyebrow,
+}: {
+  children: ReactNode;
+  eyebrow?: string;
+}) {
+  return (
+    <div className="mb-6">
+      {eyebrow && <p className="text-eyebrow mb-2">{eyebrow}</p>}
+      <h1 className="text-headline m-0" style={{ color: "var(--ink)" }}>
+        {children}
+      </h1>
+    </div>
+  );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+/* ═══════════════════════════════════════════════════════════════
+   Boutons
+   ═══════════════════════════════════════════════════════════════ */
+
+type BtnVariant =
+  | "primary"
+  | "reward"
+  | "action"
+  | "magic"
+  | "outline"
+  | "ghost";
+type BtnSize = "sm" | "md" | "lg";
+
+interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: BtnVariant;
+  size?: BtnSize;
+  loading?: boolean;
+  leftIcon?: ReactNode;
+  rightIcon?: ReactNode;
+}
+
+export function Btn({
+  variant = "primary",
+  size = "md",
+  loading = false,
+  leftIcon,
+  rightIcon,
+  children,
+  disabled,
+  className = "",
+  ...props
+}: BtnProps) {
+  const variantClass = `btn-${variant}`;
+  const sizeClass = size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : "";
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+    <button
+      {...props}
+      disabled={disabled || loading}
+      className={`btn ${variantClass} ${sizeClass} ${className}`}
+    >
+      {loading ? (
+        <span
+          style={{
+            width: "14px",
+            height: "14px",
+            border: "2px solid currentColor",
+            borderTopColor: "transparent",
+            borderRadius: "50%",
+            animation: "spin-slow .7s linear infinite",
+            display: "inline-block",
+          }}
+        />
+      ) : leftIcon ? (
+        leftIcon
+      ) : null}
       {children}
-    </label>
+      {!loading && rightIcon ? rightIcon : null}
+    </button>
+  );
+}
+
+/** @deprecated Utiliser <Btn variant="primary"> */
+export function PrimaryButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`btn btn-primary ${props.className ?? ""}`}
+    />
+  );
+}
+
+/** @deprecated Utiliser <Btn variant="outline"> */
+export function SecondaryButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`btn btn-outline ${props.className ?? ""}`}
+    />
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Champs de formulaire
+   ═══════════════════════════════════════════════════════════════ */
+
+export function Field({
+  label,
+  children,
+  error,
+  helper,
+  required,
+}: {
+  label: string;
+  children: ReactNode;
+  error?: string | null;
+  helper?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="field">
+      <span className="field-label">
+        {label}
+        {required && (
+          <span style={{ color: "var(--action)", marginLeft: "4px" }}>*</span>
+        )}
+      </span>
+      {children}
+      {error && (
+        <span className="field-error">
+          <AlertTriangle size={14} aria-hidden="true" />
+          {error}
+        </span>
+      )}
+      {!error && helper && <span className="field-helper">{helper}</span>}
+    </div>
   );
 }
 
@@ -23,47 +191,237 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 ${props.className ?? ""}`}
+      className={`field-input ${props.className ?? ""}`}
     />
   );
 }
 
-export function PrimaryButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
+export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
-    <button
+    <textarea
       {...props}
-      className={`rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 ${props.className ?? ""}`}
+      className={`field-input ${props.className ?? ""}`}
+      style={{ minHeight: "100px", resize: "vertical", ...props.style }}
     />
   );
 }
 
-export function SecondaryButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
+export function Select({
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
   return (
-    <button
-      {...props}
-      className={`rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 ${props.className ?? ""}`}
-    />
+    <select {...props} className={`field-input ${props.className ?? ""}`}>
+      {children}
+    </select>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Feedback
+   ═══════════════════════════════════════════════════════════════ */
 
 export function ErrorBanner({ children }: { children: ReactNode }) {
   if (!children) return null;
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{children}</div>
+    <div
+      className="chip chip-error rounded-[var(--radius-md)] px-4 py-3 text-sm w-full justify-start"
+      role="alert"
+      aria-live="polite"
+    >
+      <span className="chip-dot" />
+      {children}
+    </div>
   );
 }
 
-export function Badge({ tone, children }: { tone: "gray" | "green" | "red" | "amber" | "blue"; children: ReactNode }) {
-  const tones: Record<string, string> = {
-    gray: "bg-slate-100 text-slate-700",
-    green: "bg-emerald-100 text-emerald-700",
-    red: "bg-red-100 text-red-700",
-    amber: "bg-amber-100 text-amber-700",
-    blue: "bg-blue-100 text-blue-700",
-  };
-  return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
+export function SuccessBanner({ children }: { children: ReactNode }) {
+  if (!children) return null;
+  return (
+    <div
+      className="chip chip-success rounded-[var(--radius-md)] px-4 py-3 text-sm w-full justify-start"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="chip-dot" />
+      {children}
+    </div>
+  );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Badge (statut)
+   ═══════════════════════════════════════════════════════════════ */
+
+type BadgeTone = "success" | "pending" | "error" | "info" | "magic" | "neutral";
+
+export function Badge({
+  tone = "neutral",
+  children,
+  dot = true,
+}: {
+  tone?: BadgeTone;
+  children: ReactNode;
+  dot?: boolean;
+}) {
+  return (
+    <span className={`chip chip-${tone}`}>
+      {dot && <span className="chip-dot" />}
+      {children}
+    </span>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Tile KPI
+   ═══════════════════════════════════════════════════════════════ */
+
+export function KPITile({
+  label,
+  value,
+  sub,
+  accent,
+  icon,
+}: {
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  accent?: "primary" | "reward" | "action" | "magic";
+  icon?: ReactNode;
+}) {
+  const accentColor = accent
+    ? {
+        primary: "var(--primary)",
+        reward: "var(--reward-deep)",
+        action: "var(--action-deep)",
+        magic: "var(--info-deep)",
+      }[accent]
+    : "var(--ink)";
+
+  return (
+    <div className="tile">
+      <div className="tile-key">{label}</div>
+      <div className="flex items-end gap-2">
+        {icon && (
+          <span style={{ color: accentColor, display: "inline-flex" }} aria-hidden="true">
+            {icon}
+          </span>
+        )}
+        <div
+          className="tile-value"
+          style={{ color: accentColor }}
+        >
+          {value}
+        </div>
+      </div>
+      {sub && (
+        <div className="monospace mt-1" style={{ fontSize: "11px" }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Section header
+   ═══════════════════════════════════════════════════════════════ */
+
+export function SectionHead({
+  eyebrow,
+  title,
+  desc,
+}: {
+  eyebrow?: string;
+  title: string;
+  desc?: string;
+}) {
+  return (
+    <div className="section-head">
+      {eyebrow && <span className="text-eyebrow">{eyebrow}</span>}
+      <h2 className="text-title" style={{ margin: "4px 0 6px", color: "var(--ink)" }}>
+        {title}
+      </h2>
+      {desc && <p className="text-sm" style={{ color: "var(--ink-soft)" }}>{desc}</p>}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Empty State
+   ═══════════════════════════════════════════════════════════════ */
+
+export function EmptyState({
+  icon,
+  title,
+  desc,
+  action,
+}: {
+  icon?: ReactNode;
+  title: string;
+  desc?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="empty-state">
+      <span className="empty-state-icon" aria-hidden="true">{icon ?? <Inbox size={24} />}</span>
+      <p className="empty-state-title">{title}</p>
+      {desc && <p className="empty-state-desc">{desc}</p>}
+      {action}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Skeleton
+   ═══════════════════════════════════════════════════════════════ */
+
+export function Skeleton({
+  height = "20px",
+  width = "100%",
+  className = "",
+}: {
+  height?: string;
+  width?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`skeleton ${className}`}
+      style={{ height, width }}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function SkeletonCard() {
+  return (
+    <div className="card" aria-busy="true" aria-label="Chargement en cours">
+      <Skeleton height="12px" width="60px" className="mb-3" />
+      <Skeleton height="28px" width="80%" className="mb-2" />
+      <Skeleton height="14px" className="mb-1" />
+      <Skeleton height="14px" width="75%" />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Divider
+   ═══════════════════════════════════════════════════════════════ */
+
+export function Divider() {
+  return <hr className="divider-dashed" />;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Label Text (compat legacy)
+   ═══════════════════════════════════════════════════════════════ */
+
 export function LabelText(props: LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label {...props} className={`text-sm text-slate-600 ${props.className ?? ""}`} />;
+  return (
+    <label
+      {...props}
+      className={`text-sm text-[var(--ink-faint)] ${props.className ?? ""}`}
+    />
+  );
 }

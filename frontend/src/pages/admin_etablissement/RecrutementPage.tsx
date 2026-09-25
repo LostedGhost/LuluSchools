@@ -158,7 +158,7 @@ export function RecrutementPage() {
             <div key={p.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
               <span>{p.titre}</span>
               <div className="flex items-center gap-2">
-                <Badge tone={p.statut === "ouvert" ? "green" : "gray"}>{p.statut}</Badge>
+                <Badge tone={p.statut === "ouvert" ? "success" : "neutral"}>{p.statut}</Badge>
                 <SecondaryButton type="button" onClick={() => voirCandidatures(p.id)}>
                   Voir les candidatures
                 </SecondaryButton>
@@ -175,7 +175,7 @@ export function RecrutementPage() {
               <div key={c.id} className="rounded-lg border border-slate-200 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm">Candidature {c.id.slice(0, 8)}</span>
-                  <Badge tone={c.statut === "retenue" ? "green" : c.statut === "rejetee" ? "red" : "gray"}>
+                  <Badge tone={c.statut === "retenue" ? "success" : c.statut === "rejetee" ? "error" : "neutral"}>
                     {c.statut} {c.score !== null && `(${c.score.toFixed(1)})`}
                   </Badge>
                 </div>
