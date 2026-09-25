@@ -332,3 +332,24 @@ def test_eleve_retrouve_son_profil_et_sa_classe_actuelle(
     assert body["matricule"] == tuteur_apres[0]["eleve_matricule"]
     assert body["classe_id"] == etablissement_avec_classe["classe"]["id"]
     assert body["niveau"] == etablissement_avec_classe["classe"]["niveau"]
+
+
+def test_admin_retrouve_les_inscriptions_a_valider(client, tuteur_headers, etablissement_avec_classe):
+    client.post(
+        "/api/v1/inscriptions",
+        json={
+            "nom": "Dossou",
+            "prenom": "Aisha",
+            "date_naissance": _date_naissance_pour_age(17),
+            "classe_id": etablissement_avec_classe["classe"]["id"],
+        },
+        headers=tuteur_headers,
+    )
+
+    a_valider = client.get(
+        f"/api/v1/etablissements/{etablissement_avec_classe['etablissement']['id']}/inscriptions-a-valider",
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    assert a_valider.status_code == 200
+    assert len(a_valider.json()) == 1
+    assert a_valider.json()[0]["eleve_prenom"] == "Aisha"

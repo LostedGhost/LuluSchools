@@ -16,7 +16,7 @@ from app.modules.actes.schemas import (
     TypeActeCreate,
     TypeActeOut,
 )
-from app.modules.etablissements.models import AdminEtablissement, Etablissement
+from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 
@@ -81,6 +81,30 @@ def lister_types_actes(
     ))
 ) -> list[TypeActeAcademique]:
     return db.query(TypeActeAcademique).filter(TypeActeAcademique.etablissement_id == etablissement_id).all()
+
+
+@router.get("/etablissements/{etablissement_id}/demandes-actes", response_model=list[DemandeActeOut])
+def demandes_actes_de_l_etablissement(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> list[DemandeActeAcademique]:
+    """Ecran A+ : sans cette liste, l'admin n'a aucun moyen de decouvrir les demandes
+    d'actes/reclamations en attente de traitement pour son etablissement (UC-10)."""
+    _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    classe_ids = db.query(Classe.id).filter(Classe.etablissement_id == etablissement_id)
+    eleve_ids = [
+        row[0]
+        for row in db.query(Inscription.eleve_id).filter(Inscription.classe_id.in_(classe_ids)).distinct().all()
+    ]
+    if not eleve_ids:
+        return []
+    return (
+        db.query(DemandeActeAcademique)
+        .filter(DemandeActeAcademique.eleve_id.in_(eleve_ids), DemandeActeAcademique.statut != StatutDemandeActe.SOUMISE)
+        .order_by(DemandeActeAcademique.created_at.asc())
+        .all()
+    )
 
 
 @router.get("/mes-demandes-actes", response_model=list[DemandeActeOut])

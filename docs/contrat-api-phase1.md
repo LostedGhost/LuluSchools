@@ -48,6 +48,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | POST | `/inscriptions/{id}/valider` | A+ (de l'établissement de la classe) | UC-02, UC-03 | Refusé (409) si consentement manquant ou classe complète (capacité atteinte, compte les inscriptions déjà `validee`). Génère le matricule (voir UC-03 : format universitaire `[nationalite:1][sequence:5][annee:2]` sur 8 caractères, format EP/ES `[cycle:1][nationalite:1][sequence:5][annee:2]` sur 9 caractères) et le compte élève (mot de passe temporaire envoyé au tuteur par e-mail). |
 | POST | `/inscriptions/{id}/rejeter` | A+ | UC-02 | Motif obligatoire |
 | GET | `/inscriptions/{id}` | Tuteur rattaché, ou A+ de l'établissement de la classe | UC-02 | Lecture (contrôle d'accès vérifié, pas seulement l'authentification — anti-IDOR) |
+| GET | `/etablissements/{id}/inscriptions-a-valider` | A+ | UC-02 | Liste les inscriptions `soumise` en attente de validation pour l'établissement (écran A+) |
 | GET | `/tuteurs/me/inscriptions` | Tuteur | UC-02 | Liste les enfants du tuteur courant et le statut de leurs démarches (nom/prénom/matricule inclus, pas d'aller-retour par enfant) |
 | GET | `/eleves/me` | Élève | UC-02 | Profil de l'élève courant : matricule, nationalité, et classe actuelle (déduite de la dernière inscription validée) — point d'entrée du frontend élève |
 
@@ -55,8 +56,12 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
+| GET | `/etablissements/{id}/postes` | tout utilisateur authentifié | UC-04 | Liste les postes de l'établissement (découverte pour un enseignant candidat) |
 | POST | `/etablissements/{id}/postes` | A+ | UC-04 | Définit les critères par type de document (coefficient, seuil minimal) |
 | GET | `/postes/{id}` | tout utilisateur authentifié | UC-04 | Lecture |
+| GET | `/mes-candidatures` | Enseignant | UC-04 | Historique des candidatures de l'enseignant courant |
+| GET | `/mes-contrats` | Enseignant | UC-05 | Contrats de l'enseignant courant (statut, échéance) |
+| GET | `/etablissements/{id}/contestations-en-attente` | A+ | UC-04b | Contestations `en_attente` de décision pour l'établissement |
 | POST | `/postes/{id}/candidatures` | Enseignant | UC-04 | `multipart/form-data` : `types[]` + `fichiers[]` (un par critère du poste, exactement) + `casier_judiciaire` à part. Upload LuluFiles synchrone (nécessaire pour renvoyer les identifiants), mais la notation FreeLLM part **en arrière-plan** (`BackgroundTasks`, un appel réseau par document — pas de SLA, ADR-002) : la réponse renvoie les documents en `statut=en_attente` sans note, à relire via `GET /candidatures/{id}` une fois le traitement terminé. Le casier judiciaire est stocké localement, jamais sur LuluFiles (Art. 395). Si un document échoue à être noté, la candidature reste `en_evaluation` sans score, en attente d'une révision manuelle (voir `GET /candidatures/en-attente-revision`). |
 | GET | `/candidatures/{id}` | Enseignant propriétaire, ou A+ de l'établissement du poste | UC-04 | Lecture, inclut le détail des notes par document |
 | POST | `/candidatures/{id}/contestation` | Enseignant candidat | UC-04b | Fenêtre de 5 jours **ouvrés** (lundi-vendredi) après la candidature, uniquement si `statut=rejetee` |
@@ -103,6 +108,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | POST | `/etablissements/{id}/types-actes` | A+ | UC-10 | Catalogue configurable : nom, prix, pièces requises (texte libre), condition d'éligibilité optionnelle |
 | GET | `/etablissements/{id}/types-actes` | tout utilisateur authentifié concerné | UC-10 | Lecture du catalogue |
 | GET | `/mes-demandes-actes` | Élève, Tuteur | UC-10 | Historique des demandes/réclamations de l'élève courant (ou de tous les enfants du tuteur courant), plus récentes d'abord |
+| GET | `/etablissements/{id}/demandes-actes` | A+ | UC-10 | Demandes/réclamations (hors `soumise`, pas encore payées) des élèves de l'établissement, à traiter |
 | POST | `/demandes-actes` | Élève (pour lui-même) ou Tuteur (avec `eleve_utilisateur_id`, doit être son enfant) | UC-10 | `est_reclamation: true` (gratuite, `reference_evaluation` obligatoire) **ou** `type_acte_id` (payant si `prix>0`, sinon `en_traitement` immédiat) |
 | GET | `/demandes-actes/{id}` | Élève propriétaire, son Tuteur, A+ de l'établissement courant de l'élève | UC-10 | Lecture |
 | POST | `/demandes-actes/{id}/traiter` | A+ | UC-10 | Accepte ou rejette (motif obligatoire) ; refusé (409) tant que le paiement n'est pas confirmé pour un acte payant |

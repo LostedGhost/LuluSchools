@@ -110,6 +110,46 @@ def obtenir_poste(
     return poste
 
 
+@router.get("/etablissements/{etablissement_id}/postes", response_model=list[PosteOut])
+def lister_postes(
+    etablissement_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_user)
+) -> list[Poste]:
+    """Sans cette liste, un enseignant candidat n'a aucun moyen de decouvrir les postes
+    ouverts d'un etablissement sans deja en connaitre les id (UC-04)."""
+    return db.query(Poste).filter(Poste.etablissement_id == etablissement_id).all()
+
+
+@router.get("/mes-candidatures", response_model=list[CandidatureOut])
+def mes_candidatures(
+    db: Session = Depends(get_db), enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT))
+) -> list[Candidature]:
+    return db.query(Candidature).filter(Candidature.enseignant_id == enseignant.id).all()
+
+
+@router.get("/mes-contrats", response_model=list[ContratOut])
+def mes_contrats(
+    db: Session = Depends(get_db), enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT))
+) -> list[Contrat]:
+    return db.query(Contrat).filter(Contrat.enseignant_id == enseignant.id).all()
+
+
+@router.get("/etablissements/{etablissement_id}/contestations-en-attente", response_model=list[ContestationOut])
+def contestations_en_attente(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> list[Contestation]:
+    _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    return (
+        db.query(Contestation)
+        .join(Candidature, Candidature.id == Contestation.candidature_id)
+        .join(Poste, Poste.id == Candidature.poste_id)
+        .filter(Poste.etablissement_id == etablissement_id, Contestation.statut == StatutContestation.EN_ATTENTE)
+        .order_by(Contestation.created_at.asc())
+        .all()
+    )
+
+
 @router.post(
     "/postes/{poste_id}/candidatures", response_model=CandidatureOut, status_code=status.HTTP_201_CREATED
 )

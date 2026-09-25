@@ -104,6 +104,22 @@ def test_mes_demandes_actes_visibles_par_eleve_et_par_tuteur(client, classe_avec
     assert vue_tuteur.json()[0]["id"] == vue_eleve.json()[0]["id"]
 
 
+def test_admin_retrouve_les_demandes_actes_de_son_etablissement(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    client.post(
+        "/api/v1/demandes-actes",
+        json={"est_reclamation": True, "reference_evaluation": "devoir-123", "motif": "Erreur de note"},
+        headers=ctx["eleve_headers"],
+    )
+
+    vue_admin = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/demandes-actes", headers=ctx["admin_headers"]
+    )
+    assert vue_admin.status_code == 200
+    assert len(vue_admin.json()) == 1
+    assert vue_admin.json()[0]["statut"] == "en_traitement"
+
+
 def test_tuteur_peut_soumettre_pour_son_enfant(client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve
     eleve_utilisateur_id = client.get("/api/v1/me", headers=ctx["eleve_headers"]).json()["id"]

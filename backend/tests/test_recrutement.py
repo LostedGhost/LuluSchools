@@ -259,3 +259,53 @@ def test_reconduction_dans_la_fenetre_cree_un_nouveau_contrat_a_signer(
     )
     assert signature.status_code == 200
     assert signature.json()["statut"] == "signe"
+
+
+def test_lister_postes_mes_candidatures_et_mes_contrats(
+    client, fake_llm_client, enseignant_headers, etablissement_avec_classe
+):
+    poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
+    fake_llm_client.score_par_defaut = 85.0
+    candidature = _postuler_et_relire(client, enseignant_headers, poste["id"]).json()
+
+    postes = client.get(
+        f"/api/v1/etablissements/{etablissement_avec_classe['etablissement']['id']}/postes", headers=enseignant_headers
+    )
+    assert postes.status_code == 200
+    assert any(p["id"] == poste["id"] for p in postes.json())
+
+    mes_candidatures = client.get("/api/v1/mes-candidatures", headers=enseignant_headers)
+    assert mes_candidatures.status_code == 200
+    assert any(c["id"] == candidature["id"] for c in mes_candidatures.json())
+
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/contrat",
+        json={"syllabus": "Programme", "date_fin": "2027-06-30"},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    mes_contrats = client.get("/api/v1/mes-contrats", headers=enseignant_headers)
+    assert mes_contrats.status_code == 200
+    assert len(mes_contrats.json()) == 1
+
+
+def test_contestations_en_attente_visibles_par_admin(
+    client, fake_llm_client, enseignant_headers, etablissement_avec_classe
+):
+    poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
+    fake_llm_client.scores_par_type = {"cv": 40.0, "diplome": 90.0}
+    candidature = _postuler_et_relire(client, enseignant_headers, poste["id"]).json()
+    assert candidature["statut"] == "rejetee"
+
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/contestation",
+        json={"motif": "Le CV a ete mal interprete"},
+        headers=enseignant_headers,
+    )
+
+    en_attente = client.get(
+        f"/api/v1/etablissements/{etablissement_avec_classe['etablissement']['id']}/contestations-en-attente",
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    assert en_attente.status_code == 200
+    assert len(en_attente.json()) == 1
+    assert en_attente.json()[0]["candidature_id"] == candidature["id"]

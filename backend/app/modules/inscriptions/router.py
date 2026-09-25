@@ -274,6 +274,46 @@ def obtenir_inscription(
     return inscription
 
 
+@mon_espace_router.get(
+    "/etablissements/{etablissement_id}/inscriptions-a-valider", response_model=list[InscriptionAvecEleveOut]
+)
+def inscriptions_a_valider(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> list[dict]:
+    """Ecran A+ : sans cette liste, un admin d'etablissement n'a aucun moyen de savoir
+    quelles inscriptions attendent sa validation (UC-02) sans deja connaitre leurs id."""
+    lien = db.get(AdminEtablissement, admin.id)
+    if lien is None or lien.etablissement_id != etablissement_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+
+    inscriptions = (
+        db.query(Inscription)
+        .join(Classe, Classe.id == Inscription.classe_id)
+        .filter(Classe.etablissement_id == etablissement_id, Inscription.statut == StatutInscription.SOUMISE)
+        .order_by(Inscription.created_at.asc())
+        .all()
+    )
+    resultat = []
+    for inscription in inscriptions:
+        eleve = db.get(Eleve, inscription.eleve_id)
+        resultat.append(
+            {
+                "id": inscription.id,
+                "eleve_id": inscription.eleve_id,
+                "classe_id": inscription.classe_id,
+                "statut": inscription.statut,
+                "consentement_parental_horodatage": inscription.consentement_parental_horodatage,
+                "motif_rejet": inscription.motif_rejet,
+                "eleve_nom": eleve.nom,
+                "eleve_prenom": eleve.prenom,
+                "eleve_matricule": eleve.matricule,
+            }
+        )
+    return resultat
+
+
 @mon_espace_router.get("/tuteurs/me/inscriptions", response_model=list[InscriptionAvecEleveOut])
 def mes_inscriptions(
     db: Session = Depends(get_db), tuteur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR))
