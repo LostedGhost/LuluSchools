@@ -74,21 +74,60 @@ def test_eleve_non_inscrit_ne_peut_pas_lister_les_cours(
     assert response.status_code == 403
 
 
-def test_quiz_tentative_illimitee_et_seuil(client, classe_avec_enseignant_et_eleve):
+def test_quiz_genere_par_le_llm_et_tentative_illimitee(client, fake_llm_client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve
     cours = client.post(
         f"/api/v1/classes/{ctx['classe']['id']}/cours",
-        data={"titre": "Les fractions", "chapitre": "Chapitre 3", "format": "texte"},
+        data={
+            "titre": "Les fractions",
+            "chapitre": "Chapitre 3",
+            "format": "texte",
+            "contenu_texte": "1/2 + 1/2 = 1",
+        },
         headers=ctx["enseignant_headers"],
     ).json()
-    quiz = client.post(
-        f"/api/v1/cours/{cours['id']}/quiz", json={"seuil_reussite": 80}, headers=ctx["enseignant_headers"]
-    ).json()
 
-    echec = client.post(f"/api/v1/quiz/{quiz['id']}/tentatives", json={"score": 50}, headers=ctx["eleve_headers"])
+    quiz = client.post(
+        f"/api/v1/cours/{cours['id']}/quiz",
+        json={"seuil_reussite": 80, "nombre_questions": 3},
+        headers=ctx["enseignant_headers"],
+    ).json()
+    assert len(quiz["questions"]) == 3
+    assert "reponse_correcte_index" not in quiz["questions"][0]
+
+    echec = client.post(
+        f"/api/v1/quiz/{quiz['id']}/tentatives", json={"reponses": [1, 1, 1]}, headers=ctx["eleve_headers"]
+    )
     assert echec.status_code == 201
+    assert echec.json()["score"] == 0.0
     assert echec.json()["reussie"] is False
 
-    reussite = client.post(f"/api/v1/quiz/{quiz['id']}/tentatives", json={"score": 90}, headers=ctx["eleve_headers"])
+    reussite = client.post(
+        f"/api/v1/quiz/{quiz['id']}/tentatives", json={"reponses": [0, 0, 0]}, headers=ctx["eleve_headers"]
+    )
     assert reussite.status_code == 201
+    assert reussite.json()["score"] == 100.0
     assert reussite.json()["reussie"] is True
+
+
+def test_generation_quiz_sans_contenu_texte_est_refusee(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    cours = client.post(
+        f"/api/v1/classes/{ctx['classe']['id']}/cours",
+        data={"titre": "Sans contenu", "chapitre": "Chapitre 1", "format": "pdf"},
+        headers=ctx["enseignant_headers"],
+    ).json()
+    response = client.post(f"/api/v1/cours/{cours['id']}/quiz", json={}, headers=ctx["enseignant_headers"])
+    assert response.status_code == 422
+
+
+def test_generation_quiz_echouee_renvoie_502(client, fake_llm_client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    fake_llm_client.echec_generation_quiz = True
+    cours = client.post(
+        f"/api/v1/classes/{ctx['classe']['id']}/cours",
+        data={"titre": "Les fractions", "chapitre": "Chapitre 3", "format": "texte", "contenu_texte": "contenu"},
+        headers=ctx["enseignant_headers"],
+    ).json()
+    response = client.post(f"/api/v1/cours/{cours['id']}/quiz", json={}, headers=ctx["enseignant_headers"])
+    assert response.status_code == 502

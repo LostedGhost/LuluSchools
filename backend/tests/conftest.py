@@ -1,15 +1,16 @@
+import io
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import uuid
-
 from app.core.database import Base, get_db
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
-from app.core.llm import DocumentScoringError, get_llm_client
+from app.core.llm import CorrectionError, DocumentScoringError, QuizGenerationError, get_llm_client
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -85,6 +86,10 @@ class FakeLLMClient:
         self.scores_par_type: dict[str, float] = {}
         self.score_par_defaut = 90.0
         self.types_en_echec: set[str] = set()
+        self.points_par_defaut_ratio = 1.0  # part de points_max accordee par defaut
+        self.questions_en_echec_correction: set[str] = set()  # enonces qui echouent
+        self.quiz_genere: list[dict] | None = None
+        self.echec_generation_quiz = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -94,6 +99,23 @@ class FakeLLMClient:
             if type_document in critere:
                 return score
         return self.score_par_defaut
+
+    def corriger_reponse(
+        self, enonce: str, bareme_reponse: str, points_max: float, reponse_eleve: str, strict: bool
+    ) -> float:
+        if enonce in self.questions_en_echec_correction:
+            raise CorrectionError("echec simule")
+        return points_max * self.points_par_defaut_ratio
+
+    def generer_quiz(self, contenu_cours: str, nombre_questions: int = 5) -> list[dict]:
+        if self.echec_generation_quiz:
+            raise QuizGenerationError("echec simule")
+        if self.quiz_genere is not None:
+            return self.quiz_genere
+        return [
+            {"enonce": f"Question {i + 1}", "choix": ["A", "B", "C", "D"], "reponse_correcte_index": 0}
+            for i in range(nombre_questions)
+        ]
 
 
 @pytest.fixture()
@@ -235,8 +257,8 @@ def classe_avec_enseignant_et_eleve(client, fake_email_client, fake_llm_client, 
         f"/api/v1/postes/{poste['id']}/candidatures",
         data={"types": ["cv"]},
         files=[
-            ("fichiers", ("cv.png", __import__("io").BytesIO(b"contenu"), "image/png")),
-            ("casier_judiciaire", ("casier.pdf", __import__("io").BytesIO(b"casier"), "application/pdf")),
+            ("fichiers", ("cv.png", io.BytesIO(b"contenu"), "image/png")),
+            ("casier_judiciaire", ("casier.pdf", io.BytesIO(b"casier"), "application/pdf")),
         ],
         headers=enseignant_headers,
     ).json()
@@ -247,7 +269,7 @@ def classe_avec_enseignant_et_eleve(client, fake_email_client, fake_llm_client, 
     ).json()
     client.post(
         f"/api/v1/contrats/{contrat['id']}/signer",
-        json={"nom_tape": "Moussa Traore"},
+        files={"signature_image": ("signature.png", io.BytesIO(b"trace-du-canvas-en-png"), "image/png")},
         headers=enseignant_headers,
     )
 

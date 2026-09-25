@@ -5,12 +5,31 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.modules.evaluations.models import BaremeDevoir, StatutReferentiel, StatutSoumission
 
 
+class QuestionDevoirCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enonce: str
+    bareme_reponse: str
+    points_max: float = Field(gt=0)
+
+
+class QuestionDevoirOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    ordre: int
+    enonce: str
+    points_max: float
+
+
 class DevoirCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     titre: str
+    matiere: str
     date_limite: datetime
     bareme: BaremeDevoir
+    questions: list[QuestionDevoirCreate] = Field(min_length=1)
 
 
 class DevoirOut(BaseModel):
@@ -19,8 +38,31 @@ class DevoirOut(BaseModel):
     id: str
     classe_id: str
     titre: str
+    matiere: str
     date_limite: datetime
     bareme: BaremeDevoir
+    questions: list[QuestionDevoirOut]
+
+
+class ReponseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str
+    texte_reponse: str
+
+
+class SoumissionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reponses: list[ReponseCreate] = Field(min_length=1)
+
+
+class ReponseOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    question_id: str
+    texte_reponse: str
+    points_obtenus: float | None
 
 
 class SoumissionOut(BaseModel):
@@ -30,12 +72,20 @@ class SoumissionOut(BaseModel):
     devoir_id: str
     note: float | None
     statut: StatutSoumission
+    reponses: list[ReponseOut]
+
+
+class CorrectionManuelleReponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str
+    points_obtenus: float = Field(ge=0)
 
 
 class CorrectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    note: float = Field(ge=0, le=100)
+    reponses: list[CorrectionManuelleReponse] = Field(min_length=1)
 
 
 class ReferentielCreate(BaseModel):

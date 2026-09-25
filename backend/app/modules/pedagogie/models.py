@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,10 +37,9 @@ class Cours(Base):
 
 
 class Quiz(Base):
-    """UC-07 : seuil de reussite configurable (defaut 80%), tentatives illimitees. Le
-    contenu du quiz (questions/reponses) n'est specifie par aucun cas d'utilisation
-    valide - non modelise ici. POST .../tentatives enregistre un score deja calcule,
-    il ne corrige pas de vraies reponses (limitation assumee, a specifier plus tard)."""
+    """UC-07 : seuil de reussite configurable (defaut 80%), tentatives illimitees. Les
+    questions sont generees par le LLM (FreeLLM) a partir du contenu texte du cours,
+    format QCM impose (voir app.core.llm.FreeLLMClient.generer_quiz)."""
 
     __tablename__ = "quiz"
 
@@ -49,6 +48,21 @@ class Quiz(Base):
     seuil_reussite: Mapped[float] = mapped_column(Float, default=80.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
+    questions: Mapped[list["QuestionQuiz"]] = relationship(back_populates="quiz")
+
+
+class QuestionQuiz(Base):
+    __tablename__ = "questions_quiz"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    quiz_id: Mapped[str] = mapped_column(ForeignKey("quiz.id"), index=True)
+    ordre: Mapped[int] = mapped_column(Integer)
+    enonce: Mapped[str] = mapped_column(Text)
+    choix: Mapped[list] = mapped_column(JSON)
+    reponse_correcte_index: Mapped[int] = mapped_column(Integer)
+
+    quiz: Mapped[Quiz] = relationship(back_populates="questions")
+
 
 class TentativeQuiz(Base):
     __tablename__ = "tentatives_quiz"
@@ -56,6 +70,7 @@ class TentativeQuiz(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     quiz_id: Mapped[str] = mapped_column(ForeignKey("quiz.id"), index=True)
     eleve_id: Mapped[str] = mapped_column(ForeignKey("eleves.id"), index=True)
+    reponses: Mapped[list] = mapped_column(JSON)
     score: Mapped[float] = mapped_column(Float)
     reussie: Mapped[bool] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

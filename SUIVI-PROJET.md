@@ -5,7 +5,7 @@ Copier ce fichier au démarrage du projet et cocher au fur et à mesure des vali
 - [x] **1. Cas d'utilisation** — liste complète, validée explicitement (Phase 1 — voir `docs/cas-utilisation-phase-1.md`)
 - [x] **2. Diagrammes UML** — diagramme de cas d'utilisation + diagramme de classes, validés — voir `docs/diagrammes-uml-phase1.md`
 - [x] **3. Choix technique et contrat d'API** — stack retenue et contrat d'API validés — voir `README.md`, `docs/choix-technique-phase1.md`, `docs/contrat-api-phase1.md`, `docs/adr/`
-- [ ] **4. Backend** — premier jet complet de tous les modules Phase 1 (identité, établissements, inscriptions, recrutement/contrats, pédagogie, évaluations, actes) — 60 tests passants. Reste ouvert avant de cocher : signature électronique qualifiée (UC-05, prestataire non choisi), notation IA asynchrone, coefficients branchés au calcul du bulletin — voir `backend/PROJECT_MAP.md` § zones instables
+- [ ] **4. Backend** — tous les modules Phase 1 faits et testés (identité, établissements, inscriptions, recrutement/contrats, pédagogie, évaluations, actes) — 67 tests passants. Signature (canvas), coefficients pondérés, quiz/formulaires IA et écrans de révision manuelle tranchés et implémentés. Reste ouvert avant de cocher : notation/correction IA asynchrone (actuellement synchrone dans la requête) — voir `backend/PROJECT_MAP.md` § zones instables
 - [ ] **5. Validation complète du backend** — test de bout en bout réalisé (Postman ou équivalent)
 - [ ] **6. Frontend** — design system, composants de base et pages validés sur données mock
 - [ ] **7. Intégration** — backend et frontend réels connectés, écarts corrigés

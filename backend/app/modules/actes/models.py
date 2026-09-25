@@ -51,5 +51,6 @@ class DemandeActeAcademique(Base):
     motif: Mapped[str | None] = mapped_column(Text, nullable=True)
     statut: Mapped[StatutDemandeActe] = mapped_column(Enum(StatutDemandeActe), default=StatutDemandeActe.SOUMISE)
     paiement_confirme: Mapped[bool] = mapped_column(Boolean, default=False)
+    kkiapay_transaction_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     motif_rejet: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

@@ -42,25 +42,29 @@ def _generer_matricule(db: Session, code_etablissement: str) -> str:
 def creer_inscription(
     payload: InscriptionCreate,
     db: Session = Depends(get_db),
-    tuteur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR, RoleUtilisateur.ELEVE)),
 ) -> Inscription:
-    """UC-02. Seul un tuteur peut soumettre une inscription en Phase 1 : l'auto-inscription
-    directe par un eleve de 16 ans ou plus necessiterait un flux de creation de compte
-    dedie (symetrique a UC-01) qui n'est pas encore implemente - limitation assumee."""
+    """UC-02. Seuls le titulaire (l'eleve, pour une reinscription sur son propre compte
+    deja existant) et ses tuteurs sont habilites a soumettre une inscription."""
     classe = db.get(Classe, payload.classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "classe_introuvable", "Classe introuvable.")
 
-    eleve = Eleve(
-        nom=payload.nom,
-        prenom=payload.prenom,
-        date_naissance=payload.date_naissance,
-        tuteur_id=tuteur.id,
-    )
-    db.add(eleve)
-    db.flush()
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+        if eleve is None:
+            raise api_error(status.HTTP_404_NOT_FOUND, "compte_eleve_introuvable", "Compte eleve introuvable.")
+    else:
+        eleve = Eleve(
+            nom=payload.nom,
+            prenom=payload.prenom,
+            date_naissance=payload.date_naissance,
+            tuteur_id=utilisateur.id,
+        )
+        db.add(eleve)
+        db.flush()
 
-    mineur = _age_a(payload.date_naissance) < AGE_MAJORITE_NUMERIQUE
+    mineur = _age_a(eleve.date_naissance) < AGE_MAJORITE_NUMERIQUE
     if mineur and payload.consentement_parental_donne:
         statut = StatutInscription.SOUMISE
         horodatage = datetime.now(timezone.utc)
@@ -223,15 +227,20 @@ def rejeter_inscription(
 def obtenir_inscription(
     inscription_id: str,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR, RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.TUTEUR, RoleUtilisateur.ELEVE, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+    ),
 ) -> Inscription:
     inscription = db.get(Inscription, inscription_id)
     if inscription is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Inscription introuvable.")
 
+    eleve = db.get(Eleve, inscription.eleve_id)
     if utilisateur.role == RoleUtilisateur.TUTEUR:
-        eleve = db.get(Eleve, inscription.eleve_id)
         if eleve.tuteur_id != utilisateur.id:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette inscription ne vous appartient pas.")
+    elif utilisateur.role == RoleUtilisateur.ELEVE:
+        if eleve.utilisateur_id != utilisateur.id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette inscription ne vous appartient pas.")
     else:
         classe = db.get(Classe, inscription.classe_id)

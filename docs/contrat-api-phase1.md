@@ -60,11 +60,10 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | POST | `/candidatures/{id}/contestation` | Enseignant candidat | UC-04b | Fenêtre de 5 jours (calendaires en implémentation actuelle — la spec dit "ouvrés", simplification à corriger) après la candidature, uniquement si `statut=rejetee` |
 | POST | `/contestations/{id}/decision` | A+ | UC-04b | `acceptee` / `rejetee`, motif obligatoire si rejet ; acceptée → candidature repasse `en_evaluation` |
 | POST | `/candidatures/{id}/contrat` | A+ | UC-05 | Crée le contrat en attente de signature (syllabus) ; nécessite `statut=en_evaluation` avec un score calculé |
-| POST | `/contrats/{id}/signer` | Enseignant titulaire | UC-05 | **Implémenté en signature simple (horodatage + hash + nom tapé vérifié), pas la signature qualifiée prévue pour la V1 — aucun prestataire de certification n'a été choisi (point ouvert)** |
-| POST | `/contrats/{id}/reconduction` | A+ | UC-05b | **Non implémenté** (modèle de données `PropositionReconduction` posé, endpoint à écrire) |
-| POST | `/referentiels-coefficients` | A++ | UC-09 | **Non implémenté** |
-| POST | `/referentiels-coefficients/{id}/proposition` | A+ | UC-09 | **Non implémenté** |
-| POST | `/referentiels-coefficients/{id}/valider` | A++ | UC-09 | **Non implémenté** |
+| POST | `/contrats/{id}/signer` | Enseignant titulaire | UC-05 | `multipart/form-data`, champ `signature_image` : tracé dessiné au doigt/stylet sur un canvas côté client, exporté en PNG. Signature électronique **simple** (Art. 284-285), pas qualifiée — décision définitive de l'utilisateur, voir ADR-004. Stockée via LuluFiles. |
+| POST | `/contrats/{id}/reconduction` | A+ | UC-05b | Fenêtre de 30 jours avant `date_fin` ; crée un nouveau contrat en attente de signature |
+| GET | `/candidatures/en-attente-revision` | A+ | UC-04 | Écran de révision manuelle : candidatures avec au moins un document en échec de notation IA |
+| POST | `/documents-candidature/{id}/noter-manuellement` | A+ | UC-04 | Note manuelle, puis recalcule automatiquement le score/statut de la candidature |
 
 ## Pédagogie
 
@@ -72,17 +71,19 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 |---|---|---|---|---|
 | POST | `/classes/{id}/cours` | Enseignant rattaché (contrat `signe` avec l'établissement de la classe) | UC-06 | `multipart/form-data` (titre, chapitre, format, contenu_texte ou fichier). 50 Mo max, upload vers LuluFiles si fichier fourni |
 | GET | `/classes/{id}/cours` | Élève inscrit (`inscription validee`), Enseignant rattaché, A+ | UC-06 | Lecture |
-| POST | `/cours/{id}/quiz` | Enseignant propriétaire du cours | UC-07 | Seuil de réussite configurable, défaut 80% |
-| POST | `/quiz/{id}/tentatives` | Élève inscrit | UC-07 | Tentatives illimitées. **Limitation** : pas de banque de questions/réponses (non spécifiée par un UC validé) — le score est fourni par l'appelant, pas encore calculé à partir de vraies réponses |
+| POST | `/cours/{id}/quiz` | Enseignant propriétaire du cours | UC-07 | Questions **générées par FreeLLM** (QCM à 4 choix) à partir de `cours.contenu_texte` (obligatoire, sinon 422) ; seuil de réussite configurable, défaut 80% |
+| GET | `/quiz/{id}` | Élève inscrit | UC-07 | Questions sans la bonne réponse (jamais exposée avant la tentative) |
+| POST | `/quiz/{id}/tentatives` | Élève inscrit | UC-07 | `reponses: [index, ...]`, une par question, dans l'ordre. Tentatives illimitées ; score = % de bonnes réponses |
 
 ## Devoirs, évaluations, bulletins
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/classes/{id}/devoirs` | Enseignant rattaché | UC-08 | `bareme: rigide|flexible` |
-| POST | `/devoirs/{id}/soumissions` | Élève inscrit | UC-08 | Rejetée (409) si la date limite est dépassée — pas de soumission tardive acceptée. L'absence de ligne de soumission compte pour 0 au calcul du bulletin (pas besoin de tâche planifiée) |
-| POST | `/soumissions/{id}/corriger` | Enseignant propriétaire du devoir | UC-08 | Note manuelle dans les deux cas (barème rigide non auto-corrigé pour l'instant — pas de corrigé-type spécifié par un UC validé) |
-| GET | `/eleves/{id}/bulletins?classe_id=&periode=` | Élève, Tuteur, Enseignant rattaché, A+ | UC-09 | Calcule et enregistre la moyenne (moyenne simple sur les devoirs clos et notés — **pas encore pondérée par les coefficients du référentiel**, à brancher) |
+| POST | `/classes/{id}/devoirs` | Enseignant rattaché | UC-08 | Formulaire : `matiere`, `bareme: rigide|flexible`, `questions: [{enonce, bareme_reponse, points_max}, ...]` |
+| POST | `/devoirs/{id}/soumissions` | Élève inscrit | UC-08 | `reponses: [{question_id, texte_reponse}, ...]`, une par question exactement. Rejetée (409) si la date limite est dépassée. Correction **automatique par FreeLLM** à la soumission (rigide = tout ou rien, flexible = crédit partiel) ; en cas d'échec (FreeLLM indisponible), `statut=echec_correction` et la soumission attend une révision manuelle |
+| GET | `/devoirs/{id}/soumissions-a-revoir` | Enseignant propriétaire | UC-08 | Écran de révision manuelle : soumissions en `echec_correction` |
+| POST | `/soumissions/{id}/corriger` | Enseignant propriétaire du devoir | UC-08 | `reponses: [{question_id, points_obtenus}, ...]` — sert de filet de secours (échec IA) et de surcharge possible d'une correction déjà faite |
+| GET | `/eleves/{id}/bulletins?classe_id=&periode=` | Élève, Tuteur, Enseignant rattaché, A+ | UC-09 | Calcule et enregistre la **moyenne pondérée** : chaque devoir est normalisé sur 100 puis pondéré par le coefficient (niveau, matière) du référentiel validé en vigueur (défaut 1.0 si aucun référentiel ne couvre la matière). Un devoir compte dès qu'il est corrigé, même avant son échéance formelle ; sans soumission, il ne compte comme 0 qu'une fois l'échéance passée |
 | POST | `/bulletins/{id}/valider-passage` | Enseignant | UC-09 | Décision lourde (passage/redoublement/diplôme) toujours humaine, jamais déduite du seul calcul |
 | POST | `/referentiels-coefficients` | A++ | UC-09 | Référentiel national, `statut=valide` directement |
 | POST | `/referentiels-coefficients/{id}/proposition` | A+ | UC-09 | Crée une proposition (`statut=proposition_en_attente`) liée au référentiel visé |
@@ -94,10 +95,11 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 |---|---|---|---|---|
 | POST | `/etablissements/{id}/types-actes` | A+ | UC-10 | Catalogue configurable : nom, prix, pièces requises (texte libre), condition d'éligibilité optionnelle |
 | GET | `/etablissements/{id}/types-actes` | tout utilisateur authentifié concerné | UC-10 | Lecture du catalogue |
-| POST | `/demandes-actes` | Élève | UC-10 | `est_reclamation: true` (gratuite, `reference_evaluation` obligatoire) **ou** `type_acte_id` (payant si `prix>0`, sinon `en_traitement` immédiat). **Limitation** : le tuteur ne peut pas soumettre au nom de l'élève pour l'instant |
-| GET | `/demandes-actes/{id}` | Élève propriétaire, A+ de l'établissement courant de l'élève | UC-10 | Lecture |
+| POST | `/demandes-actes` | Élève (pour lui-même) ou Tuteur (avec `eleve_utilisateur_id`, doit être son enfant) | UC-10 | `est_reclamation: true` (gratuite, `reference_evaluation` obligatoire) **ou** `type_acte_id` (payant si `prix>0`, sinon `en_traitement` immédiat) |
+| GET | `/demandes-actes/{id}` | Élève propriétaire, son Tuteur, A+ de l'établissement courant de l'élève | UC-10 | Lecture |
 | POST | `/demandes-actes/{id}/traiter` | A+ | UC-10 | Accepte ou rejette (motif obligatoire) ; refusé (409) tant que le paiement n'est pas confirmé pour un acte payant |
-| POST | `/demandes-actes/{id}/paiement/webhook` | public | UC-10 | **L'intégration Kkiapay réelle (vérification de signature) n'est pas construite** — pose seulement la forme de la confirmation, à sécuriser avant mise en production |
+| POST | `/demandes-actes/{id}/paiement/amorcer` | Élève ou Tuteur propriétaire | UC-10 | `transaction_id` : associe une transaction Kkiapay (obtenue côté client via le widget) à la demande, avant confirmation par le webhook |
+| POST | `/paiements/webhook/kkiapay` | **public, URL unique pour tout le compte** (pas par demande) | UC-10 | Configuré une seule fois dans le tableau de bord Kkiapay (Clés API → Webhook). Vérifie l'en-tête `x-kkiapay-secret` contre `KKIAPAY_SECRET` ; sur `transaction.success`, retrouve la demande par `kkiapay_transaction_id` et confirme le paiement |
 
 ## Hors contrat pour l'instant
 

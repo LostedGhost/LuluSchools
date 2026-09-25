@@ -20,9 +20,10 @@ API backend sous préfixe `/api/v1` — contrat complet et à jour dans `docs/co
 - Monolithe modulaire, pas de microservices (ADR-001).
 - Accès LLM (notation de documents, etc.) exclusivement via FreeLLM (service personnel, API compatible OpenAI), jamais l'API Anthropic en direct (ADR-002).
 - Stockage de fichiers via LuluFiles, sauf le casier judiciaire qui reste local pour raisons légales — Art. 395 de la loi béninoise n° 2017-20 (ADR-003).
+- Signature du contrat enseignant : tracé dessiné sur canvas (doigt/stylet), signature électronique simple, pas qualifiée — décision définitive de l'utilisateur (ADR-004).
 
 ## État d'avancement
-Étapes 1-3 du pipeline validées. Étape 4 (backend) : premier jet complet de tous les modules de la Phase 1 (UC-01 à UC-10), 60 tests passants, 8 migrations appliquées en réel. Limitations et points ouverts documentés dans `backend/PROJECT_MAP.md` (§ zones instables) — le plus important : signature électronique qualifiée (UC-05) sans prestataire choisi, remplacée par une signature simple. Étape 5 (validation de bout en bout) pas encore commencée.
+Étapes 1-3 du pipeline validées. Étape 4 (backend) : tous les modules de la Phase 1 (UC-01 à UC-10) faits et testés (67 tests), 10 migrations appliquées en réel. Décisions récentes qui ferment d'anciens points ouverts : signature par canvas (ADR-004), moyennes pondérées par les coefficients, quiz généré par IA et devoirs corrigés par IA (formulaires), écrans de révision manuelle, webhook Kkiapay corrigé (URL unique par compte + secret partagé). Détail dans `backend/PROJECT_MAP.md` (§ état d'avancement). Étape 5 (validation de bout en bout) pas encore commencée.
 
 ## Dernière synchronisation
-2026-09-24 — premier jet complet du backend Phase 1.
+2026-09-25 — signature canvas, moyennes pondérées, quiz/formulaires IA, révision manuelle, webhook Kkiapay corrigé.

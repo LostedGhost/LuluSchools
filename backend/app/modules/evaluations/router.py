@@ -1,16 +1,18 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Classe
 from app.modules.evaluations.models import (
     Bulletin,
     Devoir,
+    QuestionDevoir,
     ReferentielCoefficient,
+    ReponseSoumission,
     Soumission,
     StatutReferentiel,
     StatutSoumission,
@@ -23,6 +25,7 @@ from app.modules.evaluations.schemas import (
     ReferentielCreate,
     ReferentielOut,
     ReferentielPropositionCreate,
+    SoumissionCreate,
     SoumissionOut,
     ValiderPassageRequest,
 )
@@ -49,10 +52,22 @@ def creer_devoir(
         classe_id=classe_id,
         enseignant_id=enseignant.id,
         titre=payload.titre,
+        matiere=payload.matiere,
         date_limite=payload.date_limite,
         bareme=payload.bareme,
     )
     db.add(devoir)
+    db.flush()
+    for ordre, question in enumerate(payload.questions):
+        db.add(
+            QuestionDevoir(
+                devoir_id=devoir.id,
+                ordre=ordre,
+                enonce=question.enonce,
+                bareme_reponse=question.bareme_reponse,
+                points_max=question.points_max,
+            )
+        )
     db.commit()
     db.refresh(devoir)
     return devoir
@@ -60,9 +75,11 @@ def creer_devoir(
 
 @router.get("/devoirs/{devoir_id}", response_model=DevoirOut)
 def obtenir_devoir(
-    devoir_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(require_roles(
-        RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ELEVE, RoleUtilisateur.ADMIN_ETABLISSEMENT
-    ))
+    devoir_id: str,
+    db: Session = Depends(get_db),
+    _utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ELEVE, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+    ),
 ) -> Devoir:
     devoir = db.get(Devoir, devoir_id)
     if devoir is None:
@@ -75,9 +92,9 @@ def obtenir_devoir(
 )
 def soumettre_devoir(
     devoir_id: str,
-    fichier: UploadFile = File(...),
+    payload: SoumissionCreate,
     db: Session = Depends(get_db),
-    files_client: LuluFilesClient = Depends(get_files_client),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
     eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
 ) -> Soumission:
     devoir = db.get(Devoir, devoir_id)
@@ -92,24 +109,47 @@ def soumettre_devoir(
             "delai_depasse",
             "La date limite est depassee : la note zero s'applique automatiquement, sans derogation.",
         )
-
     if db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first():
         raise api_error(status.HTTP_409_CONFLICT, "deja_soumis", "Vous avez deja soumis ce devoir.")
 
-    contenu = fichier.file.read()
-    try:
-        lulufiles_file_id = files_client.upload(
-            contenu, fichier.filename or "soumission", fichier.content_type or "application/octet-stream"
-        )
-    except FileStorageError as exc:
+    questions_par_id = {q.id: q for q in devoir.questions}
+    if {r.question_id for r in payload.reponses} != set(questions_par_id.keys()):
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez reessayer."
-        ) from exc
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "reponses_incompletes",
+            "Une reponse est attendue pour chaque question du devoir, exactement.",
+        )
 
-    soumission = Soumission(
-        devoir_id=devoir_id, eleve_id=eleve.id, lulufiles_file_id=lulufiles_file_id, statut=StatutSoumission.A_TEMPS
-    )
+    soumission = Soumission(devoir_id=devoir_id, eleve_id=eleve.id, statut=StatutSoumission.CORRIGEE)
     db.add(soumission)
+    db.flush()
+
+    echec = False
+    reponses_orm = []
+    for reponse in payload.reponses:
+        question = questions_par_id[reponse.question_id]
+        reponse_orm = ReponseSoumission(
+            soumission_id=soumission.id, question_id=question.id, texte_reponse=reponse.texte_reponse
+        )
+        try:
+            reponse_orm.points_obtenus = llm_client.corriger_reponse(
+                question.enonce,
+                question.bareme_reponse,
+                question.points_max,
+                reponse.texte_reponse,
+                strict=(devoir.bareme.value == "rigide"),
+            )
+        except CorrectionError:
+            echec = True
+        db.add(reponse_orm)
+        reponses_orm.append(reponse_orm)
+
+    if echec:
+        soumission.statut = StatutSoumission.ECHEC_CORRECTION
+        soumission.note = None
+    else:
+        soumission.note = sum(r.points_obtenus for r in reponses_orm)
+
     db.commit()
     db.refresh(soumission)
     return soumission
@@ -122,6 +162,9 @@ def corriger_soumission(
     db: Session = Depends(get_db),
     enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
 ) -> Soumission:
+    """Ecran de revision manuelle : sert a la fois de filet de secours quand la
+    correction automatique a echoue (statut=echec_correction) et de possibilite de
+    surcharger une correction LLM deja faite."""
     soumission = db.get(Soumission, soumission_id)
     if soumission is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Soumission introuvable.")
@@ -129,11 +172,38 @@ def corriger_soumission(
     if devoir.enseignant_id != enseignant.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
 
-    soumission.note = payload.note
+    points_max_par_question = {q.id: q.points_max for q in devoir.questions}
+    reponses_par_id = {r.question_id: r for r in soumission.reponses}
+    for correction in payload.reponses:
+        if correction.question_id not in reponses_par_id:
+            raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "question_inconnue", "Question hors de ce devoir.")
+        if correction.points_obtenus > points_max_par_question[correction.question_id]:
+            raise api_error(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, "points_hors_bareme", "points_obtenus depasse points_max."
+            )
+        reponses_par_id[correction.question_id].points_obtenus = correction.points_obtenus
+
+    soumission.note = sum(r.points_obtenus or 0 for r in soumission.reponses)
     soumission.statut = StatutSoumission.CORRIGEE
     db.commit()
     db.refresh(soumission)
     return soumission
+
+
+@router.get("/devoirs/{devoir_id}/soumissions-a-revoir", response_model=list[SoumissionOut])
+def lister_soumissions_a_revoir(
+    devoir_id: str, db: Session = Depends(get_db), enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT))
+) -> list[Soumission]:
+    devoir = db.get(Devoir, devoir_id)
+    if devoir is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+    if devoir.enseignant_id != enseignant.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
+    return (
+        db.query(Soumission)
+        .filter(Soumission.devoir_id == devoir_id, Soumission.statut == StatutSoumission.ECHEC_CORRECTION)
+        .all()
+    )
 
 
 @router.post(
@@ -209,31 +279,60 @@ def valider_referentiel(
     return proposition
 
 
-def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str, periode: str) -> Bulletin:
-    devoirs = (
-        db.query(Devoir)
-        .filter(Devoir.classe_id == classe_id, Devoir.date_limite < datetime.now(timezone.utc))
-        .all()
+def _coefficient_pour(db: Session, niveau: str, matiere: str) -> float:
+    referentiel = (
+        db.query(ReferentielCoefficient)
+        .filter(
+            ReferentielCoefficient.niveau == niveau,
+            ReferentielCoefficient.matiere == matiere,
+            ReferentielCoefficient.statut == StatutReferentiel.VALIDE,
+        )
+        .first()
     )
-    notes = []
+    return referentiel.coefficient if referentiel is not None else 1.0
+
+
+def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str, periode: str) -> Bulletin:
+    """Moyenne PONDEREE : chaque devoir est normalise sur 100 (note / somme des
+    points_max de ses questions), puis pondere par le coefficient (niveau, matiere) du
+    referentiel valide en vigueur - defaut 1.0 si aucun referentiel ne couvre la
+    matiere (UC-09). Un devoir compte des qu'il est corrige (meme avant son echeance
+    formelle) ; sans soumission, il ne compte comme 0 qu'une fois l'echeance passee -
+    avant, on n'a simplement pas encore de resultat a inclure."""
+    classe = db.get(Classe, classe_id)
+    devoirs = db.query(Devoir).filter(Devoir.classe_id == classe_id).all()
+
+    notes_ponderees = []
+    poids_total = 0.0
     for devoir in devoirs:
+        points_max_devoir = sum(q.points_max for q in devoir.questions) or 1.0
         soumission = (
             db.query(Soumission)
             .filter(Soumission.devoir_id == devoir.id, Soumission.eleve_id == eleve.id)
             .first()
         )
-        if soumission is None:
-            notes.append(0.0)
-        elif soumission.note is not None:
-            notes.append(soumission.note)
-        # soumission existante mais pas encore corrigee : exclue du calcul pour l'instant
+        date_limite = devoir.date_limite if devoir.date_limite.tzinfo else devoir.date_limite.replace(tzinfo=timezone.utc)
+        devoir_clos = datetime.now(timezone.utc) > date_limite
 
-    if not notes:
+        if soumission is None:
+            if not devoir_clos:
+                continue  # pas encore d'echeance passee : rien a compter pour l'instant
+            note_normalisee = 0.0
+        elif soumission.statut == StatutSoumission.CORRIGEE and soumission.note is not None:
+            note_normalisee = (soumission.note / points_max_devoir) * 100
+        else:
+            continue  # echec_correction en attente de revision manuelle : exclu pour l'instant
+
+        coefficient = _coefficient_pour(db, classe.niveau, devoir.matiere)
+        notes_ponderees.append(note_normalisee * coefficient)
+        poids_total += coefficient
+
+    if poids_total == 0:
         raise api_error(
             status.HTTP_404_NOT_FOUND, "aucun_devoir_evalue", "Aucun devoir clos et evalue pour cette periode."
         )
 
-    moyenne = sum(notes) / len(notes)
+    moyenne = sum(notes_ponderees) / poids_total
 
     bulletin = (
         db.query(Bulletin)
@@ -256,9 +355,11 @@ def obtenir_bulletin(
     classe_id: str,
     periode: str,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(
-        RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT
-    )),
+    utilisateur: Utilisateur = Depends(
+        require_roles(
+            RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT
+        )
+    ),
 ) -> Bulletin:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:

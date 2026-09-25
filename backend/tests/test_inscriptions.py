@@ -198,7 +198,7 @@ def test_eleve_connecte_avec_son_matricule(client, fake_email_client, tuteur_hea
         f"/api/v1/inscriptions/{inscription['id']}/valider",
         headers=etablissement_avec_classe["admin_headers"],
     )
-    identifiants = next(m for m in fake_email_client.sent if "login_id" in m)
+    identifiants = next(m for m in reversed(fake_email_client.sent) if "login_id" in m)
 
     response = client.post(
         "/api/v1/auth/login",
@@ -206,3 +206,59 @@ def test_eleve_connecte_avec_son_matricule(client, fake_email_client, tuteur_hea
     )
     assert response.status_code == 200
     assert response.json()["doit_changer_mot_de_passe"] is True
+
+
+def test_eleve_titulaire_peut_soumettre_sa_propre_reinscription(
+    client, fake_email_client, tuteur_headers, etablissement_avec_classe
+):
+    premiere = client.post(
+        "/api/v1/inscriptions",
+        json={
+            "nom": "Dossou",
+            "prenom": "Aisha",
+            "date_naissance": _date_naissance_pour_age(17),
+            "classe_id": etablissement_avec_classe["classe"]["id"],
+        },
+        headers=tuteur_headers,
+    ).json()
+    client.post(
+        f"/api/v1/inscriptions/{premiere['id']}/valider",
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    identifiants = next(m for m in reversed(fake_email_client.sent) if "login_id" in m)
+    login_eleve = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": identifiants["login_id"], "mot_de_passe": identifiants["mot_de_passe"]},
+    ).json()
+    eleve_headers = {"Authorization": f"Bearer {login_eleve['access_token']}"}
+
+    # Nouvelle classe (celle de la fixture est deja a capacite max avec la premiere inscription).
+    nouvelle_classe = client.post(
+        f"/api/v1/etablissements/{etablissement_avec_classe['etablissement']['id']}/classes",
+        json={"niveau": "CE2", "capacite": 5, "politique_depassement": "ordre_arrivee"},
+        headers=etablissement_avec_classe["admin_headers"],
+    ).json()
+
+    reinscription = client.post(
+        "/api/v1/inscriptions",
+        json={
+            "nom": "Dossou",
+            "prenom": "Aisha",
+            "date_naissance": _date_naissance_pour_age(17),
+            "classe_id": nouvelle_classe["id"],
+        },
+        headers=eleve_headers,
+    )
+    assert reinscription.status_code == 201
+    assert reinscription.json()["statut"] == "soumise"
+
+
+def test_tuteur_non_habilite_ne_peut_pas_soumettre_une_demande_sans_lien(
+    client, admin_ministeriel_headers
+):
+    response = client.post(
+        "/api/v1/inscriptions",
+        json={"nom": "X", "prenom": "Y", "date_naissance": "2010-01-01", "classe_id": "inexistante"},
+        headers=admin_ministeriel_headers,
+    )
+    assert response.status_code == 403

@@ -1,4 +1,5 @@
 import base64
+import json
 import re
 
 from openai import OpenAI, OpenAIError
@@ -9,6 +10,14 @@ from app.core.config import settings
 class DocumentScoringError(Exception):
     """Levee quand FreeLLM ne peut pas noter un document (indisponibilite, reponse non
     interpretable comme un score - voir ADR-002 : pas de SLA, pas de modele frontier)."""
+
+
+class CorrectionError(Exception):
+    """Levee quand FreeLLM ne peut pas corriger une reponse de formulaire d'evaluation."""
+
+
+class QuizGenerationError(Exception):
+    """Levee quand FreeLLM ne peut pas generer un quiz exploitable a partir d'un cours."""
 
 
 class FreeLLMClient:
@@ -51,6 +60,78 @@ class FreeLLMClient:
             raise DocumentScoringError(f"Reponse FreeLLM non interpretable comme un score : {texte!r}")
 
         return max(0.0, min(100.0, float(correspondance.group())))
+
+    def corriger_reponse(
+        self, enonce: str, bareme_reponse: str, points_max: float, reponse_eleve: str, strict: bool
+    ) -> float:
+        """UC-08 : les evaluations sont corrigees par le LLM selon le bareme fourni par
+        l'enseignant. bareme='rigide' => tout ou rien (points_max ou 0) ; 'flexible' =>
+        credit partiel selon la qualite du raisonnement."""
+        consigne_notation = (
+            f"Attribue soit {points_max} (reponse correcte) soit 0 (reponse incorrecte), rien entre les deux."
+            if strict
+            else f"Attribue un score entre 0 et {points_max}, avec credit partiel si le raisonnement est "
+            "correct mais incomplet."
+        )
+        prompt = (
+            f"Question posee a un eleve : {enonce}\n"
+            f"Bareme de correction attendu par l'enseignant : {bareme_reponse}\n"
+            f"Reponse de l'eleve : {reponse_eleve}\n\n"
+            f"{consigne_notation} Reponds uniquement avec le nombre de points obtenus, sans aucun autre texte."
+        )
+        try:
+            response = self._client.chat.completions.create(
+                model="auto", messages=[{"role": "user", "content": prompt}]
+            )
+        except OpenAIError as exc:
+            raise CorrectionError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        correspondance = re.search(r"\d+(\.\d+)?", texte)
+        if correspondance is None:
+            raise CorrectionError(f"Reponse FreeLLM non interpretable comme un score : {texte!r}")
+
+        return max(0.0, min(points_max, float(correspondance.group())))
+
+    def generer_quiz(self, contenu_cours: str, nombre_questions: int = 5) -> list[dict]:
+        """UC-07 : le quiz est genere par le LLM a partir du contenu du cours. Format
+        impose : QCM a 4 choix, une seule bonne reponse par question."""
+        prompt = (
+            f"A partir du contenu de cours suivant, genere exactement {nombre_questions} questions a choix "
+            "multiple (4 choix chacune, une seule bonne reponse) pour verifier la comprehension d'un eleve.\n\n"
+            f"Contenu du cours :\n{contenu_cours}\n\n"
+            "Reponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, au format exact : "
+            '[{"enonce": "...", "choix": ["...", "...", "...", "..."], "reponse_correcte_index": 0}, ...]'
+        )
+        try:
+            response = self._client.chat.completions.create(
+                model="auto", messages=[{"role": "user", "content": prompt}]
+            )
+        except OpenAIError as exc:
+            raise QuizGenerationError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        debut, fin = texte.find("["), texte.rfind("]")
+        if debut == -1 or fin == -1:
+            raise QuizGenerationError(f"Reponse FreeLLM non interpretable comme un quiz JSON : {texte!r}")
+        try:
+            questions = json.loads(texte[debut : fin + 1])
+        except json.JSONDecodeError as exc:
+            raise QuizGenerationError(f"JSON de quiz invalide : {texte!r}") from exc
+
+        for question in questions:
+            if (
+                not isinstance(question.get("enonce"), str)
+                or not isinstance(question.get("choix"), list)
+                or len(question["choix"]) < 2
+                or not isinstance(question.get("reponse_correcte_index"), int)
+            ):
+                raise QuizGenerationError(f"Question de quiz mal formee : {question!r}")
+
+        if not questions:
+            raise QuizGenerationError("FreeLLM a renvoye un quiz vide.")
+
+        return questions
 
 
 def get_llm_client() -> FreeLLMClient:

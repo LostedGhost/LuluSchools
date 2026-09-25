@@ -30,6 +30,7 @@ class DemandeActeCreate(BaseModel):
     est_reclamation: bool = False
     reference_evaluation: str | None = None
     motif: str | None = None
+    eleve_utilisateur_id: str | None = None  # requis seulement quand le tuteur soumet pour son enfant
 
     @model_validator(mode="after")
     def _valider_exclusivite(self) -> "DemandeActeCreate":
@@ -54,10 +55,18 @@ class DemandeActeOut(BaseModel):
     motif_rejet: str | None
 
 
-class PaiementWebhookRequest(BaseModel):
+class AmorcerPaiementRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    reference: str
+    transaction_id: str
+
+
+class KkiapayWebhookPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")  # Kkiapay envoie d'autres champs (amount, fees, method...)
+
+    transactionId: str
+    isPaymentSucces: bool
+    event: str
 
 
 class TraiterDemandeRequest(BaseModel):

@@ -10,7 +10,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/etablissements/` — établissements, classes, admins A+/A++
 - `app/modules/inscriptions/` — inscriptions élève (consentement parental, validation, matricule, compte élève auto-créé)
 - `app/modules/recrutement/` — postes, candidatures (notation IA + LuluFiles + casier judiciaire), contestations, contrats, reconduction
-- `app/modules/pedagogie/` — cours, quiz (pas de banque de questions — voir zones instables)
+- `app/modules/pedagogie/` — cours, quiz généré par FreeLLM (QCM)
 - `app/modules/evaluations/` — devoirs, soumissions, référentiels de coefficients (UC-09), bulletins
 - `app/modules/actes/` — catalogue d'actes académiques par établissement, demandes (réclamation ou acte payant)
 - `alembic/` — migrations (une par évolution de schéma, jamais réécrites une fois appliquées)
@@ -42,21 +42,21 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `router.py` — `POST /inscriptions` (Tuteur seul en Phase 1 — l'auto-inscription ≥16 ans sans tuteur n'est pas implémentée, nécessiterait un flux de compte dédié), branche d'âge Art. 446 (16 ans), `POST .../consentement-parental`, `POST .../valider` (A+, vérifie la capacité de la classe et génère matricule + compte élève), `POST .../rejeter`, `GET /inscriptions/{id}`.
 
 ### app/modules/recrutement/
-- `models.py` — `Poste`, `CritereDocumentPoste` (coefficient + seuil par type de document), `Candidature`, `DocumentCandidature` (note IA), `VerificationCasierJudiciaire` (1-1, hors pipeline IA, fichier local — voir docstring, Art. 395), `Contestation`, `Contrat`, `PropositionReconduction` (modèle posé, endpoint pas encore écrit).
+- `models.py` — `Poste`, `CritereDocumentPoste` (coefficient + seuil par type de document), `Candidature`, `DocumentCandidature` (note IA), `VerificationCasierJudiciaire` (1-1, hors pipeline IA, fichier local — voir docstring, Art. 395), `Contestation`, `Contrat` (+ `date_fin`, + `signature_image_lulufiles_id`), `PropositionReconduction`.
 - `conversion.py` — `convertir_en_image()` : convertit la première page d'un PDF en PNG via PyMuPDF (FreeLLM n'accepte que des images en vision) ; passe les images telles quelles.
-- `router.py` — `POST/GET /etablissements/{id}/postes`, `POST /postes/{id}/candidatures` (upload multipart, notation FreeLLM synchrone, casier judiciaire routé en stockage local), `GET /candidatures/{id}`, `POST /candidatures/{id}/contestation`, `POST /contestations/{id}/decision`, `POST /candidatures/{id}/contrat`, `POST /contrats/{id}/signer` (signature **simple**, pas encore qualifiée — voir zones instables).
+- `router.py` — `POST/GET /etablissements/{id}/postes`, `POST /postes/{id}/candidatures` (upload multipart, notation FreeLLM synchrone, casier judiciaire routé en stockage local), `GET /candidatures/{id}`, `GET /candidatures/en-attente-revision` + `POST /documents-candidature/{id}/noter-manuellement` (écran de révision manuelle), `POST /candidatures/{id}/contestation`, `POST /contestations/{id}/decision`, `POST /candidatures/{id}/contrat`, `POST /contrats/{id}/signer` (signature dessinée sur canvas, stockée via LuluFiles — décision finale, ADR-004), `POST /contrats/{id}/reconduction`.
 
 ### app/modules/pedagogie/
-- `models.py` — `Cours`, `Quiz` (voir docstring : pas de banque de questions, non spécifiée par un UC validé), `TentativeQuiz`.
-- `router.py` — `POST/GET /classes/{id}/cours`, `POST /cours/{id}/quiz`, `POST /quiz/{id}/tentatives`. Contient aussi `_verifier_enseignant_rattache` et `_verifier_eleve_inscrit`, réutilisées par `evaluations/router.py`.
+- `models.py` — `Cours`, `Quiz`, `QuestionQuiz` (généré par FreeLLM, QCM 4 choix), `TentativeQuiz` (stocke les `reponses` de l'élève en JSON + score calculé).
+- `router.py` — `POST/GET /classes/{id}/cours`, `POST /cours/{id}/quiz` (appelle `FreeLLMClient.generer_quiz` sur `cours.contenu_texte`), `GET /quiz/{id}` (questions sans la bonne réponse), `POST /quiz/{id}/tentatives`. Contient aussi `_verifier_enseignant_rattache` et `_verifier_eleve_inscrit`, réutilisées par `evaluations/router.py`.
 
 ### app/modules/evaluations/
-- `models.py` — `Devoir`, `Soumission` (voir docstring : pas de ligne = 0 au bulletin), `ReferentielCoefficient` (gouvernance UC-09, pas encore branchée au calcul), `Bulletin`.
-- `router.py` — `POST /classes/{id}/devoirs`, `POST /devoirs/{id}/soumissions` (rejette si en retard), `POST /soumissions/{id}/corriger`, gouvernance `/referentiels-coefficients*`, `GET /eleves/{id}/bulletins` (calcule et upsert), `POST /bulletins/{id}/valider-passage`.
+- `models.py` — `Devoir` (+ `matiere`, + `QuestionDevoir` : énoncé, barème texte libre, points max), `Soumission` (+ `ReponseSoumission` : réponse élève + points obtenus + corrigée par IA), `ReferentielCoefficient` (gouvernance UC-09, **branchée** au calcul du bulletin), `Bulletin`.
+- `router.py` — `POST /classes/{id}/devoirs` (formulaire de questions), `POST /devoirs/{id}/soumissions` (correction automatique via `FreeLLMClient.corriger_reponse` par question, `echec_correction` si FreeLLM indisponible), `GET /devoirs/{id}/soumissions-a-revoir` (écran de révision manuelle), `POST /soumissions/{id}/corriger` (manuel, sert de filet de secours), gouvernance `/referentiels-coefficients*`, `GET /eleves/{id}/bulletins` (moyenne **pondérée** par coefficient, upsert), `POST /bulletins/{id}/valider-passage`.
 
 ### app/modules/actes/
-- `models.py` — `TypeActeAcademique` (catalogue par établissement, voir UC-10 révisé), `DemandeActeAcademique`.
-- `router.py` — `POST/GET /etablissements/{id}/types-actes`, `POST /demandes-actes`, `POST /demandes-actes/{id}/paiement/webhook` (stub, pas de vraie vérification Kkiapay), `POST /demandes-actes/{id}/traiter`.
+- `models.py` — `TypeActeAcademique` (catalogue par établissement, voir UC-10 révisé), `DemandeActeAcademique` (+ `kkiapay_transaction_id`).
+- `router.py` — `POST/GET /etablissements/{id}/types-actes`, `POST /demandes-actes` (Élève ou Tuteur), `POST /demandes-actes/{id}/paiement/amorcer`, `POST /demandes-actes/{id}/traiter`. Expose aussi `paiements_router` : `POST /paiements/webhook/kkiapay` — URL **unique pour tout le compte** (pas par demande, correction d'une erreur de conception initiale), vérifie l'en-tête `x-kkiapay-secret` contre `settings.kkiapay_secret`.
 
 ### alembic/versions/
 - `0001_identite_initial.py` — utilisateurs, tuteurs, otp_verifications.
@@ -65,8 +65,10 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `0004_inscriptions.py` — eleves, inscriptions.
 - `0005_enseignants.py` — enseignants.
 - `0006_recrutement.py` — postes, criteres_document_poste, candidatures, documents_candidature, verifications_casier_judiciaire, contestations, contrats, propositions_reconduction.
-- `0007_contrats_date_fin.py` — ajoute `date_fin` sur `contrats` (necessaire a la fenetre de reconduction).
+- `0007_contrats_date_fin.py` — ajoute `date_fin` sur `contrats` (nécessaire à la fenêtre de reconduction).
 - `0008_pedagogie_evaluations_actes.py` — cours, quiz, tentatives_quiz, devoirs, soumissions, referentiels_coefficients, bulletins, types_acte_academique, demandes_acte_academique.
+- `0009_contrats_signature_image.py` — ajoute `signature_image_lulufiles_id` sur `contrats` (signature dessinée, remplace le nom tapé — ADR-004).
+- `0010_formulaires_llm.py` — recrée `soumissions` en formulaire de réponses (plus de fichier joint), ajoute `questions_devoir`/`reponses_soumission`/`questions_quiz`, `matiere` sur `devoirs`, `reponses` sur `tentatives_quiz`, `kkiapay_transaction_id` sur `demandes_acte_academique`. **Note** : recrée la table `soumissions` plutôt que d'altérer l'enum Postgres en place — acceptable uniquement parce qu'aucune donnée réelle n'existait encore dans ces tables ; ne pas reproduire ce pattern une fois des données réelles présentes.
 Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** downgrade validés manuellement pour 0001).
 
 ### scripts/
@@ -82,19 +84,22 @@ Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** 
 - Compte provisionné (élève, admin établissement) = mot de passe temporaire envoyé par e-mail + `mot_de_passe_temporaire=True`.
 
 ## État d'avancement / zones instables
-Tous les modules de la Phase 1 (UC-01 à UC-10) ont un premier jet fait et testé (60 tests) : `/health`, identité, établissements/classes, inscriptions, recrutement/contrats (avec reconduction), pédagogie, évaluations, actes académiques.
+Tous les modules de la Phase 1 (UC-01 à UC-10) sont faits et testés (67 tests) : `/health`, identité, établissements/classes, inscriptions, recrutement/contrats (avec reconduction et écran de révision manuelle), pédagogie (quiz généré par IA), évaluations (formulaires corrigés par IA, moyenne pondérée), actes académiques (avec webhook Kkiapay).
 
-- **Fragile** : `mot_de_passe_temporaire` n'est qu'un indicateur renvoyé par `/auth/login`, rien ne bloque encore côté serveur tant qu'il n'est pas changé.
-- **Limitations assumées, documentées dans le contrat d'API** :
-  - `POST /inscriptions` et `POST /demandes-actes` n'acceptent que le titulaire direct du compte (tuteur, élève) — pas de soumission pour compte d'un tiers.
-  - Notation FreeLLM synchrone dans la requête (pas de file d'attente/tâche de fond).
-  - Aucun endpoint de révision manuelle pour un document en `echec_notation` (candidature) — la donnée existe, l'action n'existe pas.
-  - Contestation candidature comptée en jours calendaires plutôt qu'ouvrés.
-  - Quiz : pas de banque de questions/réponses (non spécifiée) — le score est fourni par l'appelant.
-  - Barème rigide (devoir) pas réellement auto-corrigé — pas de corrigé-type spécifié, la correction reste manuelle dans les deux cas.
-  - Bulletin : moyenne simple sur les devoirs, **pas encore pondérée** par `ReferentielCoefficient` (la gouvernance UC-09 existe, le calcul ne s'en sert pas encore).
-  - Webhook de paiement des actes académiques : forme posée, **aucune vérification de signature Kkiapay réelle** — à sécuriser avant production.
-- **Bloqué en attente d'un choix externe** : signature électronique qualifiée (UC-05) — `POST /contrats/{id}/signer` implémente une signature simple en attendant un prestataire.
+**Décisions définitives prises par l'utilisateur qui ferment d'anciens points ouverts :**
+- Signature du contrat enseignant (UC-05) : tracé dessiné au doigt/stylet sur un canvas côté client, exporté en PNG, stocké via LuluFiles — signature électronique simple (Art. 284-285), pas qualifiée. Voir ADR-004. Ce n'est plus un point ouvert, c'est le choix retenu.
+- Moyennes pondérées : `GET /eleves/{id}/bulletins` utilise désormais le coefficient (niveau, matière) du `ReferentielCoefficient` validé en vigueur (défaut 1.0 si aucun référentiel ne couvre la matière).
+- Quiz (UC-07) : généré par FreeLLM à partir de `cours.contenu_texte` (QCM 4 choix). Devoirs (UC-08) : formulaires de questions, chacune avec son propre barème texte libre, corrigées automatiquement par FreeLLM (rigide = tout ou rien, flexible = crédit partiel).
+- Écrans de révision manuelle : `GET /candidatures/en-attente-revision` + `POST /documents-candidature/{id}/noter-manuellement` (recrutement) et `GET /devoirs/{id}/soumissions-a-revoir` + `POST /soumissions/{id}/corriger` (évaluations), tous deux déclenchés quand FreeLLM échoue à noter/corriger (ADR-002).
+- Inscriptions et demandes d'actes : le titulaire (l'élève, une fois son compte existant) peut désormais agir lui-même, en plus de son tuteur — plus seulement le tuteur.
+- Webhook Kkiapay : corrigé pour respecter leur mécanique réelle (vérifiée sur leur documentation) — une URL **unique pour tout le compte** (`POST /paiements/webhook/kkiapay`), pas une par demande, avec vérification de l'en-tête `x-kkiapay-secret`. Le rattachement transaction ↔ demande se fait via `POST /demandes-actes/{id}/paiement/amorcer` (appelé côté client juste après avoir obtenu un `transactionId` du widget Kkiapay).
+
+**Fragile** : `mot_de_passe_temporaire` n'est qu'un indicateur renvoyé par `/auth/login`, rien ne bloque encore côté serveur tant qu'il n'est pas changé.
+
+**Limitations assumées restantes, documentées dans le contrat d'API :**
+- Notation/correction FreeLLM synchrone dans la requête (pas de file d'attente/tâche de fond) — acceptable au volume Phase 1.
+- Contestation candidature comptée en jours calendaires plutôt qu'ouvrés.
+- `POST /inscriptions` par un élève (titulaire) suppose qu'il a déjà un compte (réinscription) — la toute première inscription reste réservée au tuteur.
 
 ## Dernière synchronisation
-2026-09-24 — après pédagogie, évaluations et actes académiques : premier jet complet de la Phase 1.
+2026-09-25 — signature par canvas (ADR-004), moyennes pondérées, quiz/formulaires générés et corrigés par IA, écrans de révision manuelle, habilitation du titulaire (élève) en plus du tuteur, correction du webhook Kkiapay (URL unique + secret).

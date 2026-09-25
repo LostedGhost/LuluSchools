@@ -149,19 +149,20 @@ def test_contrat_puis_signature(client, fake_llm_client, enseignant_headers, eta
     assert contrat.status_code == 201
     contrat_id = contrat.json()["id"]
 
-    signature_refusee = client.post(
+    signature_vide = client.post(
         f"/api/v1/contrats/{contrat_id}/signer",
-        json={"nom_tape": "Un Autre Nom"},
+        files={"signature_image": ("signature.png", io.BytesIO(b""), "image/png")},
         headers=enseignant_headers,
     )
-    assert signature_refusee.status_code == 422
+    assert signature_vide.status_code == 422
 
     signature = client.post(
         f"/api/v1/contrats/{contrat_id}/signer",
-        json={"nom_tape": "Moussa Traore"},
+        files={"signature_image": ("signature.png", io.BytesIO(b"trace-du-canvas-en-png"), "image/png")},
         headers=enseignant_headers,
     )
     assert signature.status_code == 200
+    assert signature.json()["signature_image_lulufiles_id"] is not None
     assert signature.json()["statut"] == "signe"
 
 
@@ -196,7 +197,7 @@ def _creer_contrat_signe(client, fake_llm_client, enseignant_headers, etablissem
     ).json()
     client.post(
         f"/api/v1/contrats/{contrat['id']}/signer",
-        json={"nom_tape": "Moussa Traore"},
+        files={"signature_image": ("signature.png", io.BytesIO(b"trace-du-canvas-en-png"), "image/png")},
         headers=enseignant_headers,
     )
     return contrat
@@ -237,7 +238,7 @@ def test_reconduction_dans_la_fenetre_cree_un_nouveau_contrat_a_signer(
 
     signature = client.post(
         f"/api/v1/contrats/{body['nouveau_contrat_id']}/signer",
-        json={"nom_tape": "Moussa Traore"},
+        files={"signature_image": ("signature.png", io.BytesIO(b"trace-du-canvas-en-png"), "image/png")},
         headers=enseignant_headers,
     )
     assert signature.status_code == 200

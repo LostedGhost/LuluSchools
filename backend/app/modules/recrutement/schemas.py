@@ -102,12 +102,7 @@ class ContratOut(BaseModel):
     date_fin: date
     statut: StatutContrat
     signature_horodatage: datetime | None
-
-
-class ContratSignerRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    nom_tape: str
+    signature_image_lulufiles_id: str | None
 
 
 class ReconductionCreate(BaseModel):
@@ -115,6 +110,12 @@ class ReconductionCreate(BaseModel):
 
     syllabus: str
     date_fin: date
+
+
+class NotationManuelleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: float = Field(ge=0, le=100)
 
 
 class PropositionReconductionOut(BaseModel):

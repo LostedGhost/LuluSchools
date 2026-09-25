@@ -37,7 +37,7 @@ from app.modules.recrutement.schemas import (
     ContestationOut,
     ContratCreate,
     ContratOut,
-    ContratSignerRequest,
+    NotationManuelleRequest,
     PosteCreate,
     PosteOut,
     PropositionReconductionOut,
@@ -178,22 +178,74 @@ def postuler(
     )
 
     db.flush()
+    _reevaluer_candidature(db, candidature, criteres_par_type)
+
+    db.commit()
+    db.refresh(candidature)
+    return candidature
+
+
+def _reevaluer_candidature(db: Session, candidature: Candidature, criteres_par_type: dict) -> None:
+    """Applique la decision d'elimination/score une fois tous les documents notes.
+    Reutilisee a la soumission initiale et apres une revision manuelle (ADR-002 :
+    aucune decision automatique tant qu'un document n'a pas pu etre note)."""
     documents = db.query(DocumentCandidature).filter(DocumentCandidature.candidature_id == candidature.id).all()
 
     if any(d.statut == StatutDocument.ECHEC_NOTATION for d in documents):
-        # Aucune decision automatique tant qu'un document n'a pas pu etre note (ADR-002) :
-        # reste en_evaluation en attente d'une revision manuelle (endpoint pas encore construit).
-        pass
+        return  # en attente de revision manuelle, voir POST /documents-candidature/{id}/noter-manuellement
+
+    sous_seuil = any(d.note_ia < criteres_par_type[d.type_document].seuil_minimal for d in documents)
+    if sous_seuil:
+        candidature.statut = StatutCandidature.REJETEE
     else:
-        sous_seuil = any(d.note_ia < criteres_par_type[d.type_document].seuil_minimal for d in documents)
-        if sous_seuil:
-            candidature.statut = StatutCandidature.REJETEE
-        else:
-            poids_total = sum(criteres_par_type[d.type_document].coefficient for d in documents)
-            candidature.score = (
-                sum(d.note_ia * criteres_par_type[d.type_document].coefficient for d in documents)
-                / poids_total
-            )
+        poids_total = sum(criteres_par_type[d.type_document].coefficient for d in documents)
+        candidature.score = (
+            sum(d.note_ia * criteres_par_type[d.type_document].coefficient for d in documents) / poids_total
+        )
+
+
+@router.get("/candidatures/en-attente-revision", response_model=list[CandidatureOut])
+def lister_candidatures_en_attente_revision(
+    db: Session = Depends(get_db), admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT))
+) -> list[Candidature]:
+    """Ecran de revision manuelle (recrutement) : candidatures ayant au moins un
+    document que FreeLLM n'a pas pu noter, scopees aux etablissements administres."""
+    lien = db.get(AdminEtablissement, admin.id)
+    if lien is None:
+        return []
+    return (
+        db.query(Candidature)
+        .join(Poste, Poste.id == Candidature.poste_id)
+        .join(DocumentCandidature, DocumentCandidature.candidature_id == Candidature.id)
+        .filter(Poste.etablissement_id == lien.etablissement_id, DocumentCandidature.statut == StatutDocument.ECHEC_NOTATION)
+        .distinct()
+        .all()
+    )
+
+
+@router.post("/documents-candidature/{document_id}/noter-manuellement", response_model=CandidatureOut)
+def noter_document_manuellement(
+    document_id: str,
+    payload: NotationManuelleRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> Candidature:
+    document = db.get(DocumentCandidature, document_id)
+    if document is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Document introuvable.")
+    candidature = db.get(Candidature, document.candidature_id)
+    poste = db.get(Poste, candidature.poste_id)
+    _verifier_admin_de_l_etablissement(db, admin, poste.etablissement_id)
+
+    if document.statut != StatutDocument.ECHEC_NOTATION:
+        raise api_error(status.HTTP_409_CONFLICT, "revision_non_requise", "Ce document n'attend pas de revision manuelle.")
+
+    document.note_ia = payload.note
+    document.statut = StatutDocument.NOTE
+    db.flush()
+
+    criteres_par_type = {c.type_document: c for c in poste.criteres}
+    _reevaluer_candidature(db, candidature, criteres_par_type)
 
     db.commit()
     db.refresh(candidature)
@@ -322,13 +374,17 @@ def creer_contrat(
 @router.post("/contrats/{contrat_id}/signer", response_model=ContratOut)
 def signer_contrat(
     contrat_id: str,
-    payload: ContratSignerRequest,
+    signature_image: UploadFile = File(...),
     db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
     enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
 ) -> Contrat:
-    """Signature electronique SIMPLE (horodatage + hash du document), pas encore la
-    signature qualifiee prevue par l'utilisateur pour la V1 : aucun prestataire de
-    certification n'a ete choisi a ce jour (point ouvert, voir rapport final)."""
+    """Signature electronique SIMPLE (Art. 284-285 de la loi n. 2017-20 : admise, mais
+    preuve plus faible qu'une signature qualifiee en cas de litige devant un tribunal -
+    aucun prestataire de certification qualifiee n'a ete retenu). Concretement : un trace
+    dessine au doigt/stylet sur un canvas cote client, exporte en PNG, envoye ici et
+    stocke via LuluFiles. L'horodatage + le hash du contrat au moment de la signature
+    forment la piste d'audit (voir ADR-004)."""
     contrat = db.get(Contrat, contrat_id)
     if contrat is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Contrat introuvable.")
@@ -336,15 +392,22 @@ def signer_contrat(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce contrat ne vous appartient pas.")
     if contrat.statut != StatutContrat.EN_ATTENTE_SIGNATURE:
         raise api_error(status.HTTP_409_CONFLICT, "deja_signe", "Ce contrat est deja signe.")
-    if payload.nom_tape.strip().lower() != f"{enseignant.prenom} {enseignant.nom}".strip().lower():
-        raise api_error(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            "nom_incorrect",
-            "Le nom tape ne correspond pas au titulaire du compte.",
+
+    contenu_image = signature_image.file.read()
+    if not contenu_image:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "signature_vide", "Aucun trace de signature recu.")
+    try:
+        signature_image_id = files_client.upload(
+            contenu_image, signature_image.filename or "signature.png", signature_image.content_type or "image/png"
         )
+    except FileStorageError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker la signature, veuillez reessayer."
+        ) from exc
 
     contrat.signature_horodatage = datetime.now(timezone.utc)
     contrat.signature_hash_document = hashlib.sha256(contrat.syllabus.encode("utf-8")).hexdigest()
+    contrat.signature_image_lulufiles_id = signature_image_id
     contrat.statut = StatutContrat.SIGNE
     db.commit()
     db.refresh(contrat)
