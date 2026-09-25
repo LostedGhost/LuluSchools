@@ -257,3 +257,208 @@ export interface DemandeActeOut {
   paiement_confirme: boolean;
   motif_rejet: string | null;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 2/3 — UC-11/12 : tickets transport et cantine
+   ═══════════════════════════════════════════════════════════════ */
+
+export type StatutTicket = "achete" | "valide" | "expire" | "rembourse";
+export type ServiceControle = "transport" | "cantine" | "evenement";
+
+export interface LigneTransportOut {
+  id: string;
+  etablissement_id: string;
+  nom: string;
+  prix: number;
+  capacite_par_trajet: number;
+}
+
+export interface TicketTransportOut {
+  id: string;
+  ligne_id: string;
+  utilisateur_id: string;
+  date_trajet: string;
+  statut: StatutTicket;
+  prix_paye: number;
+  paiement_confirme: boolean;
+}
+
+export interface TypeRepasCantineOut {
+  id: string;
+  etablissement_id: string;
+  nom: string;
+  prix: number;
+  capacite_par_jour: number;
+}
+
+export interface TicketCantineOut {
+  id: string;
+  type_repas_id: string;
+  utilisateur_id: string;
+  date_service: string;
+  statut: StatutTicket;
+  prix_paye: number;
+  paiement_confirme: boolean;
+}
+
+export interface DesignationControleurOut {
+  id: string;
+  etablissement_id: string;
+  utilisateur_id: string;
+  service: ServiceControle;
+  evenement_id: string | null;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 2/3 — UC-17 : billetterie d'événements
+   ═══════════════════════════════════════════════════════════════ */
+
+export type StatutEvenement = "ouvert" | "annule";
+export type StatutBillet = "achete" | "valide" | "expire" | "rembourse";
+
+export interface EvenementOut {
+  id: string;
+  etablissement_id: string;
+  titre: string;
+  description: string;
+  lieu: string;
+  date_heure: string;
+  capacite_max: number;
+  prix_billet: number;
+  statut: StatutEvenement;
+  parrain_utilisateur_id: string | null;
+}
+
+export interface BilletEvenementOut {
+  id: string;
+  evenement_id: string;
+  utilisateur_id: string;
+  statut: StatutBillet;
+  prix_paye: number;
+  paiement_confirme: boolean;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 2/3 — UC-13 : messagerie
+   ═══════════════════════════════════════════════════════════════ */
+
+export type TypeConversation = "dm" | "groupe_classe";
+
+export interface ConversationOut {
+  id: string;
+  type: TypeConversation;
+  classe_id: string | null;
+  created_at: string;
+}
+
+export interface MessageOut {
+  id: string;
+  conversation_id: string;
+  auteur_id: string;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SignalementOut {
+  id: string;
+  message_id: string;
+  signale_par_id: string;
+  traite: boolean;
+  decision: string | null;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 2/3 — UC-14 : assistant El Professor
+   ═══════════════════════════════════════════════════════════════ */
+
+export type RoleMessageElProfessor = "eleve" | "assistant";
+
+export interface MessageElProfessorOut {
+  id: string;
+  session_id: string;
+  role: RoleMessageElProfessor;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SessionElProfessorOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  cours_id: string;
+  messages: MessageElProfessorOut[];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 2/3 — UC-16 : cours en direct
+   ═══════════════════════════════════════════════════════════════ */
+
+export type StatutSessionLive = "planifiee" | "en_cours" | "terminee";
+
+export interface SessionLiveOut {
+  id: string;
+  classe_id: string;
+  enseignant_id: string;
+  date_heure: string;
+  statut: StatutSessionLive;
+}
+
+export interface SessionLiveDemarreeOut extends SessionLiveOut {
+  token_connexion: string;
+}
+
+export interface ConsentementCameraLiveOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  date_consentement: string;
+}
+
+export interface ParticipationLiveOut {
+  id: string;
+  session_id: string;
+  eleve_utilisateur_id: string;
+  camera_autorisee: boolean;
+  token_connexion: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 2/3 — UC-18 : micro-jobs et séquestre
+   ═══════════════════════════════════════════════════════════════ */
+
+export type StatutOffreMicroJob = "ouverte" | "fermee";
+export type StatutMissionMicroJob =
+  | "en_cours"
+  | "terminee_declaree"
+  | "validee"
+  | "contestee"
+  | "remboursee"
+  | "payee";
+export type StatutContestationMicroJob = "en_attente" | "acceptee" | "rejetee";
+
+export interface OffreMicroJobOut {
+  id: string;
+  prestataire_id: string;
+  titre: string;
+  description: string;
+  prix: number;
+  statut: StatutOffreMicroJob;
+}
+
+export interface MissionMicroJobOut {
+  id: string;
+  offre_id: string;
+  client_id: string;
+  statut: StatutMissionMicroJob;
+  prix_paye: number;
+  paiement_confirme: boolean;
+  date_declaration_fin: string | null;
+  date_limite_validation: string | null;
+  reference_paiement_prestataire: string | null;
+}
+
+export interface ContestationMicroJobOut {
+  id: string;
+  mission_id: string;
+  motif: string;
+  statut: StatutContestationMicroJob;
+  decision_motif: string | null;
+}

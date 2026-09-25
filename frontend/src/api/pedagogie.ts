@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { CoursOut, LienFichierOut, QuizOut, TentativeQuizOut } from "../types/api";
+import type { CoursOut, LienFichierOut, QuizOut, SessionElProfessorOut, TentativeQuizOut } from "../types/api";
 
 export function listerCours(classeId: string) {
   return api.get<CoursOut[]>(`/classes/${classeId}/cours`);
@@ -49,4 +49,18 @@ export function creerQuiz(coursId: string, seuilReussite: number, nombreQuestion
     seuil_reussite: seuilReussite,
     nombre_questions: nombreQuestions,
   });
+}
+
+// --- Assistant El Professor (UC-14) ---
+
+export function ouvrirSessionElProfessor(coursId: string) {
+  return api.post<SessionElProfessorOut>(`/cours/${coursId}/el-professor/session`);
+}
+
+export function obtenirSessionElProfessor(coursId: string) {
+  return api.get<SessionElProfessorOut>(`/cours/${coursId}/el-professor/session`);
+}
+
+export function poserQuestionElProfessor(sessionId: string, question: string) {
+  return api.post<SessionElProfessorOut>(`/el-professor/sessions/${sessionId}/messages`, { question });
 }
