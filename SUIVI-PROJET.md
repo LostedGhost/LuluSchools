@@ -18,6 +18,19 @@ Copier ce fichier au démarrage du projet et cocher au fur et à mesure des vali
 - Paiement / séquestre : Kkiapay (agrégateur mobile money/carte).
 - Phasage MVP : Phase 1 (socle identité/inscriptions/contrats/cours/devoirs/moyennes) → Phase 2 (réclamations/actes payants/tickets/messagerie/**agent IA "El Professor"** — assistant pédagogique conversationnel qui explique les cours à l'élève et oriente chaque acteur selon son profil, idée de l'utilisateur, volontairement hors périmètre Phase 1 pour ne pas retarder la finalisation du MVP) → Phase 3 (vidéo/live/billetterie/micro-jobs+séquestre/3D).
 
+## Phases 2 et 3 — pipeline redémarré à l'étape 1
+
+Le backend Phase 1 (UC-01 à UC-10) est complet et testé (75 tests). L'utilisateur a demandé de finaliser le backend sur l'intégralité de sa vision du projet, toutes phases confondues — ce qui rouvre le pipeline `lucio-dev` à l'étape 1 pour les Phases 2 et 3, qui n'avaient jusqu'ici qu'une ligne de cadrage (`Phasage MVP` ci-dessous), aucun cas d'utilisation détaillé.
+
+- [~] **1. Cas d'utilisation (Phases 2 et 3)** — premier jet rédigé dans `docs/cas-utilisation-phase-2-3.md` (UC-11 à UC-19 : tickets transport/cantine, messagerie, assistant IA "El Professor", vidéo/podcast, cours en direct, billetterie, micro-jobs+séquestre, visites 3D/drone). **En attente de validation explicite** — 13 points ouverts listés en fin de document, dont 2 purement administratifs hors portée du logiciel (âge minimum micro-job, autorisation de vol drone) et plusieurs décisions produit à ton arbitrage.
+- [ ] **2. Diagrammes UML (Phases 2 et 3)** — non démarré, dépend de la validation de l'étape 1.
+- [ ] **3. Choix technique et contrat d'API (Phases 2 et 3)** — non démarré.
+- [ ] **4. Backend (Phases 2 et 3)** — non démarré.
+- [ ] **5. Validation complète du backend (Phases 2 et 3)** — non démarré.
+- [ ] **6. Frontend (Phases 2 et 3)** — non démarré.
+- [ ] **7. Intégration (Phases 2 et 3)** — non démarré.
+- [ ] **8. Déploiement (Phases 2 et 3)** — non démarré.
+
 ## Notes / écarts assumés
 
-- **Plan LuluFiles gratuit ("Lancement")** : 5 Go de transfert/mois et 2 Mo/s de bande passante partagés par tout le compte. Choix assumé par l'utilisateur pour la Phase 1 pilote ; passage à un plan payant prévu au besoin, à réévaluer avant la Phase 2/3 (voir `docs/adr/ADR-003-stockage-fichiers-lulufiles.md`).
+- **Plan LuluFiles gratuit ("Lancement")** : 5 Go de transfert/mois et 2 Mo/s de bande passante partagés par tout le compte. Choix assumé par l'utilisateur pour la Phase 1 pilote ; passage à un plan payant prévu au besoin, à réévaluer avant la Phase 2/3 (voir `docs/adr/ADR-003-stockage-fichiers-lulufiles.md`) — redevient un point bloquant concret dès UC-15 (vidéo pédagogique), voir `docs/cas-utilisation-phase-2-3.md`.
