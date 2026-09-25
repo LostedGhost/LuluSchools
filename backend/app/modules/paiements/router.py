@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.deps import api_error
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe
 from app.modules.billetterie.models import BilletEvenement, StatutBillet
+from app.modules.micro_jobs.models import MissionMicroJob, StatutMissionMicroJob
 from app.modules.paiements.schemas import KkiapayWebhookPayload
 from app.modules.services_scolaires.models import StatutTicket, TicketCantine, TicketTransport
 
@@ -59,6 +60,21 @@ def _confirmer_billet_evenement(db: Session, transaction_id: str) -> bool:
     return True
 
 
+def _confirmer_mission_micro_job(db: Session, transaction_id: str) -> bool:
+    mission = (
+        db.query(MissionMicroJob).filter(MissionMicroJob.kkiapay_transaction_id == transaction_id).first()
+    )
+    if (
+        mission is None
+        or mission.statut != StatutMissionMicroJob.EN_COURS
+        or mission.paiement_confirme
+    ):
+        return False
+    mission.paiement_confirme = True
+    db.commit()
+    return True
+
+
 @router.post("/paiements/webhook/kkiapay", include_in_schema=False)
 def webhook_kkiapay(
     payload: KkiapayWebhookPayload,
@@ -81,6 +97,7 @@ def webhook_kkiapay(
             or _confirmer_ticket_transport(db, payload.transactionId)
             or _confirmer_ticket_cantine(db, payload.transactionId)
             or _confirmer_billet_evenement(db, payload.transactionId)
+            or _confirmer_mission_micro_job(db, payload.transactionId)
         )
 
     return {"ok": True}
