@@ -309,6 +309,18 @@ def lister_soumissions_a_revoir(
     )
 
 
+@router.get("/referentiels-coefficients", response_model=list[ReferentielOut])
+def lister_referentiels(
+    db: Session = Depends(get_db),
+    _utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ADMIN_MINISTERIEL, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+    ),
+) -> list[ReferentielCoefficient]:
+    """Sans cette liste, ni le ministere ni un A+ ne peuvent decouvrir les referentiels
+    existants ou les propositions en attente sans deja en connaitre les id (UC-09)."""
+    return db.query(ReferentielCoefficient).order_by(ReferentielCoefficient.created_at.desc()).all()
+
+
 @router.post(
     "/referentiels-coefficients", response_model=ReferentielOut, status_code=status.HTTP_201_CREATED
 )

@@ -23,6 +23,33 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/eleve/actes", label: "Actes academiques" },
     ];
   }
+  if (role === "enseignant") {
+    return [
+      { to: "/enseignant", label: "Tableau de bord" },
+      { to: "/enseignant/postes", label: "Postes ouverts" },
+      { to: "/enseignant/candidatures", label: "Mes candidatures" },
+      { to: "/enseignant/contrats", label: "Mes contrats" },
+      { to: "/enseignant/cours", label: "Mes cours" },
+      { to: "/enseignant/devoirs", label: "Mes devoirs" },
+    ];
+  }
+  if (role === "admin_etablissement") {
+    return [
+      { to: "/admin-etablissement", label: "Tableau de bord" },
+      { to: "/admin-etablissement/inscriptions", label: "Inscriptions" },
+      { to: "/admin-etablissement/classes", label: "Classes" },
+      { to: "/admin-etablissement/postes", label: "Recrutement" },
+      { to: "/admin-etablissement/contestations", label: "Contestations" },
+      { to: "/admin-etablissement/actes", label: "Actes academiques" },
+    ];
+  }
+  if (role === "admin_ministeriel") {
+    return [
+      { to: "/admin-ministeriel", label: "Tableau de bord" },
+      { to: "/admin-ministeriel/etablissements", label: "Etablissements" },
+      { to: "/admin-ministeriel/referentiels", label: "Referentiels" },
+    ];
+  }
   return [];
 }
 

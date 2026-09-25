@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { creerCompteTuteur, verifierOtpTuteur } from "../api/auth";
+import { creerCompteEnseignant, creerCompteTuteur, verifierOtpEnseignant, verifierOtpTuteur } from "../api/auth";
 import { messageErreur } from "../api/client";
 import { Card, ErrorBanner, Field, PageTitle, PrimaryButton, TextInput } from "../components/ui";
 
-export function SignupTuteurPage() {
+export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
   const navigate = useNavigate();
   const [etape, setEtape] = useState<"formulaire" | "otp">("formulaire");
   const [nom, setNom] = useState("");
@@ -15,12 +15,16 @@ export function SignupTuteurPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
 
+  const creerCompte = role === "tuteur" ? creerCompteTuteur : creerCompteEnseignant;
+  const verifierOtp = role === "tuteur" ? verifierOtpTuteur : verifierOtpEnseignant;
+  const titre = role === "tuteur" ? "Creer un compte tuteur" : "Creer un compte enseignant";
+
   const soumettreInscription = async (e: FormEvent) => {
     e.preventDefault();
     setErreur(null);
     setEnCours(true);
     try {
-      await creerCompteTuteur({ nom, prenom, email, mot_de_passe: motDePasse });
+      await creerCompte({ nom, prenom, email, mot_de_passe: motDePasse });
       setEtape("otp");
     } catch (err) {
       setErreur(messageErreur(err, "Impossible de creer le compte."));
@@ -34,7 +38,7 @@ export function SignupTuteurPage() {
     setErreur(null);
     setEnCours(true);
     try {
-      await verifierOtpTuteur(email, code);
+      await verifierOtp(email, code);
       navigate("/connexion", { replace: true });
     } catch (err) {
       setErreur(messageErreur(err, "Code invalide."));
@@ -48,7 +52,7 @@ export function SignupTuteurPage() {
       <Card>
         {etape === "formulaire" ? (
           <>
-            <PageTitle>Creer un compte tuteur</PageTitle>
+            <PageTitle>{titre}</PageTitle>
             <form onSubmit={soumettreInscription} className="space-y-4">
               <Field label="Nom">
                 <TextInput value={nom} onChange={(e) => setNom(e.target.value)} required />

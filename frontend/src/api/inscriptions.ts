@@ -25,3 +25,15 @@ export function mesInscriptions() {
 export function monProfilEleve() {
   return api.get<EleveMeOut>("/eleves/me");
 }
+
+export function inscriptionsAValider(etablissementId: string) {
+  return api.get<InscriptionAvecEleveOut[]>(`/etablissements/${etablissementId}/inscriptions-a-valider`);
+}
+
+export function validerInscription(inscriptionId: string) {
+  return api.post<InscriptionOut>(`/inscriptions/${inscriptionId}/valider`);
+}
+
+export function rejeterInscription(inscriptionId: string, motif: string) {
+  return api.post<InscriptionOut>(`/inscriptions/${inscriptionId}/rejeter`, { motif });
+}

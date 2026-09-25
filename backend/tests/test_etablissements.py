@@ -85,6 +85,10 @@ def test_admin_etablissement_peut_creer_une_classe_dans_son_etablissement(
     assert response.status_code == 201
     assert response.json()["etablissement_id"] == etablissement["id"]
 
+    mon_etab = client.get("/api/v1/etablissements/mon-etablissement", headers=headers)
+    assert mon_etab.status_code == 200
+    assert mon_etab.json()["id"] == etablissement["id"]
+
 
 def test_admin_etablissement_ne_peut_pas_creer_une_classe_ailleurs(
     client, fake_email_client, admin_ministeriel_headers

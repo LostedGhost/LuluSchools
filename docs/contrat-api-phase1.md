@@ -36,6 +36,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 |---|---|---|---|---|
 | POST | `/etablissements` | A++ | — | Création d'un établissement (EP/ES/UP), attribue le code établissement (`EP01`, `ES01`, `UP01`…) ; crée aussi le premier compte A+ (mot de passe temporaire envoyé par e-mail, changement obligatoire à la première connexion). Le tout premier compte A++ n'a pas d'endpoint : il est provisionné une fois via `backend/scripts/seed_admin_ministeriel.py`, exécuté directement sur le serveur. |
 | GET | `/etablissements` / `/etablissements/{id}` | tout utilisateur authentifié | — | Lecture |
+| GET | `/etablissements/mon-etablissement` | A+ | — | L'établissement administré par l'A+ courant (non déductible de `GET /me`) |
 | POST | `/etablissements/{id}/classes` | A+ | UC-02, UC-03 | Définit niveau, capacité, politique de dépassement |
 | GET | `/etablissements/{id}/classes` | tout utilisateur authentifié | — | Lecture |
 
@@ -59,6 +60,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | GET | `/etablissements/{id}/postes` | tout utilisateur authentifié | UC-04 | Liste les postes de l'établissement (découverte pour un enseignant candidat) |
 | POST | `/etablissements/{id}/postes` | A+ | UC-04 | Définit les critères par type de document (coefficient, seuil minimal) |
 | GET | `/postes/{id}` | tout utilisateur authentifié | UC-04 | Lecture |
+| GET | `/postes/{id}/candidatures` | A+ de l'établissement du poste | UC-04, UC-05 | Toutes les candidatures du poste — nécessaire pour que l'A+ puisse créer un contrat (`POST /candidatures/{id}/contrat`) sans déjà connaître l'id de la candidature |
 | GET | `/mes-candidatures` | Enseignant | UC-04 | Historique des candidatures de l'enseignant courant |
 | GET | `/mes-contrats` | Enseignant | UC-05 | Contrats de l'enseignant courant (statut, échéance) |
 | GET | `/etablissements/{id}/contestations-en-attente` | A+ | UC-04b | Contestations `en_attente` de décision pour l'établissement |
@@ -97,6 +99,7 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 | POST | `/soumissions/{id}/corriger` | Enseignant propriétaire du devoir | UC-08 | `reponses: [{question_id, points_obtenus}, ...]` — sert de filet de secours (échec IA) et de surcharge possible d'une correction déjà faite |
 | GET | `/eleves/{id}/bulletins?classe_id=&periode=` | Élève, Tuteur, Enseignant rattaché, A+ | UC-09 | Calcule et enregistre la **moyenne pondérée** : chaque devoir est normalisé sur 100 puis pondéré par le coefficient (niveau, matière) du référentiel validé en vigueur (défaut 1.0 si aucun référentiel ne couvre la matière). Un devoir compte dès qu'il est corrigé, même avant son échéance formelle ; sans soumission, il ne compte comme 0 qu'une fois l'échéance passée |
 | POST | `/bulletins/{id}/valider-passage` | Enseignant | UC-09 | Décision lourde (passage/redoublement/diplôme) toujours humaine, jamais déduite du seul calcul |
+| GET | `/referentiels-coefficients` | A++, A+ | UC-09 | Liste tous les référentiels (dont les propositions en attente) — sans elle, aucune gouvernance possible sans déjà connaître les id |
 | POST | `/referentiels-coefficients` | A++ | UC-09 | Référentiel national, `statut=valide` directement |
 | POST | `/referentiels-coefficients/{id}/proposition` | A+ | UC-09 | Crée une proposition (`statut=proposition_en_attente`) liée au référentiel visé |
 | POST | `/referentiels-coefficients/{id}/valider` | A++ | UC-09 | Seule action qui rend une proposition effective ; remplace l'ancien référentiel |

@@ -190,6 +190,10 @@ def test_gouvernance_referentiel_coefficient(client, admin_ministeriel_headers, 
     assert referentiel.status_code == 201
     referentiel_id = referentiel.json()["id"]
 
+    liste = client.get("/api/v1/referentiels-coefficients", headers=etablissement_avec_classe["admin_headers"])
+    assert liste.status_code == 200
+    assert any(r["id"] == referentiel_id for r in liste.json())
+
     proposition_refusee = client.post(
         f"/api/v1/referentiels-coefficients/{referentiel_id}/proposition",
         json={"coefficient": 3},

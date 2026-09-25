@@ -41,7 +41,7 @@ export interface TuteurOut {
 
 export type TypeEtablissement = "EP" | "ES" | "UP";
 export type StatutEtablissement = "public" | "prive";
-export type PolitiqueDepassement = "ordre_arrivee" | "notes_concours" | "tirage_au_sort";
+export type PolitiqueDepassement = "ordre_arrivee" | "notes_concours" | "tirage_sort";
 
 export interface EtablissementOut {
   id: string;
@@ -166,6 +166,64 @@ export interface BulletinOut {
   moyenne_generale: number;
   decision_passage: string | null;
   valide_par_conseil: boolean;
+}
+
+export type StatutPoste = "ouvert" | "pourvu" | "non_pourvu";
+
+export interface CritereDocument {
+  type_document: string;
+  coefficient: number;
+  seuil_minimal: number;
+}
+
+export interface PosteOut {
+  id: string;
+  etablissement_id: string;
+  titre: string;
+  statut: StatutPoste;
+  criteres: CritereDocument[];
+}
+
+export type StatutDocumentCandidature = "en_attente" | "note" | "echec_notation";
+
+export interface DocumentCandidatureOut {
+  id: string;
+  type_document: string;
+  note_ia: number | null;
+  statut: StatutDocumentCandidature;
+}
+
+export type StatutCandidature = "en_evaluation" | "retenue" | "rejetee";
+
+export interface CandidatureOut {
+  id: string;
+  poste_id: string;
+  statut: StatutCandidature;
+  score: number | null;
+  documents: DocumentCandidatureOut[];
+}
+
+export type StatutContestation = "en_attente" | "acceptee" | "rejetee";
+
+export interface ContestationOut {
+  id: string;
+  candidature_id: string;
+  motif: string;
+  statut: StatutContestation;
+  motif_decision: string | null;
+}
+
+export type StatutContrat = "en_attente_signature" | "signe";
+
+export interface ContratOut {
+  id: string;
+  candidature_id: string;
+  etablissement_id: string;
+  syllabus: string;
+  date_fin: string;
+  statut: StatutContrat;
+  signature_horodatage: string | null;
+  signature_image_lulufiles_id: string | null;
 }
 
 export interface TypeActeOut {

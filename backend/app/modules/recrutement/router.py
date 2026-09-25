@@ -150,6 +150,21 @@ def contestations_en_attente(
     )
 
 
+@router.get("/postes/{poste_id}/candidatures", response_model=list[CandidatureOut])
+def lister_candidatures_du_poste(
+    poste_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> list[Candidature]:
+    """Sans cette liste, l'A+ n'a aucun moyen de retrouver les candidatures d'un poste
+    pour decider d'un contrat (UC-04, UC-05) sans deja en connaitre les id."""
+    poste = db.get(Poste, poste_id)
+    if poste is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Poste introuvable.")
+    _verifier_admin_de_l_etablissement(db, admin, poste.etablissement_id)
+    return db.query(Candidature).filter(Candidature.poste_id == poste_id).all()
+
+
 @router.post(
     "/postes/{poste_id}/candidatures", response_model=CandidatureOut, status_code=status.HTTP_201_CREATED
 )

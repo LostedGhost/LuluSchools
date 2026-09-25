@@ -89,6 +89,21 @@ def lister_etablissements(
     return db.query(Etablissement).all()
 
 
+@router.get("/mon-etablissement", response_model=EtablissementOut)
+def mon_etablissement(
+    db: Session = Depends(get_db), admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT))
+) -> Etablissement:
+    """Point d'entree du frontend A+ : sans lui, un admin d'etablissement n'a aucun moyen
+    de savoir quel etablissement il administre (pas expose sur MeOut)."""
+    lien = db.get(AdminEtablissement, admin.id)
+    if lien is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucun etablissement rattache a ce compte.")
+    etablissement = db.get(Etablissement, lien.etablissement_id)
+    if etablissement is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    return etablissement
+
+
 @router.get("/{etablissement_id}", response_model=EtablissementOut)
 def obtenir_etablissement(
     etablissement_id: str,

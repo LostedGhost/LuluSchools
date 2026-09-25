@@ -30,3 +30,25 @@ export function amorcerPaiement(demandeId: string, transactionId: string) {
 export function obtenirDemandeActe(demandeId: string) {
   return api.get<DemandeActeOut>(`/demandes-actes/${demandeId}`);
 }
+
+export function demandesActesEtablissement(etablissementId: string) {
+  return api.get<DemandeActeOut[]>(`/etablissements/${etablissementId}/demandes-actes`);
+}
+
+export function traiterDemandeActe(demandeId: string, decision: "acceptee" | "rejetee", motifRejet?: string) {
+  return api.post<DemandeActeOut>(`/demandes-actes/${demandeId}/traiter`, {
+    decision,
+    motif_rejet: motifRejet,
+  });
+}
+
+export interface TypeActePayload {
+  nom: string;
+  prix: number;
+  pieces_requises: string;
+  condition_eligibilite?: string;
+}
+
+export function creerTypeActe(etablissementId: string, payload: TypeActePayload) {
+  return api.post<TypeActeOut>(`/etablissements/${etablissementId}/types-actes`, payload);
+}

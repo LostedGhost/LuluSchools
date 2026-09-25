@@ -164,6 +164,7 @@ def test_contrat_puis_signature(client, fake_llm_client, enseignant_headers, eta
     )
     assert contrat.status_code == 201
     contrat_id = contrat.json()["id"]
+    assert contrat.json()["etablissement_id"] == etablissement_avec_classe["etablissement"]["id"]
 
     signature_vide = client.post(
         f"/api/v1/contrats/{contrat_id}/signer",
@@ -273,6 +274,12 @@ def test_lister_postes_mes_candidatures_et_mes_contrats(
     )
     assert postes.status_code == 200
     assert any(p["id"] == poste["id"] for p in postes.json())
+
+    candidatures_du_poste = client.get(
+        f"/api/v1/postes/{poste['id']}/candidatures", headers=etablissement_avec_classe["admin_headers"]
+    )
+    assert candidatures_du_poste.status_code == 200
+    assert any(c["id"] == candidature["id"] for c in candidatures_du_poste.json())
 
     mes_candidatures = client.get("/api/v1/mes-candidatures", headers=enseignant_headers)
     assert mes_candidatures.status_code == 200

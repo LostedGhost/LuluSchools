@@ -59,9 +59,13 @@ export function LoginPage() {
           </PrimaryButton>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
-          Pas encore de compte tuteur ?{" "}
+          Pas encore de compte ?{" "}
           <Link to="/inscription-tuteur" className="text-indigo-600 hover:underline">
-            Creer un compte
+            Tuteur
+          </Link>{" "}
+          ·{" "}
+          <Link to="/inscription-enseignant" className="text-indigo-600 hover:underline">
+            Enseignant
           </Link>
         </p>
       </Card>

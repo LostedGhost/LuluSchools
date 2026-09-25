@@ -17,6 +17,14 @@ export function verifierOtpTuteur(email: string, code: string) {
   return api.post("/auth/tuteurs/verify-otp", { email, code });
 }
 
+export function creerCompteEnseignant(payload: InscriptionTuteurPayload) {
+  return api.post<TuteurOut>("/auth/enseignants", payload);
+}
+
+export function verifierOtpEnseignant(email: string, code: string) {
+  return api.post("/auth/enseignants/verify-otp", { email, code });
+}
+
 export function connexion(identifiant: string, mot_de_passe: string) {
   return api.post<TokenPair>("/auth/login", { identifiant, mot_de_passe });
 }

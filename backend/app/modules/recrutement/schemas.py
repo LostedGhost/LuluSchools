@@ -99,6 +99,7 @@ class ContratOut(BaseModel):
 
     id: str
     candidature_id: str
+    etablissement_id: str
     syllabus: str
     date_fin: date
     statut: StatutContrat
