@@ -48,6 +48,7 @@ class PosteOut(BaseModel):
 class DocumentCandidatureOut(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
+    id: str
     type_document: str
     note_ia: float | None
     statut: StatutDocument

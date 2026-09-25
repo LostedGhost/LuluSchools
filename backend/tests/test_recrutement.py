@@ -96,6 +96,16 @@ def test_candidature_avec_echec_notation_reste_en_evaluation_sans_score(
     document_cv = next(d for d in body["documents"] if d["type_document"] == "cv")
     assert document_cv["statut"] == "echec_notation"
 
+    # Le document doit exposer son id : sans lui, l'ecran de revision manuelle
+    # (POST /documents-candidature/{id}/noter-manuellement) est inutilisable.
+    revision = client.post(
+        f"/api/v1/documents-candidature/{document_cv['id']}/noter-manuellement",
+        json={"note": 90},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    assert revision.status_code == 200
+    assert revision.json()["score"] is not None
+
 
 def test_documents_ne_correspondant_pas_aux_criteres_est_refuse(
     client, enseignant_headers, etablissement_avec_classe
