@@ -91,7 +91,7 @@ Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** 
 - Compte provisionné (élève, admin établissement) = mot de passe temporaire envoyé par e-mail + `mot_de_passe_temporaire=True`.
 
 ## État d'avancement / zones instables
-Tous les modules de la Phase 1 (UC-01 à UC-10) sont faits, testés unitairement ET validés de bout en bout (68 tests, dont `test_e2e_parcours_complet.py` qui rejoue tout le parcours réel) : `/health`, identité, établissements/classes, inscriptions, recrutement/contrats (avec reconduction et écran de révision manuelle), pédagogie (quiz généré par IA), évaluations (formulaires corrigés par IA, moyenne pondérée), actes académiques (avec webhook Kkiapay). Le mot de passe temporaire est désormais réellement appliqué côté serveur (bloque l'écriture tant qu'il n'est pas changé).
+Tous les modules de la Phase 1 (UC-01 à UC-10) sont faits, testés unitairement ET validés de bout en bout (75 tests, dont `test_e2e_parcours_complet.py` qui rejoue tout le parcours réel) : `/health`, identité, établissements/classes, inscriptions, recrutement/contrats (avec reconduction et écran de révision manuelle), pédagogie (quiz généré par IA), évaluations (formulaires corrigés par IA, moyenne pondérée), actes académiques (avec webhook Kkiapay). Le mot de passe temporaire est désormais réellement appliqué côté serveur (`get_current_active_user` dans `app/core/deps.py` bloque toute requête avec 403 tant qu'il n'est pas changé, sauf `/me` et `/auth/change-password`).
 
 **Bug réel trouvé et corrigé par le test de bout en bout** : `CASIER_JUDICIAIRE_STORAGE_PATH` avec un chemin absolu style Linux (`/var/lib/...`) était mal interprété par `pathlib` sous Windows — créait les fichiers sous la racine du lecteur courant (`D:\var\lib\...`) au lieu d'échouer ou d'utiliser le bon chemin. Corrigé en local (`.env` pointe désormais vers un chemin Windows explicite) ; `.env.example` documente le piège pour la prochaine personne qui développe sous Windows. Le chemin `/var/lib/...` reste correct pour un déploiement réel sur VPS Linux.
 
@@ -103,12 +103,8 @@ Tous les modules de la Phase 1 (UC-01 à UC-10) sont faits, testés unitairement
 - Inscriptions et demandes d'actes : le titulaire (l'élève, une fois son compte existant) peut désormais agir lui-même, en plus de son tuteur — plus seulement le tuteur.
 - Webhook Kkiapay : corrigé pour respecter leur mécanique réelle (vérifiée sur leur documentation) — une URL **unique pour tout le compte** (`POST /paiements/webhook/kkiapay`), pas une par demande, avec vérification de l'en-tête `x-kkiapay-secret`. Le rattachement transaction ↔ demande se fait via `POST /demandes-actes/{id}/paiement/amorcer` (appelé côté client juste après avoir obtenu un `transactionId` du widget Kkiapay).
 
-**Fragile** : `mot_de_passe_temporaire` n'est qu'un indicateur renvoyé par `/auth/login`, rien ne bloque encore côté serveur tant qu'il n'est pas changé.
-
 **Limitations assumées restantes, documentées dans le contrat d'API :**
-- Notation/correction FreeLLM synchrone dans la requête (pas de file d'attente/tâche de fond) — acceptable au volume Phase 1.
-- Contestation candidature comptée en jours calendaires plutôt qu'ouvrés.
 - `POST /inscriptions` par un élève (titulaire) suppose qu'il a déjà un compte (réinscription) — la toute première inscription reste réservée au tuteur.
 
 ## Dernière synchronisation
-2026-09-25 — mot de passe temporaire réellement appliqué, délai de contestation en jours ouvrés, test de bout en bout (étape 5 du pipeline) écrit et passant, bug de chemin Windows trouvé et corrigé.
+2026-09-25 — vérification complète du backend Phase 1 : 75 tests exécutés et passants, blocage serveur du mot de passe temporaire confirmé en lisant `app/core/deps.py`, carte corrigée (elle affichait encore 68 tests et le mot de passe temporaire comme non bloqué).
