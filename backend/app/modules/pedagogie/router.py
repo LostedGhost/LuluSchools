@@ -4,21 +4,34 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
-from app.core.llm import FreeLLMClient, QuizGenerationError, get_llm_client
+from app.core.llm import ElProfessorError, FreeLLMClient, QuizGenerationError, get_llm_client
 from app.modules.etablissements.models import Classe
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
-from app.modules.pedagogie.models import Cours, FormatCours, QuestionQuiz, Quiz, TentativeQuiz
+from app.modules.pedagogie.models import (
+    Cours,
+    FormatCours,
+    MessageElProfessor,
+    QuestionQuiz,
+    Quiz,
+    RoleMessageElProfessor,
+    SessionElProfessor,
+    TentativeQuiz,
+)
 from app.modules.pedagogie.schemas import (
     CoursOut,
+    QuestionElProfessorCreate,
     QuizCreate,
     QuizOut,
+    SessionElProfessorOut,
     TentativeQuizCreate,
     TentativeQuizOut,
 )
 from app.modules.recrutement.models import Contrat, StatutContrat
 
 MAX_TAILLE_COURS_OCTETS = 50 * 1024 * 1024
+MAX_TAILLE_COURS_VIDEO_OCTETS = 200 * 1024 * 1024  # UC-15 (Phase 3), delegue - la duree (15 min) n'est pas
+# verifiable cote serveur sans bibliotheque de parsing video, limitation assumee pour ce premier jet.
 
 router = APIRouter(tags=["pedagogie"])
 
@@ -79,9 +92,12 @@ def publier_cours(
     lulufiles_file_id = None
     if fichier is not None:
         contenu = fichier.file.read()
-        if len(contenu) > MAX_TAILLE_COURS_OCTETS:
+        limite = MAX_TAILLE_COURS_VIDEO_OCTETS if format == FormatCours.VIDEO else MAX_TAILLE_COURS_OCTETS
+        if len(contenu) > limite:
             raise api_error(
-                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "fichier_trop_volumineux", "Fichier limite a 50 Mo."
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                "fichier_trop_volumineux",
+                f"Fichier limite a {limite // (1024 * 1024)} Mo.",
             )
         try:
             lulufiles_file_id = files_client.upload(
@@ -241,3 +257,88 @@ def lister_mes_tentatives(
         .order_by(TentativeQuiz.created_at.desc())
         .all()
     )
+
+
+@router.post(
+    "/cours/{cours_id}/el-professor/session", response_model=SessionElProfessorOut, status_code=status.HTTP_201_CREATED
+)
+def ouvrir_session_el_professor(
+    cours_id: str,
+    db: Session = Depends(get_db),
+    eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
+) -> SessionElProfessor:
+    """UC-14 : upsert, une seule session par (eleve, cours)."""
+    cours = db.get(Cours, cours_id)
+    if cours is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
+    _verifier_eleve_inscrit(db, eleve_utilisateur.id, cours.classe_id)
+
+    session = (
+        db.query(SessionElProfessor)
+        .filter(
+            SessionElProfessor.eleve_utilisateur_id == eleve_utilisateur.id,
+            SessionElProfessor.cours_id == cours_id,
+        )
+        .first()
+    )
+    if session is not None:
+        return session
+
+    session = SessionElProfessor(eleve_utilisateur_id=eleve_utilisateur.id, cours_id=cours_id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.get("/cours/{cours_id}/el-professor/session", response_model=SessionElProfessorOut)
+def obtenir_session_el_professor(
+    cours_id: str,
+    db: Session = Depends(get_db),
+    eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
+) -> SessionElProfessor:
+    session = (
+        db.query(SessionElProfessor)
+        .filter(
+            SessionElProfessor.eleve_utilisateur_id == eleve_utilisateur.id,
+            SessionElProfessor.cours_id == cours_id,
+        )
+        .first()
+    )
+    if session is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucune session El Professor pour ce cours.")
+    return session
+
+
+@router.post(
+    "/el-professor/sessions/{session_id}/messages",
+    response_model=SessionElProfessorOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def poser_question_el_professor(
+    session_id: str,
+    payload: QuestionElProfessorCreate,
+    db: Session = Depends(get_db),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
+    eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
+) -> SessionElProfessor:
+    session = db.get(SessionElProfessor, session_id)
+    if session is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Session introuvable.")
+    if session.eleve_utilisateur_id != eleve_utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette session ne vous appartient pas.")
+    cours = db.get(Cours, session.cours_id)
+
+    historique = [{"role": m.role.value, "contenu": m.contenu} for m in session.messages]
+    try:
+        reponse = llm_client.repondre_question_el_professor(cours.contenu_texte or "", historique, payload.question)
+    except ElProfessorError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une reponse, veuillez reessayer."
+        ) from exc
+
+    db.add(MessageElProfessor(session_id=session_id, role=RoleMessageElProfessor.ELEVE, contenu=payload.question))
+    db.add(MessageElProfessor(session_id=session_id, role=RoleMessageElProfessor.ASSISTANT, contenu=reponse))
+    db.commit()
+    db.refresh(session)
+    return session

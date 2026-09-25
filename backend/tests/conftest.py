@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db, get_session_factory
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
-from app.core.llm import CorrectionError, DocumentScoringError, QuizGenerationError, get_llm_client
+from app.core.llm import CorrectionError, DocumentScoringError, ElProfessorError, QuizGenerationError, get_llm_client
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -90,6 +90,8 @@ class FakeLLMClient:
         self.questions_en_echec_correction: set[str] = set()  # enonces qui echouent
         self.quiz_genere: list[dict] | None = None
         self.echec_generation_quiz = False
+        self.reponse_el_professor = "Voici l'explication demandee."
+        self.echec_el_professor = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -116,6 +118,11 @@ class FakeLLMClient:
             {"enonce": f"Question {i + 1}", "choix": ["A", "B", "C", "D"], "reponse_correcte_index": 0}
             for i in range(nombre_questions)
         ]
+
+    def repondre_question_el_professor(self, contenu_cours: str, historique: list[dict], question: str) -> str:
+        if self.echec_el_professor:
+            raise ElProfessorError("echec simule")
+        return self.reponse_el_professor
 
 
 @pytest.fixture()

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -20,6 +20,7 @@ class FormatCours(str, enum.Enum):
     TEXTE = "texte"
     PDF = "pdf"
     AUDIO = "audio"
+    VIDEO = "video"  # UC-15 (Phase 3) : meme circuit qu'un cours audio/pdf, taille/duree limitees a l'upload
 
 
 class Cours(Base):
@@ -74,3 +75,37 @@ class TentativeQuiz(Base):
     score: Mapped[float] = mapped_column(Float)
     reussie: Mapped[bool] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class RoleMessageElProfessor(str, enum.Enum):
+    ELEVE = "eleve"
+    ASSISTANT = "assistant"
+
+
+class SessionElProfessor(Base):
+    """UC-14 : une session par (eleve, cours) - upsert, reutilisee a chaque nouvelle
+    question pour garder l'historique de continuite pedagogique (delegue)."""
+
+    __tablename__ = "sessions_el_professor"
+    __table_args__ = (UniqueConstraint("eleve_utilisateur_id", "cours_id", name="uq_session_el_professor"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    eleve_utilisateur_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
+    cours_id: Mapped[str] = mapped_column(ForeignKey("cours.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    messages: Mapped[list["MessageElProfessor"]] = relationship(
+        back_populates="session", order_by="MessageElProfessor.created_at"
+    )
+
+
+class MessageElProfessor(Base):
+    __tablename__ = "messages_el_professor"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions_el_professor.id"), index=True)
+    role: Mapped[RoleMessageElProfessor] = mapped_column(Enum(RoleMessageElProfessor))
+    contenu: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    session: Mapped[SessionElProfessor] = relationship(back_populates="messages")

@@ -20,6 +20,10 @@ class QuizGenerationError(Exception):
     """Levee quand FreeLLM ne peut pas generer un quiz exploitable a partir d'un cours."""
 
 
+class ElProfessorError(Exception):
+    """Levee quand FreeLLM ne peut pas repondre a une question de l'assistant El Professor."""
+
+
 class FreeLLMClient:
     """Tous les appels LLM du projet passent par FreeLLM (ADR-002), jamais l'API Anthropic
     en direct. FreeLLM n'accepte que des images en vision : les PDF sont convertis en
@@ -132,6 +136,36 @@ class FreeLLMClient:
             raise QuizGenerationError("FreeLLM a renvoye un quiz vide.")
 
         return questions
+
+    def repondre_question_el_professor(
+        self, contenu_cours: str, historique: list[dict], question: str
+    ) -> str:
+        """UC-14 : assistant pedagogique conversationnel, portee V1 volontairement
+        etroite (delegue) - repond uniquement sur le contenu du cours, ne donne jamais
+        la reponse d'un devoir en cours (garde-fou de prompt, cf. UC-08)."""
+        consigne = (
+            "Tu es 'El Professor', un assistant pedagogique qui aide un eleve a comprendre le "
+            "contenu de son cours. Reponds uniquement a partir du contenu de cours fourni "
+            "ci-dessous. Si la question sort du sujet du cours, dis-le poliment plutot que "
+            "d'inventer une reponse. Tu ne donnes jamais la reponse toute faite d'un devoir ou "
+            "d'un exercice note : tu expliques la notion pour que l'eleve trouve lui-meme.\n\n"
+            f"Contenu du cours :\n{contenu_cours}"
+        )
+        messages = [{"role": "system", "content": consigne}]
+        for tour in historique:
+            role = "assistant" if tour["role"] == "assistant" else "user"
+            messages.append({"role": role, "content": tour["contenu"]})
+        messages.append({"role": "user", "content": question})
+
+        try:
+            response = self._client.chat.completions.create(model="auto", messages=messages)
+        except OpenAIError as exc:
+            raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        if not texte:
+            raise ElProfessorError("Reponse FreeLLM vide.")
+        return texte
 
 
 def get_llm_client() -> FreeLLMClient:
