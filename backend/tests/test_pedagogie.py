@@ -40,6 +40,11 @@ def test_eleve_non_inscrit_ne_peut_pas_lister_les_cours(
         "/api/v1/auth/login", json={"identifiant": "paul.zinsou@example.com", "mot_de_passe": mot_de_passe_temp}
     ).json()
     autre_admin_headers = {"Authorization": f"Bearer {login_autre_admin['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=autre_admin_headers,
+    )
     autre_classe = client.post(
         f"/api/v1/etablissements/{autre_etablissement['id']}/classes",
         json={"niveau": "CE1", "capacite": 30, "politique_depassement": "ordre_arrivee"},

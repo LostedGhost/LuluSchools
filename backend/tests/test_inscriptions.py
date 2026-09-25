@@ -231,6 +231,11 @@ def test_eleve_titulaire_peut_soumettre_sa_propre_reinscription(
         json={"identifiant": identifiants["login_id"], "mot_de_passe": identifiants["mot_de_passe"]},
     ).json()
     eleve_headers = {"Authorization": f"Bearer {login_eleve['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": identifiants["mot_de_passe"], "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=eleve_headers,
+    )
 
     # Nouvelle classe (celle de la fixture est deja a capacite max avec la premiere inscription).
     nouvelle_classe = client.post(

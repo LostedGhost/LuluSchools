@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import api_error, get_current_user, require_roles
+from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.security import generate_temporary_password, hash_password
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
@@ -120,7 +120,7 @@ def creer_classe(
     etablissement_id: str,
     payload: ClasseCreate,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(get_current_user),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> Classe:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")

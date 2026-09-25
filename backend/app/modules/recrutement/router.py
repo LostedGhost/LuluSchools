@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import api_error, get_current_user, require_roles
+from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import DocumentScoringError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
@@ -51,6 +51,17 @@ RECONDUCTION_FENETRE_JOURS = 30
 router = APIRouter(tags=["recrutement"])
 
 
+def _ajouter_jours_ouvres(date_depart: datetime, jours_ouvres: int) -> datetime:
+    """UC-04b exige un delai en jours OUVRES (lundi-vendredi), pas calendaires."""
+    resultat = date_depart
+    ajoutes = 0
+    while ajoutes < jours_ouvres:
+        resultat += timedelta(days=1)
+        if resultat.weekday() < 5:  # 0=lundi ... 6=dimanche
+            ajoutes += 1
+    return resultat
+
+
 def _verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
     if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
@@ -66,7 +77,7 @@ def creer_poste(
     etablissement_id: str,
     payload: PosteCreate,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(get_current_user),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> Poste:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
@@ -289,9 +300,8 @@ def contester_candidature(
         raise api_error(
             status.HTTP_409_CONFLICT, "candidature_non_rejetee", "Seule une candidature rejetee peut etre contestee."
         )
-    if datetime.now(timezone.utc) - candidature.created_at.replace(tzinfo=timezone.utc) > timedelta(
-        days=CONTESTATION_DELAI_JOURS
-    ):
+    limite = _ajouter_jours_ouvres(candidature.created_at.replace(tzinfo=timezone.utc), CONTESTATION_DELAI_JOURS)
+    if datetime.now(timezone.utc) > limite:
         raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de contestation est depasse.")
 
     contestation = Contestation(candidature_id=candidature_id, motif=payload.motif)

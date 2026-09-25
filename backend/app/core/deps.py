@@ -43,8 +43,22 @@ def get_current_user(
     return utilisateur
 
 
+def get_current_active_user(utilisateur: Utilisateur = Depends(get_current_user)) -> Utilisateur:
+    """Comme get_current_user, mais bloque un compte dont le mot de passe temporaire
+    (eleve/admin etablissement provisionnes) n'a pas encore ete change - sauf pour
+    /me et /auth/change-password, qui utilisent get_current_user directement pour
+    rester accessibles pendant ce changement obligatoire."""
+    if utilisateur.mot_de_passe_temporaire:
+        raise api_error(
+            status.HTTP_403_FORBIDDEN,
+            "changement_mot_de_passe_requis",
+            "Vous devez changer votre mot de passe temporaire avant de continuer (POST /auth/change-password).",
+        )
+    return utilisateur
+
+
 def require_roles(*roles: RoleUtilisateur):
-    def _dependency(utilisateur: Utilisateur = Depends(get_current_user)) -> Utilisateur:
+    def _dependency(utilisateur: Utilisateur = Depends(get_current_active_user)) -> Utilisateur:
         if utilisateur.role not in roles:
             raise api_error(
                 status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action."

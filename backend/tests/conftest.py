@@ -229,6 +229,12 @@ def etablissement_avec_classe(client, fake_email_client, admin_ministeriel_heade
         json={"identifiant": "fatou.kone.fixture@example.com", "mot_de_passe": mot_de_passe_temp},
     ).json()
     admin_headers = {"Authorization": f"Bearer {login_admin['access_token']}"}
+    # Le mot de passe temporaire doit etre change avant toute action d'ecriture (deps.get_current_active_user).
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=admin_headers,
+    )
 
     classe = client.post(
         f"/api/v1/etablissements/{etablissement['id']}/classes",
@@ -296,6 +302,11 @@ def classe_avec_enseignant_et_eleve(client, fake_email_client, fake_llm_client, 
         json={"identifiant": identifiants_eleve["login_id"], "mot_de_passe": identifiants_eleve["mot_de_passe"]},
     ).json()
     eleve_headers = {"Authorization": f"Bearer {login_eleve['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": identifiants_eleve["mot_de_passe"], "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=eleve_headers,
+    )
 
     return {
         "etablissement": etablissement_avec_classe["etablissement"],

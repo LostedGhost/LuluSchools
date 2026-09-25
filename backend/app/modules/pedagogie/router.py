@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import api_error, get_current_user, require_roles
+from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import FreeLLMClient, QuizGenerationError, get_llm_client
 from app.modules.etablissements.models import Classe
@@ -69,7 +69,7 @@ def publier_cours(
     fichier: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
-    enseignant: Utilisateur = Depends(get_current_user),
+    enseignant: Utilisateur = Depends(get_current_active_user),
 ) -> Cours:
     classe = db.get(Classe, classe_id)
     if classe is None:
@@ -122,7 +122,7 @@ def creer_quiz(
     payload: QuizCreate,
     db: Session = Depends(get_db),
     llm_client: FreeLLMClient = Depends(get_llm_client),
-    enseignant: Utilisateur = Depends(get_current_user),
+    enseignant: Utilisateur = Depends(get_current_active_user),
 ) -> Quiz:
     """UC-07 : les questions sont generees par le LLM a partir du contenu texte du cours."""
     cours = db.get(Cours, cours_id)

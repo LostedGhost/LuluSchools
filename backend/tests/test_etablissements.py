@@ -63,6 +63,20 @@ def test_admin_etablissement_peut_creer_une_classe_dans_son_etablissement(
     assert login["doit_changer_mot_de_passe"] is True
     headers = {"Authorization": f"Bearer {login['access_token']}"}
 
+    refus_avant_changement = client.post(
+        f"/api/v1/etablissements/{etablissement['id']}/classes",
+        json={"niveau": "CE1", "capacite": 30, "politique_depassement": "ordre_arrivee"},
+        headers=headers,
+    )
+    assert refus_avant_changement.status_code == 403
+    assert refus_avant_changement.json()["error"]["code"] == "changement_mot_de_passe_requis"
+
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=headers,
+    )
+
     response = client.post(
         f"/api/v1/etablissements/{etablissement['id']}/classes",
         json={"niveau": "CE1", "capacite": 30, "politique_depassement": "ordre_arrivee"},
