@@ -17,6 +17,7 @@ import {
   TextInput,
 } from "../../components/ui";
 import { Building2 } from "lucide-react";
+import { estRempli, estEmailValide } from "../../utils/validation";
 
 export function EtablissementsPage() {
   const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
@@ -31,6 +32,7 @@ export function EtablissementsPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [champErreurs, setChampErreurs] = useState<{ nom?: string; adminNom?: string; adminPrenom?: string; adminEmail?: string }>({});
 
   const charger = () => {
     setChargement(true);
@@ -46,6 +48,15 @@ export function EtablissementsPage() {
     e.preventDefault();
     setErreur(null);
     setSucces(null);
+
+    const erreurs: typeof champErreurs = {};
+    if (!estRempli(nom)) erreurs.nom = "Nom de l'établissement requis.";
+    if (!estRempli(adminNom)) erreurs.adminNom = "Nom de l'administrateur requis.";
+    if (!estRempli(adminPrenom)) erreurs.adminPrenom = "Prénom de l'administrateur requis.";
+    if (!estEmailValide(adminEmail)) erreurs.adminEmail = "Adresse e-mail invalide.";
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       await creerEtablissement({
@@ -86,10 +97,10 @@ export function EtablissementsPage() {
       {showForm && (
         <Card className="mb-8 anim-slide-up" style={{ borderColor: "var(--primary)", borderWidth: "2px" }}>
           <SectionHead title="Créer un établissement" desc="Provisionne aussi le premier compte A+, avec mot de passe temporaire envoyé par e-mail." />
-          <form onSubmit={soumettre} className="space-y-4" style={{ marginTop: "var(--space-4)" }}>
+          <form onSubmit={soumettre} noValidate className="space-y-4" style={{ marginTop: "var(--space-4)" }}>
             <div className="grid-3">
-              <Field label="Nom">
-                <TextInput value={nom} onChange={(e) => setNom(e.target.value)} required />
+              <Field label="Nom" error={champErreurs.nom}>
+                <TextInput value={nom} onChange={(e) => setNom(e.target.value)} />
               </Field>
               <Field label="Type">
                 <Select value={type} onChange={(e) => setType(e.target.value as TypeEtablissement)}>
@@ -107,14 +118,14 @@ export function EtablissementsPage() {
             </div>
             <p className="text-eyebrow">Administrateur de l'établissement</p>
             <div className="grid-3">
-              <Field label="Nom">
-                <TextInput value={adminNom} onChange={(e) => setAdminNom(e.target.value)} required />
+              <Field label="Nom" error={champErreurs.adminNom}>
+                <TextInput value={adminNom} onChange={(e) => setAdminNom(e.target.value)} />
               </Field>
-              <Field label="Prénom">
-                <TextInput value={adminPrenom} onChange={(e) => setAdminPrenom(e.target.value)} required />
+              <Field label="Prénom" error={champErreurs.adminPrenom}>
+                <TextInput value={adminPrenom} onChange={(e) => setAdminPrenom(e.target.value)} />
               </Field>
-              <Field label="E-mail">
-                <TextInput type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} required />
+              <Field label="E-mail" error={champErreurs.adminEmail}>
+                <TextInput type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
               </Field>
             </div>
             <Btn type="submit" variant="primary" loading={enCours}>

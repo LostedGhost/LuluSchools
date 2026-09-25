@@ -3,6 +3,7 @@ import { creerReferentiel, listerReferentiels, validerReferentiel, type Referent
 import { messageErreur } from "../../api/client";
 import { Badge, Btn, Card, EmptyState, ErrorBanner, Field, PageTitle, SectionHead, SkeletonCard, TextInput } from "../../components/ui";
 import { Scale } from "lucide-react";
+import { estRempli } from "../../utils/validation";
 
 const TONE_STATUT: Record<ReferentielOut["statut"], "success" | "pending" | "neutral"> = {
   valide: "success",
@@ -25,6 +26,7 @@ export function ReferentielsPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [validationEnCoursId, setValidationEnCoursId] = useState<string | null>(null);
+  const [champErreurs, setChampErreurs] = useState<{ niveau?: string; matiere?: string; coefficient?: string }>({});
 
   const charger = () => {
     setChargement(true);
@@ -39,6 +41,14 @@ export function ReferentielsPage() {
   const soumettre = async (e: FormEvent) => {
     e.preventDefault();
     setErreur(null);
+
+    const erreurs: typeof champErreurs = {};
+    if (!estRempli(niveau)) erreurs.niveau = "Niveau requis.";
+    if (!estRempli(matiere)) erreurs.matiere = "Matière requise.";
+    if (!Number.isFinite(coefficient) || coefficient <= 0) erreurs.coefficient = "Coefficient requis (supérieur à 0).";
+    setChampErreurs(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+
     setEnCours(true);
     try {
       await creerReferentiel(niveau, matiere, coefficient);
@@ -74,17 +84,18 @@ export function ReferentielsPage() {
 
       <Card className="mb-8" style={{ borderColor: "var(--primary)", borderWidth: "2px" }}>
         <SectionHead title="Fixer un référentiel national" desc="Coefficient par niveau et matière, applicable à tous les établissements." />
-        <form onSubmit={soumettre} style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
-          <Field label="Niveau">
-            <TextInput value={niveau} onChange={(e) => setNiveau(e.target.value)} placeholder="Ex. CE1" required />
+        <form onSubmit={soumettre} noValidate style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
+          <Field label="Niveau" error={champErreurs.niveau}>
+            <TextInput value={niveau} onChange={(e) => setNiveau(e.target.value)} placeholder="Ex. CE1" />
           </Field>
-          <Field label="Matière">
-            <TextInput value={matiere} onChange={(e) => setMatiere(e.target.value)} placeholder="Ex. Mathématiques" required />
+          <Field label="Matière" error={champErreurs.matiere}>
+            <TextInput value={matiere} onChange={(e) => setMatiere(e.target.value)} placeholder="Ex. Mathématiques" />
           </Field>
-          <Field label="Coefficient">
+          <Field label="Coefficient" error={champErreurs.coefficient}>
             <TextInput
               type="number"
               step="0.1"
+              min={0.1}
               value={coefficient}
               onChange={(e) => setCoefficient(Number(e.target.value))}
               style={{ width: "100px" }}
