@@ -16,7 +16,7 @@ Copier ce fichier au démarrage du projet et cocher au fur et à mesure des vali
 - Portage : mandat ministériel officiel (Bénin). A++ = acteur gouvernemental réel.
 - Zone V1 : Bénin — conformité suivie via le référentiel loi n° 2017-20 (skill `droit-numerique-benin`).
 - Paiement / séquestre : Kkiapay (agrégateur mobile money/carte).
-- Phasage MVP : Phase 1 (socle identité/inscriptions/contrats/cours/devoirs/moyennes) → Phase 2 (réclamations/actes payants/tickets/messagerie) → Phase 3 (vidéo/live/billetterie/micro-jobs+séquestre/3D).
+- Phasage MVP : Phase 1 (socle identité/inscriptions/contrats/cours/devoirs/moyennes) → Phase 2 (réclamations/actes payants/tickets/messagerie/**agent IA "El Professor"** — assistant pédagogique conversationnel qui explique les cours à l'élève et oriente chaque acteur selon son profil, idée de l'utilisateur, volontairement hors périmètre Phase 1 pour ne pas retarder la finalisation du MVP) → Phase 3 (vidéo/live/billetterie/micro-jobs+séquestre/3D).
 
 ## Notes / écarts assumés
 
