@@ -76,10 +76,3 @@ services:
       # JSON (le champ est une liste cote backend) : ["https://luluschools.vercel.app"]
       - key: CORS_ALLOW_ORIGINS
         value: '["https://luluschools.vercel.app"]'
-
-databases:
-  - name: luluschools-db
-    plan: free
-    region: frankfurt
-    databaseName: luluschools
-    user: luluschools
