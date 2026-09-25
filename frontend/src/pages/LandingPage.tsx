@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { FloatingXPBadge, ProgressCard3D, XPBar } from "../components/gamification";
 import { Tilt3D } from "../components/Tilt3D";
@@ -181,33 +181,38 @@ export function LandingPage() {
             }}
           >
             {[
-              { label: "Fonctionnalités", href: "#features" },
-              { label: "Rôles", href: "#roles" },
-            ].map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "var(--radius-pill)",
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  color: "var(--ink-soft)",
-                  transition: "background var(--dur-fast) ease, color var(--dur-fast) ease",
-                }}
-                onMouseEnter={(e) => {
+              { label: "Notre mission", href: "#features" },
+              { label: "Établissements", href: "/etablissements" },
+            ].map((item) => {
+              const navItemStyle = {
+                padding: "8px 16px",
+                borderRadius: "var(--radius-pill)",
+                fontSize: "var(--text-sm)",
+                fontWeight: 600,
+                textDecoration: "none",
+                color: "var(--ink-soft)",
+                transition: "background var(--dur-fast) ease, color var(--dur-fast) ease",
+              };
+              const hoverHandlers = {
+                onMouseEnter: (e: MouseEvent<HTMLElement>) => {
                   (e.target as HTMLElement).style.background = "var(--surface-2)";
                   (e.target as HTMLElement).style.color = "var(--ink)";
-                }}
-                onMouseLeave={(e) => {
+                },
+                onMouseLeave: (e: MouseEvent<HTMLElement>) => {
                   (e.target as HTMLElement).style.background = "transparent";
                   (e.target as HTMLElement).style.color = "var(--ink-soft)";
-                }}
-              >
-                {item.label}
-              </a>
-            ))}
+                },
+              };
+              return item.href.startsWith("#") ? (
+                <a key={item.href} href={item.href} style={navItemStyle} {...hoverHandlers}>
+                  {item.label}
+                </a>
+              ) : (
+                <Link key={item.href} to={item.href} style={navItemStyle} {...hoverHandlers}>
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* CTA nav */}
