@@ -143,22 +143,13 @@ export function LandingPage() {
         >
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                background: "var(--primary)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: "var(--font-brand)",
-                fontSize: "17px",
-                color: "var(--on-primary)",
-              }}
-            >
-              LS
-            </div>
+            <img
+              src="/logo.png"
+              alt="LuluSchools"
+              width={40}
+              height={40}
+              style={{ width: "40px", height: "40px", objectFit: "contain" }}
+            />
             <span
               style={{
                 fontFamily: "var(--font-brand)",

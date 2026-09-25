@@ -102,6 +102,7 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/admin-etablissement/postes", label: "Recrutement", icon: <Briefcase size={iconSize} /> },
       { to: "/admin-etablissement/contestations", label: "Contestations", icon: <Scale size={iconSize} /> },
       { to: "/admin-etablissement/actes", label: "Actes académiques", icon: <FileText size={iconSize} /> },
+      { to: "/admin-etablissement/referentiels", label: "Référentiels", icon: <Settings size={iconSize} /> },
     ];
   }
   if (role === "admin_ministeriel") {
@@ -121,27 +122,13 @@ function navPourRole(role: string | undefined): NavItem[] {
 function Wordmark({ collapsed }: { collapsed: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-      {/* Logo icon */}
-      <div
-        style={{
-          width: "36px",
-          height: "36px",
-          borderRadius: "50%",
-          background: "radial-gradient(circle at 32% 28%, #A9F0C6, var(--primary) 70%)",
-          border: "2.5px solid var(--border-strong)",
-          boxShadow: "2px 2px 0 var(--primary-deep)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "var(--font-display)",
-          fontWeight: 700,
-          fontSize: "13px",
-          color: "var(--on-primary)",
-          flexShrink: 0,
-        }}
-      >
-        LS
-      </div>
+      <img
+        src="/logo.png"
+        alt="LuluSchools"
+        width={36}
+        height={36}
+        style={{ width: "36px", height: "36px", objectFit: "contain", flexShrink: 0 }}
+      />
       {!collapsed && (
         <span className="sidebar-wordmark">
           Lulu<span className="dot">·</span>Schools

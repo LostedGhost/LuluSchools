@@ -81,25 +81,13 @@ export function LoginPage() {
       >
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <div
-            style={{
-              width: "60px",
-              height: "60px",
-              borderRadius: "50%",
-              background: "var(--primary)",
-              boxShadow: "var(--shadow-sm)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "var(--font-display)",
-              fontWeight: 700,
-              fontSize: "20px",
-              color: "var(--on-primary)",
-              margin: "0 auto 16px",
-            }}
-          >
-            LS
-          </div>
+          <img
+            src="/logo.png"
+            alt="LuluSchools"
+            width={60}
+            height={60}
+            style={{ width: "60px", height: "60px", objectFit: "contain", margin: "0 auto 16px", display: "block" }}
+          />
           <h1
             className="text-title"
             style={{ margin: "0 0 6px", color: "var(--ink)" }}
