@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import api_error
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe
+from app.modules.billetterie.models import BilletEvenement, StatutBillet
 from app.modules.paiements.schemas import KkiapayWebhookPayload
 from app.modules.services_scolaires.models import StatutTicket, TicketCantine, TicketTransport
 
@@ -47,6 +48,17 @@ def _confirmer_ticket_cantine(db: Session, transaction_id: str) -> bool:
     return True
 
 
+def _confirmer_billet_evenement(db: Session, transaction_id: str) -> bool:
+    billet = (
+        db.query(BilletEvenement).filter(BilletEvenement.kkiapay_transaction_id == transaction_id).first()
+    )
+    if billet is None or billet.statut != StatutBillet.ACHETE or billet.paiement_confirme:
+        return False
+    billet.paiement_confirme = True
+    db.commit()
+    return True
+
+
 @router.post("/paiements/webhook/kkiapay", include_in_schema=False)
 def webhook_kkiapay(
     payload: KkiapayWebhookPayload,
@@ -68,6 +80,7 @@ def webhook_kkiapay(
             _confirmer_demande_acte(db, payload.transactionId)
             or _confirmer_ticket_transport(db, payload.transactionId)
             or _confirmer_ticket_cantine(db, payload.transactionId)
+            or _confirmer_billet_evenement(db, payload.transactionId)
         )
 
     return {"ok": True}

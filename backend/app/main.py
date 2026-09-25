@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.modules.actes.router import router as actes_router
+from app.modules.billetterie.router import router as billetterie_router
 from app.modules.controle_acces.router import router as controle_acces_router
 from app.modules.etablissements.router import router as etablissements_router
 from app.modules.evaluations.router import router as evaluations_router
@@ -69,4 +70,5 @@ app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")
 app.include_router(services_scolaires_router, prefix="/api/v1")
+app.include_router(billetterie_router, prefix="/api/v1")
 app.include_router(kkiapay_webhook_router, prefix="/api/v1")
