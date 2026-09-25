@@ -19,7 +19,7 @@ services:
   - type: web
     name: luluschools-backend
     runtime: python
-    plan: starter
+    plan: free
     region: frankfurt
     rootDir: backend
     buildCommand: pip install -r requirements.txt
