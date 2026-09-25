@@ -13,6 +13,7 @@ import { messageErreur } from "../../api/client";
 import type { BaremeDevoir, ClasseOut, DevoirOut, EtablissementOut, SoumissionOut } from "../../types/api";
 import { Card, ErrorBanner, Field, SectionHead, Btn, TextInput, Select, EmptyState } from "../../components/ui";
 import { AIBadge } from "../../components/gamification";
+import { estRempli, erreurDateFuture } from "../../utils/validation";
 
 export function MesDevoirsPage() {
   const [etablissementIds, setEtablissementIds] = useState<string[]>([]);
@@ -97,6 +98,31 @@ export function MesDevoirsPage() {
     e.preventDefault();
     if (!classeId) return;
     setErreur(null);
+
+    if (!estRempli(titre)) {
+      setErreur("Veuillez saisir un titre pour le devoir.");
+      return;
+    }
+    if (!estRempli(matiere)) {
+      setErreur("Veuillez saisir la matière.");
+      return;
+    }
+    const erreurDate = erreurDateFuture(dateLimite);
+    if (erreurDate) {
+      setErreur(`Date limite invalide : ${erreurDate}`);
+      return;
+    }
+    for (const [i, q] of questions.entries()) {
+      if (!estRempli(q.enonce) || !estRempli(q.bareme_reponse)) {
+        setErreur(`Question ${i + 1} : l'énoncé et le barème sont requis.`);
+        return;
+      }
+      if (!Number.isFinite(q.points_max) || q.points_max <= 0) {
+        setErreur(`Question ${i + 1} : les points max doivent être supérieurs à 0.`);
+        return;
+      }
+    }
+
     setEnCours(true);
     try {
       await creerDevoir(classeId, titre, matiere, new Date(dateLimite).toISOString(), bareme, questions);
@@ -114,6 +140,14 @@ export function MesDevoirsPage() {
   };
 
   const corrigerManuel = async (soumission: SoumissionOut, devoir: DevoirOut) => {
+    for (const q of devoir.questions) {
+      const points = pointsParReponse[`${soumission.id}:${q.id}`] ?? 0;
+      if (!Number.isFinite(points) || points < 0 || points > q.points_max) {
+        setErreur(`La note doit être comprise entre 0 et ${q.points_max} pour chaque question.`);
+        return;
+      }
+    }
+    setErreur(null);
     const reponses = devoir.questions.map((q) => ({
       question_id: q.id,
       points_obtenus: pointsParReponse[`${soumission.id}:${q.id}`] ?? 0,
