@@ -1,6 +1,6 @@
 # LuluSchools — Cas d'utilisation, Phases 2 et 3
 
-Rédigé selon la méthode `lucio-dev` (pipeline spec-first), même format que `docs/cas-utilisation-phase-1.md`. Chaque cas d'utilisation liste ses règles métier précises ; les points encore ouverts sont marqués 🔓. **Ce document doit être explicitement validé comme complet avant de passer à l'étape 2 (diagrammes UML) pour ces deux phases** — aucun code ni modèle de données ne doit être produit avant cette validation (voir skill `lucio-dev`).
+Rédigé selon la méthode `lucio-dev` (pipeline spec-first), même format que `docs/cas-utilisation-phase-1.md`. **Validé le 2026-09-25** : l'utilisateur a tranché explicitement le point UC-13 (DM adulte↔mineur) et a délégué l'arbitrage de tous les autres points ouverts restants. Toutes les décisions issues de cette délégation sont marquées **[Délégué]** ci-dessous pour rester traçables ; les deux points purement administratifs (hors portée du logiciel) restent signalés 🔓 car ils nécessitent une action humaine réelle (pas une décision produit) avant que la fonctionnalité correspondante soit réellement utilisable en production.
 
 Cadrage : mandat ministériel officiel, premier déploiement au Bénin, conformité suivie sur la loi n° 2017-20 (skill `droit-numerique-benin`). Paiement/séquestre via Kkiapay, même modèle de compte unique que pour les actes académiques (UC-10) : LuluSchools n'héberge jamais les fonds elle-même.
 
@@ -23,10 +23,9 @@ A++ (admin ministériel) · A+ (admin établissement) · A- (admin/décideur pas
 - Catalogue de lignes/trajets défini par établissement (A+) : nom de ligne, prix, capacité par trajet (nombre de places).
 - Achat : élève ou tuteur choisit une ligne + une date de trajet ; paiement Kkiapay avant confirmation (même mécanique que UC-10 : `POST .../paiement/amorcer` puis webhook).
 - Statuts : `acheté` → `validé` (scanné/tamponné à l'embarquement par le Contrôleur/Ticketeur désigné sur cette ligne) → `expiré` (date de trajet dépassée sans validation) → `remboursé`.
-- **Remboursement (Art. 354 — perte du droit de rétractation pour un service intégralement fourni)** : un ticket déjà `validé` (embarquement effectué) n'est jamais remboursable. Un ticket non utilisé peut être remboursé jusqu'à une heure limite avant le trajet.
-  - 🔓 Heure limite exacte de remboursement (proposition par défaut : jusqu'à la veille 18h).
-  - 🔓 Vente à l'unité seulement, ou abonnement multi-trajets (semaine/mois) ? Proposition : ticket à l'unité en V1, abonnement en évolution ultérieure.
-- Capacité de la ligne atteinte → achat refusé (`409`), pas de liste d'attente en V1 🔓 (à confirmer).
+- **Remboursement (Art. 354 — perte du droit de rétractation pour un service intégralement fourni)** : un ticket déjà `validé` (embarquement effectué) n'est jamais remboursable. Un ticket non utilisé peut être remboursé jusqu'à la veille du trajet 18h **[Délégué]**.
+- Vente à l'unité uniquement en V1, pas d'abonnement multi-trajets **[Délégué]** — un abonnement est une évolution ultérieure indépendante (pas de règle de dégressif de prix à inventer maintenant).
+- Capacité de la ligne atteinte → achat refusé (`409`), pas de liste d'attente en V1 **[Délégué]**.
 
 ## UC-12 — Achat d'un ticket cantine
 
@@ -34,19 +33,19 @@ A++ (admin ministériel) · A+ (admin établissement) · A- (admin/décideur pas
 
 - Catalogue défini par établissement (A+) : prix du repas (peut varier par jour/menu), capacité de service par jour.
 - Même cycle de vie qu'UC-11 (`acheté` → `validé` au service → `expiré` → `remboursé`), même heure limite de remboursement (Art. 354, service fourni en une fois dès le repas servi).
-- 🔓 Information allergènes/régime alimentaire particulier : hors périmètre V1 (pas de champ dédié), à confirmer si nécessaire avant implémentation.
-- 🔓 Un même rôle Contrôleur/Ticketeur peut-il valider transport ET cantine, ou faut-il une désignation séparée par service ? Proposition : une désignation par service (un contrôleur peut cumuler les deux, mais l'A+ les attribue séparément).
+- Pas de champ allergènes/régime alimentaire en V1 **[Délégué]** — un régime alimentaire est une donnée de santé (Art. 394 — donnée sensible), son ajout mériterait sa propre UC avec un régime de consentement dédié plutôt qu'un champ texte libre improvisé ; hors périmètre tant que ce n'est pas explicitement demandé.
+- Le rôle Contrôleur/Ticketeur est désigné par service (transport, cantine, ou un événement de la Phase 3) **[Délégué]** — une même personne peut cumuler plusieurs désignations, mais chaque désignation est une attribution explicite et distincte faite par l'A+, jamais un rôle global implicite.
 
 ## UC-13 — Messagerie interne
 
 > En tant qu'utilisateur authentifié (tuteur, élève, enseignant, A+, A++), je veux échanger des messages texte avec un autre utilisateur ou avec le groupe de ma classe, afin de communiquer dans le cadre scolaire.
 
-- Deux types de conversation : **1-à-1** (entre deux utilisateurs) et **groupe de classe** (auto-créé à la création de la classe, membres = enseignant(s) rattaché(s) + élèves inscrits + tuteurs rattachés à ces élèves ; mise à jour automatique à chaque inscription/désinscription).
-- Format V1 : texte uniquement, pas de pièce jointe ni d'image 🔓 (à confirmer — simplifie fortement la modération).
-- **Règle verrouillée pour raison légale (Art. 519 — sollicitation de mineurs ; Art. 521 — corruption de mineur, peines aggravées explicitement "dans les établissements d'enseignement" ; Art. 550 — harcèlement par communication électronique)** : toute conversation impliquant au moins un élève mineur (<18 ans, ou reprendre le seuil déjà utilisé <16 ans pour le consentement 🔓 à trancher) est journalisée de façon inaltérable côté serveur (une suppression par un participant ne fait que la masquer de son propre écran, jamais du stockage serveur) et consultable par l'A+ de l'établissement de l'élève sur signalement. Chaque message affiche un bouton "signaler" visible par tous les participants ; un signalement notifie immédiatement l'A+ concerné.
-- 🔓 **Décision produit encore ouverte** (pas légalement tranchée, à valider par toi) : autorise-t-on les messages 1-à-1 libres entre un adulte (enseignant/admin) et un élève mineur, ou restreint-on ces échanges au groupe de classe supervisé uniquement (DM adulte↔mineur interdit, DM adulte↔tuteur et élève↔élève/groupe classe autorisés) ? Recommandation : la deuxième option réduit fortement le risque et la surface de modération nécessaire, mais c'est ton produit — à trancher explicitement avant l'étape UML.
-- 🔓 Durée de conservation des messages avant purge (proposition : pas de purge automatique en V1, alignée avec la conservation à des fins de preuve/signalement).
-- 🔓 Canal de notification à réception d'un message (email via Brevo déjà en place, ou notification in-app seule en V1 ?).
+- Deux types de conversation : **1-à-1** et **groupe de classe** (auto-créé à la création de la classe, membres = enseignant(s) rattaché(s) + élèves inscrits + tuteurs rattachés à ces élèves ; mise à jour automatique à chaque inscription/désinscription).
+- **Restriction DM adulte↔élève (décision explicite de l'utilisateur, 2026-09-25)** : un adulte (enseignant, A+, A++) ne peut échanger avec un élève **que via le groupe de classe**, jamais en conversation 1-à-1. Les conversations 1-à-1 restent ouvertes entre : tuteur↔enseignant, tuteur↔A+, tuteur↔tuteur, tuteur↔élève (son propre enfant rattaché), et élève↔élève. Un enseignant/A+ qui tente d'ouvrir un DM vers un compte Élève reçoit un refus (`403`) l'orientant vers le groupe de classe concerné.
+- **Règle verrouillée pour raison légale (Art. 519 — sollicitation de mineurs ; Art. 521 — corruption de mineur, peines aggravées explicitement "dans les établissements d'enseignement" ; Art. 550 — harcèlement par communication électronique)** : toute conversation impliquant au moins un élève (seuil `<18 ans` **[Délégué]** — plus prudent que le seuil `<16 ans` utilisé pour le consentement d'inscription, car ces articles protègent le mineur au sens large, pas seulement le mineur non émancipé pour l'inscription) est journalisée de façon inaltérable côté serveur (une suppression par un participant ne fait que la masquer de son propre écran, jamais du stockage serveur) et consultable par l'A+ de l'établissement de l'élève sur signalement. Chaque message affiche un bouton "signaler" visible par tous les participants ; un signalement notifie immédiatement l'A+ concerné.
+- Format V1 : texte uniquement, pas de pièce jointe ni d'image **[Délégué]** — élimine tout un pan de modération de contenu (nudité, contenu illicite) sans juger de sa valeur produit à ce stade ; s'ajoute plus tard si un vrai besoin apparaît.
+- Pas de purge automatique des messages en V1 **[Délégué]** — cohérent avec la conservation à des fins de preuve/signalement ci-dessus, une purge affaiblirait la traçabilité légale qu'on vient de verrouiller.
+- Notification par e-mail via Brevo à réception (même prestataire que le reste de la plateforme) **[Délégué]** — pas de nouveau canal à intégrer pour ce premier jet.
 
 ## UC-14 — Assistant IA pédagogique "El Professor"
 
@@ -56,8 +55,8 @@ A++ (admin ministériel) · A+ (admin établissement) · A- (admin/décideur pas
 - Contexte fourni au modèle : le `contenu_texte` du cours concerné (même source que la génération de quiz, UC-07).
 - L'assistant ne donne jamais directement la réponse d'un devoir non encore soumis par l'élève (garde-fou de prompt) — cohérent avec l'esprit d'UC-08 (l'évaluation reste un exercice réel de l'élève).
 - Aucune note, décision ou statut n'est produit par cet assistant (pas de décision automatisée à effet significatif — cohérent avec Art. 401, déjà appliqué ailleurs sur la plateforme).
-- 🔓 **Portée encore ouverte** : uniquement un tuteur pédagogique pour l'élève sur le contenu d'un cours donné, ou aussi un guide d'usage de la plateforme pour les autres rôles (tuteur, enseignant, A+) comme évoqué à l'origine de l'idée ? Ce point change fortement le périmètre technique — à trancher avant UML.
-- 🔓 Historique de conversation conservé par élève et par cours, ou session éphémère non stockée ? Impacte le modèle de données.
+- **Portée V1 : uniquement l'Élève, uniquement sur le contenu d'un cours donné [Délégué]** — c'est le cœur de l'idée d'origine (expliquer les cours à l'élève) et le périmètre le plus resserré possible à spécifier/tester. "Orienter chaque acteur selon son profil" (guide d'usage plateforme pour tuteur/enseignant/A+) est noté comme extension possible d'une Phase ultérieure, pas de cette UC — élargir la portée maintenant ferait de cette UC un produit différent (un assistant plateforme générique) avant même d'avoir validé la version pédagogique de base.
+- Historique de conversation conservé par élève et par cours (pas de session éphémère) **[Délégué]** — utile à la continuité pédagogique d'une session à l'autre, cohérent avec le reste de la plateforme qui conserve l'historique (tentatives de quiz, soumissions).
 
 ---
 
@@ -69,68 +68,67 @@ A++ (admin ministériel) · A+ (admin établissement) · A- (admin/décideur pas
 
 - Extension directe d'UC-06 : mêmes règles de rattachement (classe/matière/chapitre, visible uniquement par les élèves inscrits pour l'année en cours), nouveau format `video` (mp4) en plus de `markdown`/`pdf`/`audio`.
 - Stockage via LuluFiles (cohérent ADR-003), sauf si le format/poids vidéo dépasse ce que permet le plan LuluFiles actuel.
-- 🔓 **Point bloquant hérité de la Phase 1** : le plan gratuit LuluFiles ("Lancement") est plafonné à 5 Go de transfert/mois et 2 Mo/s partagés (voir `docs/adr/ADR-003-stockage-fichiers-lulufiles.md`) — la vidéo consomme largement plus de bande passante que texte/PDF/audio. Ce point doit être retranché avec toi avant l'implémentation (passage à un plan payant, ou limite de taille/durée stricte par vidéo).
-- 🔓 Taille/durée max par vidéo (proposition par défaut : 200 Mo / 15 minutes, à confirmer).
+- **Limite hérité de la Phase 1, plan LuluFiles gratuit** (5 Go de transfert/mois, 2 Mo/s partagés — voir ADR-003) : plutôt que de changer de plan par anticipation, la limite de taille/durée par vidéo ci-dessous sert justement de garde-fou pour rester sous ce plafond en V1 **[Délégué]** ; passage à un plan payant seulement si la consommation réelle l'exige (pas de dépense anticipée sur une charge encore hypothétique).
+- Taille/durée max par vidéo : 200 Mo / 15 minutes **[Délégué]**.
 
 ## UC-16 — Cours en direct (live)
 
 > En tant qu'enseignant, je veux animer une session de cours en direct avec ma classe, afin de dispenser un enseignement interactif à distance en complément des contenus publiés.
 
 - **Consentement renforcé (extension légale d'Art. 446, décision que je verrouille sur le fondement du même article que le consentement d'inscription)** : un élève mineur ne peut activer sa caméra/son micro en session live qu'après un consentement explicite et horodaté d'un tuteur couvrant spécifiquement "la participation avec image/voix à des sessions en direct" — distinct du consentement d'inscription générique (UC-01/UC-02), car il couvre un traitement d'image différent. Un élève sans ce consentement peut suivre la session en lecture seule (audio du professeur + chat texte), jamais bloqué hors de la classe.
-- **Enregistrement de la session** : proposition par défaut (à confirmer) — **pas d'enregistrement automatique en V1**. Un enregistrement expose les élèves filmés à un traitement d'image supplémentaire (Art. 576 — atteinte à la représentation de la personne, en cas de diffusion sans autorisation) qui nécessiterait un consentement encore distinct de tous les tuteurs présents ce jour-là ; reporté hors V1 pour ne pas bloquer la fonctionnalité principale.
-- 🔓 Infrastructure technique de diffusion (WebRTC/SFU, fournisseur) — décision technique, pas une règle métier, tranchée à l'étape 3 (choix technique) une fois cette UC validée.
-- 🔓 Nombre max de participants simultanés par session (dépend du choix technique ci-dessus).
+- **Pas d'enregistrement automatique en V1 [Délégué, confirmé]**. Un enregistrement expose les élèves filmés à un traitement d'image supplémentaire (Art. 576 — atteinte à la représentation de la personne, en cas de diffusion sans autorisation) qui nécessiterait un consentement encore distinct de tous les tuteurs présents ce jour-là ; reporté hors V1 pour ne pas bloquer la fonctionnalité principale.
+- Infrastructure technique de diffusion (WebRTC/SFU, fournisseur) — décision technique, pas une règle métier, tranchée à l'étape 3 (choix technique) une fois cette UC validée.
+- Nombre max de participants simultanés par session : dépend du choix technique de l'étape 3, pas fixé ici.
 
 ## UC-17 — Billetterie d'événements scolaires
 
 > En tant qu'A+ (ou "Parrain d'événement" désigné par lui), je veux créer un événement avec billetterie payante ou gratuite, afin d'organiser une manifestation ouverte aux familles (kermesse, remise de diplômes, spectacle).
 
 - Champs : titre, description, lieu, date/heure, capacité max, prix par billet (0 si gratuit).
-- Achat par tout utilisateur authentifié de la plateforme (élève, tuteur, enseignant, admin) 🔓 — un public externe sans compte est-il autorisé à acheter un billet, ou faut-il obligatoirement un compte LuluSchools ? Proposition : compte requis, cohérent avec le reste de la plateforme (pas d'achat anonyme).
+- Achat réservé aux utilisateurs authentifiés de la plateforme (élève, tuteur, enseignant, admin), pas d'achat anonyme par un public externe sans compte **[Délégué]** — cohérent avec le reste de la plateforme, évite de créer un parcours d'achat public entièrement distinct pour cette seule UC.
 - Paiement Kkiapay, même mécanique que UC-10/UC-11/UC-12.
 - Billet = référence unique scannée à l'entrée par un Contrôleur/Ticketeur désigné pour l'événement (rôle temporaire, comme UC-11/UC-12).
-- **Remboursement (Art. 354, cohérent avec UC-11/UC-12)** : billet scanné à l'entrée → jamais remboursable. Avant l'événement, remboursable jusqu'à une heure limite 🔓 (proposition : jusqu'à 48h avant, plus long qu'un ticket de transport/cantine car achat souvent anticipé).
+- **Remboursement (Art. 354, cohérent avec UC-11/UC-12)** : billet scanné à l'entrée → jamais remboursable. Avant l'événement, remboursable jusqu'à 48h avant **[Délégué]** (plus long qu'un ticket de transport/cantine, car un billet d'événement est en général acheté bien à l'avance).
 - **Annulation de l'événement par l'organisateur (Art. 356 — résolution pour manquement contractuel)** : remboursement intégral obligatoire de tous les billets vendus, déclenché automatiquement à l'annulation.
-- 🔓 Catégories de billets (adulte/enfant/famille) ou tarif unique par événement en V1 ? Proposition : tarif unique en V1.
+- Tarif unique par événement en V1, pas de catégories de billets (adulte/enfant/famille) **[Délégué]** — une tarification par catégorie est une évolution indépendante, pas nécessaire pour valider le circuit de billetterie de base.
 
 ## UC-18 — Micro-jobs entre pairs avec séquestre
 
 > En tant qu'utilisateur de la plateforme, je veux proposer ou accepter une mission rémunérée de courte durée (tutorat, petite mission de service), afin d'échanger un service contre rémunération de façon sécurisée par séquestre.
 
-- 🔓 **Point bloquant à traiter avant toute spécification plus poussée de cette UC, hors périmètre de la loi n° 2017-20** : l'âge minimum légal pour qu'un élève **mineur** perçoive une rémunération pour un travail relève du Code du travail béninois, pas du droit numérique — je ne peux pas trancher ce point avec le skill `droit-numerique-benin`. Il faut une confirmation ministérielle/juridique séparée avant d'autoriser un élève mineur à être **prestataire** (à l'inverse, être seulement **client** d'un micro-job proposé par un majeur pose moins de risque et pourrait être ouvert plus tôt).
-- Rôle "Prestataire micro-job" : déjà anticipé dans le RBAC de la Phase 1, pas encore de règle d'attribution définie — 🔓 qui peut devenir prestataire (tout enseignant/tuteur majeur ? validation préalable par l'A+ ?).
-- **Séquestre** : le paiement Kkiapay du client est retenu jusqu'à validation de la mission ; le prestataire n'est payé qu'après cette validation. LuluSchools n'héberge jamais les fonds elle-même (cohérent ADR-003) — 🔓 à vérifier concrètement si l'API Kkiapay porte elle-même un mécanisme de séquestre (fonds bloqués chez eux jusqu'à libération), ou si LuluSchools doit modéliser un délai de rétention avant reversement de son côté — ce point technique dépend de la documentation réelle de Kkiapay, à consulter à l'étape 3.
-- 🔓 Mécanisme de litige (le client conteste la qualité de la mission après paiement retenu) — aucune règle définie aujourd'hui, à spécifier entièrement.
-- 🔓 Commission éventuelle de la plateforme sur chaque mission (%) — à confirmer.
+- 🔓 **Point administratif réel, hors périmètre de la loi n° 2017-20, donc pas couvert par la délégation légale** : l'âge minimum pour qu'un mineur perçoive une rémunération relève du Code du travail béninois, pas du droit numérique — je n'ai pas la compétence pour le trancher avec le skill `droit-numerique-benin`, et une décision produit ne peut pas se substituer à une confirmation juridique réelle sur ce point précis.
+- **Décision de prudence en attendant cette confirmation [Délégué]** : en V1, seuls les rôles **majeurs par construction** (Enseignant, Tuteur, A+, A++) peuvent être client ou prestataire d'un micro-job. Le rôle Élève est exclu du dispositif dans son ensemble — y compris pour un élève par ailleurs majeur (≥18 ans), pour éviter d'avoir à calculer et vérifier un âge dynamique juste pour ce cas — jusqu'à ce que le point ci-dessus soit tranché administrativement ; l'UC sera réouverte pour élargir l'accès aux élèves à ce moment-là.
+- Devenir prestataire ne nécessite pas de validation préalable par l'A+ **[Délégué]** — un compte Enseignant ou Tuteur déjà authentifié sur la plateforme peut publier une offre de mission directement, cohérent avec le faible enjeu d'une "petite mission" par rapport à un recrutement complet (UC-04).
+- **Séquestre** : le paiement Kkiapay du client est retenu jusqu'à validation de la mission par le client ; le prestataire n'est payé qu'après. Mécanisme technique exact (Kkiapay porte-t-il lui-même la rétention, ou LuluSchools modélise-t-il un statut `retenu`/`libéré` de son côté) tranché à l'étape 3 une fois la documentation Kkiapay consultée — ce n'est pas une règle métier mais un détail d'intégration, cohérent avec le principe déjà verrouillé qu'LuluSchools n'héberge jamais les fonds elle-même (ADR-003).
+- **Mécanisme de litige [Délégué]** : le client dispose de 5 jours après la déclaration de fin de mission par le prestataire pour la valider ou la contester (délai identique à UC-04b, cohérence de la plateforme) ; passé ce délai sans réaction, la mission est considérée validée tacitement et le paiement est libéré. En cas de contestation, l'A+ de l'établissement du prestataire tranche (accepté → paiement libéré, rejeté → remboursement du client), motif et horodatage conservés comme pour UC-04b.
+- **Pas de commission de plateforme en V1 [Délégué]** — introduire une commission est une décision commerciale distincte de la validation du circuit fonctionnel de base ; le prestataire reçoit l'intégralité du montant convenu.
 
 ## UC-19 — Visite virtuelle 3D / vidéo aérienne (drone) d'un établissement
 
 > En tant qu'A+ (ou A++), je veux publier une visite virtuelle 3D ou une vidéo aérienne de mon établissement, afin de le présenter à distance aux familles et futurs candidats.
 
-- 🔓 **Point purement administratif, hors périmètre de la loi n° 2017-20** : l'usage d'un drone relève de la réglementation aérienne béninoise (autorisation ANAC ou équivalent) — à obtenir par l'établissement/A+ avant tout tournage, ce n'est pas une règle que le logiciel peut faire respecter.
-- **Droit à l'image des personnes filmées (Art. 576 — atteinte à la représentation de la personne, en cas de diffusion sans autorisation)** : toute prise de vue où des élèves ou membres du personnel sont identifiables nécessite leur consentement (ou celui de leur tuteur pour un mineur) avant publication.
-  - 🔓 Modalité technique à trancher : floutage automatique des visages avant publication, tournage hors présence d'élèves, ou recueil de consentement individuel — les trois ont des implications très différentes sur le backend (aucune si tournage hors présence, traitement d'image si floutage automatique).
-- 🔓 Format de diffusion : lien externe vers un service tiers (type Matterport) simplement référencé, ou upload natif via LuluFiles ? Le premier est beaucoup plus simple à implémenter (pas de traitement 3D côté LuluSchools).
+- 🔓 **Point purement administratif, hors périmètre de la loi n° 2017-20, donc pas couvert par la délégation légale** : l'usage d'un drone relève de la réglementation aérienne béninoise (autorisation ANAC ou équivalent) — précondition opérationnelle à obtenir par l'établissement/A+ avant tout tournage. Traduit dans le produit par une case à cocher obligatoire ("j'atteste disposer des autorisations requises") avant publication, mais LuluSchools ne peut pas vérifier cette autorisation elle-même.
+- **Droit à l'image (Art. 576 — atteinte à la représentation de la personne, en cas de diffusion sans autorisation) [Délégué]** : pas de floutage automatique en V1 (fiabilité insuffisante pour une garantie légale, faux négatifs possibles) et pas de recueil de consentement individuel par visage détecté (trop lourd à opérer pour la valeur ajoutée). À la place, la même case à cocher que ci-dessus engage l'établissement/A+ à ne publier que du contenu sans personne identifiable, ou pour lequel un consentement a déjà été recueilli hors plateforme — la responsabilité éditoriale reste celle de l'établissement, comme pour tout contenu qu'il publie ailleurs (affiches, site web).
+- Format de diffusion : lien externe vers un service tiers (type Matterport) simplement référencé, pas d'upload natif via LuluFiles **[Délégué]** — évite tout traitement 3D/vidéo lourd côté LuluSchools et le risque de bande passante déjà signalé pour la vidéo (UC-15).
 
 ---
 
-## Points ouverts avant validation finale des Phases 2 et 3
+## État de validation — Phases 2 et 3 (2026-09-25)
 
-**Légalement tranchés (décidés par moi, article cité — voir [[feedback-legal-autonomy]]) :**
-1. Messagerie impliquant un mineur : journalisation inaltérable + signalement obligatoire (Art. 519, 521, 550).
-2. Tickets/billets déjà consommés ou scannés : jamais remboursables (Art. 354).
-3. Annulation d'un événement par l'organisateur : remboursement intégral obligatoire (Art. 356).
-4. Participation caméra/micro d'un mineur en session live : consentement tuteur distinct et explicite requis (extension d'Art. 446).
+Ce cahier des charges est **validé**. Historique des décisions pour garder la trace de qui a tranché quoi :
 
-**Purement administratifs, hors portée du logiciel (à traiter par toi/le ministère, pas par une décision technique) :**
-5. Micro-jobs (UC-18) : âge minimum légal pour qu'un élève mineur soit rémunéré — Code du travail béninois, hors loi n° 2017-20.
-6. Visites 3D/drone (UC-19) : autorisation de vol de drone — réglementation aérienne (ANAC), hors loi n° 2017-20.
+**Tranchées explicitement par l'utilisateur :**
+1. Messagerie (UC-13) : DM adulte↔élève interdit, restreint au groupe de classe uniquement.
+2. Toutes les autres décisions listées ci-dessous : déléguées explicitement ("je te fais confiance pour toutes les décisions légales et structurantes").
 
-**Décisions produit encore à ton arbitrage (aucune n'est légalement contrainte) :**
-7. Messagerie (UC-13) : DM libres adulte↔mineur autorisés, ou restreints au groupe de classe supervisé ?
-8. El Professor (UC-14) : uniquement un tuteur pédagogique sur le contenu de cours, ou aussi un guide d'usage plateforme pour tous les rôles ?
-9. Vidéo pédagogique (UC-15) : le plan LuluFiles gratuit actuel tient-il la charge vidéo, ou faut-il déjà prévoir un plan payant avant la Phase 3 ?
-10. Cours en direct (UC-16) : confirmer l'absence d'enregistrement automatique en V1.
-11. Micro-jobs (UC-18) : Kkiapay porte-t-il lui-même le séquestre, ou LuluSchools doit-il le modéliser (délai de rétention) ?
-12. Visites 3D/drone (UC-19) : floutage automatique, tournage sans élèves, ou consentement individuel ?
-13. Divers réglages par défaut proposés ci-dessus (délais de remboursement, tailles/durées max, catégories de billets, etc.) — chacun marqué 🔓 dans son UC, à valider en bloc ou à ajuster.
+**Légalement tranchées (article cité — voir [[feedback-legal-autonomy]]) :**
+3. Messagerie impliquant un élève : journalisation inaltérable + signalement obligatoire (Art. 519, 521, 550).
+4. Tickets/billets déjà consommés ou scannés : jamais remboursables (Art. 354).
+5. Annulation d'un événement par l'organisateur : remboursement intégral obligatoire (Art. 356).
+6. Participation caméra/micro d'un mineur en session live : consentement tuteur distinct et explicite requis (extension d'Art. 446).
+
+**Décisions produit déléguées (marquées `[Délégué]` dans chaque UC ci-dessus)** : heures/délais de remboursement, absence d'abonnement transport, absence de champ allergène, désignation du Contrôleur/Ticketeur par service, portée d'El Professor limitée à l'élève sur le cours, historique El Professor conservé, taille/durée max vidéo, absence d'enregistrement des lives, achat de billet réservé aux comptes authentifiés, tarif de billet unique, restriction des micro-jobs aux rôles majeurs par construction (Élève exclu du dispositif), pas de validation préalable A+ pour devenir prestataire, mécanisme de litige micro-job calqué sur UC-04b, pas de commission de plateforme, pas de floutage automatique pour les visites 3D/drone (attestation déclarative à la place), diffusion 3D par lien externe plutôt qu'upload natif.
+
+**Restent de vrais points administratifs, hors portée d'une décision produit ou légale (pas bloquants pour l'UML/le contrat d'API, mais bloquants avant mise en production réelle de ces deux UC précises) :**
+7. Micro-jobs (UC-18) : âge minimum légal pour qu'un mineur soit rémunéré — Code du travail béninois, hors loi n° 2017-20. Traité en attendant par l'exclusion totale du rôle Élève du dispositif (voir UC-18).
+8. Visites 3D/drone (UC-19) : autorisation de vol de drone — réglementation aérienne (ANAC), hors loi n° 2017-20. Traité par une attestation déclarative de l'établissement (voir UC-19).

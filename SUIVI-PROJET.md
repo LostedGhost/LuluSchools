@@ -22,8 +22,8 @@ Copier ce fichier au démarrage du projet et cocher au fur et à mesure des vali
 
 Le backend Phase 1 (UC-01 à UC-10) est complet et testé (75 tests). L'utilisateur a demandé de finaliser le backend sur l'intégralité de sa vision du projet, toutes phases confondues — ce qui rouvre le pipeline `lucio-dev` à l'étape 1 pour les Phases 2 et 3, qui n'avaient jusqu'ici qu'une ligne de cadrage (`Phasage MVP` ci-dessous), aucun cas d'utilisation détaillé.
 
-- [~] **1. Cas d'utilisation (Phases 2 et 3)** — premier jet rédigé dans `docs/cas-utilisation-phase-2-3.md` (UC-11 à UC-19 : tickets transport/cantine, messagerie, assistant IA "El Professor", vidéo/podcast, cours en direct, billetterie, micro-jobs+séquestre, visites 3D/drone). **En attente de validation explicite** — 13 points ouverts listés en fin de document, dont 2 purement administratifs hors portée du logiciel (âge minimum micro-job, autorisation de vol drone) et plusieurs décisions produit à ton arbitrage.
-- [ ] **2. Diagrammes UML (Phases 2 et 3)** — non démarré, dépend de la validation de l'étape 1.
+- [x] **1. Cas d'utilisation (Phases 2 et 3)** — **validé le 2026-09-25** dans `docs/cas-utilisation-phase-2-3.md` (UC-11 à UC-19 : tickets transport/cantine, messagerie, assistant IA "El Professor", vidéo/podcast, cours en direct, billetterie, micro-jobs+séquestre, visites 3D/drone). L'utilisateur a tranché UC-13 (DM adulte↔élève interdit, restreint au groupe de classe) et délégué l'arbitrage de tous les autres points ouverts (voir [[feedback-legal-autonomy]], étendue aux décisions structurantes). 2 points restent de vrais blocages administratifs hors logiciel (âge minimum micro-job UC-18, autorisation de vol drone UC-19), traités par exclusion/attestation en attendant, non bloquants pour la suite du pipeline.
+- [~] **2. Diagrammes UML (Phases 2 et 3)** — en cours.
 - [ ] **3. Choix technique et contrat d'API (Phases 2 et 3)** — non démarré.
 - [ ] **4. Backend (Phases 2 et 3)** — non démarré.
 - [ ] **5. Validation complète du backend (Phases 2 et 3)** — non démarré.
