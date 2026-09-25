@@ -33,9 +33,7 @@ services:
         value: production
 
       - key: DATABASE_URL
-        fromDatabase:
-          name: luluschools-db
-          property: connectionString
+        value: postgresql://luluschools_user:WroJ3HKDzBNnJc44IKuTPMRTkshtU9T3@dpg-darcdls9v7es73e39440-a/luluschools
 
       - key: JWT_SECRET_KEY
         generateValue: true
