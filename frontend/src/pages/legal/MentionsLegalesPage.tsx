@@ -7,7 +7,7 @@ export function MentionsLegalesPage() {
       <p>
         À ce stade (phase pilote, avant portage institutionnel), LuluSchools est édité par :<br />
         <strong>Gracio Topanou</strong> — porteur du projet<br />
-        Contact : <a href="mailto:contact@luluschools.bj">contact@luluschools.bj</a><br />
+        Contact : <a href="mailto:topanoulucio@gmail.com">topanoulucio@gmail.com</a><br />
         Site personnel : <a href="https://www.graciotopanou.online/" target="_blank" rel="noopener noreferrer">graciotopanou.online</a>
       </p>
       <div className="legal-note">
@@ -43,7 +43,7 @@ export function MentionsLegalesPage() {
       <h2>Signalement d'un contenu ou d'un incident</h2>
       <p>
         Conformément aux articles 497 et 500 de la loi n° 2017-20, tout contenu manifestement illicite ou toute
-        atteinte à la sécurité peut être signalé à <a href="mailto:contact@luluschools.bj">contact@luluschools.bj</a>.
+        atteinte à la sécurité peut être signalé à <a href="mailto:topanoulucio@gmail.com">topanoulucio@gmail.com</a>.
         Chaque module concerné (messagerie, marketplace) dispose aussi d'un bouton de signalement intégré, revu
         par l'administrateur de l'établissement concerné.
       </p>

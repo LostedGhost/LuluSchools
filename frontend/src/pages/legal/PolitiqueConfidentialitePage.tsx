@@ -83,7 +83,7 @@ export function PolitiqueConfidentialitePage() {
         <li>retirer un consentement précédemment donné, sans effet rétroactif ;</li>
         <li>introduire une réclamation auprès de l'Autorité de Protection des Données Personnelles (APDP) si vous estimez vos droits non respectés (Art. 448).</li>
       </ul>
-      <p>Pour exercer ces droits, écrivez à <a href="mailto:contact@luluschools.bj">contact@luluschools.bj</a>.</p>
+      <p>Pour exercer ces droits, écrivez à <a href="mailto:topanoulucio@gmail.com">topanoulucio@gmail.com</a>.</p>
     </LegalLayout>
   );
 }
