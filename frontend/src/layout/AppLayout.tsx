@@ -2,6 +2,7 @@ import { type ReactNode, useState, useEffect, createContext, useContext } from "
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Avatar, RolePill } from "../components/Avatar";
+import { Footer } from "../components/Footer";
 import { XPBar } from "../components/gamification";
 import {
   LayoutDashboard,
@@ -421,10 +422,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const isPublicPage = !utilisateur;
 
   if (isPublicPage) {
-    /* Pages publiques : pas de sidebar, layout centré */
+    /* Pages publiques : pas de sidebar, layout centré, footer global (mentions
+       légales, cookies...) - pas repété sur les tableaux de bord authentifiés
+       pour ne pas entrer en collision avec la barre de navigation mobile. */
     return (
-      <div style={{ minHeight: "100dvh", background: "var(--bg)" }}>
-        {children}
+      <div style={{ minHeight: "100dvh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1 }}>{children}</div>
+        <Footer />
       </div>
     );
   }

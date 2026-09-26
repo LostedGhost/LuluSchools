@@ -760,20 +760,6 @@ export function LandingPage() {
           </p>
         </div>
       </section>
-
-      {/* ── Footer ── */}
-      <footer
-        style={{
-          borderTop: "2px solid var(--border-strong)",
-          padding: "32px 24px",
-          textAlign: "center",
-          color: "var(--ink-faint)",
-          fontSize: "var(--text-sm)",
-          fontFamily: "var(--font-mono)",
-        }}
-      >
-        LuluSchools · Plateforme éducative nationale · République du Bénin · {new Date().getFullYear()}
-      </footer>
     </div>
   );
 }

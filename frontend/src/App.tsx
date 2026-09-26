@@ -63,6 +63,10 @@ import { MicroJobsPage } from "./pages/micro_jobs/MicroJobsPage";
 import { MicroJobsArbitragePage } from "./pages/admin_ministeriel/MicroJobsArbitragePage";
 import { MarketplacePage } from "./pages/eleve/MarketplacePage";
 import { MarketplaceAdminPage } from "./pages/admin_etablissement/MarketplaceAdminPage";
+import { MentionsLegalesPage } from "./pages/legal/MentionsLegalesPage";
+import { PolitiqueConfidentialitePage } from "./pages/legal/PolitiqueConfidentialitePage";
+import { CGUPage } from "./pages/legal/CGUPage";
+import { PolitiqueCookiesPage } from "./pages/legal/PolitiqueCookiesPage";
 
 function App() {
   return (
@@ -114,6 +118,10 @@ function App() {
               }
             />
             <Route path="/dashboard" element={<DashboardRedirect />} />
+            <Route path="/mentions-legales" element={<MentionsLegalesPage />} />
+            <Route path="/politique-confidentialite" element={<PolitiqueConfidentialitePage />} />
+            <Route path="/cgu" element={<CGUPage />} />
+            <Route path="/politique-cookies" element={<PolitiqueCookiesPage />} />
 
             {/* Tuteur */}
             <Route
