@@ -23,6 +23,7 @@ le flux OTP/mot de passe temporaire pour rester utilisable immediatement). Un re
 from __future__ import annotations
 
 import argparse
+import hashlib
 import random
 import sys
 import uuid
@@ -483,11 +484,82 @@ def _capacite_pour(ctx: Contexte, cfg: Config) -> int:
     return ctx.rng.randint(*cfg.eleves_par_classe) + ctx.rng.randint(2, 8)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Géolocalisation : devine une position plausible a partir du NOM de chaque
+# etablissement genere ci-dessous (les noms referencent deja de vraies
+# villes/quartiers beninois - Cotonou, Porto-Novo, Abomey-Calavi, Abomey,
+# Parakou, Godomey, Seme-Kpodji, Akpakpa - ou de vraies institutions connues
+# comme l'UNSTIM d'Abomey ou l'INSTI de Lokossa), avec un petit ecart
+# deterministe par etablissement pour eviter que plusieurs etablissements
+# d'une meme ville se superposent exactement sur la carte. Logique identique
+# a scripts/update_localisations.py (qui reste utile pour geolocaliser une
+# base deja peuplee AVANT ce changement, ou pour un rejeu --overwrite).
+# ═══════════════════════════════════════════════════════════════════════════
+
+INSTITUTIONS_CONNUES: dict[str, tuple[float, float]] = {
+    "mathieu bouké": (9.3372, 2.6303),  # Lycee Mathieu Bouke - Parakou
+    "toffa 1er": (6.4969, 2.6289),  # Lycee Toffa 1er - Porto-Novo
+    "technologie industrielle": (6.6389, 1.7167),  # INSTI - Lokossa
+    "ingénierie et mathématiques": (7.1825, 1.9911),  # UNSTIM - Abomey
+}
+
+VILLES_BENIN: dict[str, tuple[float, float]] = {
+    "abomey-calavi": (6.4025, 2.3389),
+    "porto-novo": (6.4969, 2.6289),
+    "seme-kpodji": (6.3661, 2.6156),
+    "godomey": (6.3958, 2.3336),
+    "akpakpa": (6.3644, 2.4453),
+    "parakou": (9.3372, 2.6303),
+    "abomey": (7.1825, 1.9911),
+    "cotonou": (6.3703, 2.3912),
+}
+
+
+def _normaliser(texte: str) -> str:
+    remplacements = {"é": "e", "è": "e", "ê": "e", "ô": "o", "à": "a", "î": "i", "’": "-", "'": "-"}
+    resultat = texte.lower()
+    for accentue, simple in remplacements.items():
+        resultat = resultat.replace(accentue, simple)
+    return resultat
+
+
+def _jitter(etablissement_id: str, amplitude: float = 0.015) -> tuple[float, float]:
+    """Petit ecart deterministe (~± amplitude degres, de l'ordre du km) pour ne pas
+    empiler plusieurs etablissements d'une meme ville exactement au meme point."""
+    digest = hashlib.sha256(etablissement_id.encode()).hexdigest()
+    dx = (int(digest[:8], 16) / 0xFFFFFFFF - 0.5) * 2 * amplitude
+    dy = (int(digest[8:16], 16) / 0xFFFFFFFF - 0.5) * 2 * amplitude
+    return dx, dy
+
+
+def deviner_coordonnees(nom: str, etablissement_id: str) -> tuple[float, float]:
+    nom_normalise = _normaliser(nom)
+
+    base: tuple[float, float] | None = None
+    for fragment, coords in INSTITUTIONS_CONNUES.items():
+        if _normaliser(fragment) in nom_normalise:
+            base = coords
+            break
+    if base is None:
+        for ville, coords in VILLES_BENIN.items():
+            if ville in nom_normalise:
+                base = coords
+                break
+    if base is None:
+        base = VILLES_BENIN["cotonou"]  # capitale economique : repli par defaut raisonnable
+
+    dx, dy = _jitter(etablissement_id)
+    return round(base[0] + dx, 6), round(base[1] + dy, 6)
+
+
 def creer_etablissement_primaire(db, ctx: Contexte, cfg: Config, nom: str) -> Etablissement:
+    etab_id = new_id()
+    latitude, longitude = deviner_coordonnees(nom, etab_id)
     etab = Etablissement(
-        id=new_id(), nom=nom, type=TypeEtablissement.EP,
+        id=etab_id, nom=nom, type=TypeEtablissement.EP,
         statut=ctx.rng.choice(list(StatutEtablissement)),
         code_etablissement=attribuer_code_etablissement(ctx, TypeEtablissement.EP),
+        latitude=latitude, longitude=longitude,
     )
     add(db, etab)
     ctx.compter("etablissements")
@@ -497,10 +569,13 @@ def creer_etablissement_primaire(db, ctx: Contexte, cfg: Config, nom: str) -> Et
 
 
 def creer_etablissement_secondaire(db, ctx: Contexte, cfg: Config, nom: str, technique: bool) -> Etablissement:
+    etab_id = new_id()
+    latitude, longitude = deviner_coordonnees(nom, etab_id)
     etab = Etablissement(
-        id=new_id(), nom=nom, type=TypeEtablissement.ES,
+        id=etab_id, nom=nom, type=TypeEtablissement.ES,
         statut=ctx.rng.choice(list(StatutEtablissement)),
         code_etablissement=attribuer_code_etablissement(ctx, TypeEtablissement.ES),
+        latitude=latitude, longitude=longitude,
     )
     add(db, etab)
     ctx.compter("etablissements")
@@ -523,10 +598,13 @@ def creer_etablissement_secondaire(db, ctx: Contexte, cfg: Config, nom: str, tec
 
 
 def creer_etablissement_universite(db, ctx: Contexte, cfg: Config, nom: str, public: bool) -> Etablissement:
+    etab_id = new_id()
+    latitude, longitude = deviner_coordonnees(nom, etab_id)
     etab = Etablissement(
-        id=new_id(), nom=nom, type=TypeEtablissement.UP,
+        id=etab_id, nom=nom, type=TypeEtablissement.UP,
         statut=StatutEtablissement.PUBLIC if public else StatutEtablissement.PRIVE,
         code_etablissement=attribuer_code_etablissement(ctx, TypeEtablissement.UP),
+        latitude=latitude, longitude=longitude,
     )
     add(db, etab)
     ctx.compter("etablissements")
@@ -1481,6 +1559,7 @@ def executer_seed(cfg: Config, seed: int) -> Contexte:
     try:
         print("Création de l'administrateur ministériel...")
         creer_admin_ministeriel(db, ctx)
+        db.commit()
 
         n_total_etabs = cfg.n_ep + cfg.n_es + cfg.n_up
         print(f"Création de {n_total_etabs} établissements ({cfg.n_ep} EP, {cfg.n_es} ES, {cfg.n_up} UP) et de leurs classes...")
@@ -1512,11 +1591,22 @@ def executer_seed(cfg: Config, seed: int) -> Contexte:
             creer_billetterie_pour_etablissement(db, ctx, cfg, etablissement)
             creer_visite_virtuelle(db, ctx, etablissement)
 
+            # Commit apres chaque etablissement (et non un seul commit final) : sur une
+            # base distante (Render), une erreur tardive (ex. micro-jobs) ne doit pas
+            # faire perdre TOUT le travail deja flush - juste ce qui suit le dernier
+            # commit reussi. Deja verifie en conditions reelles : un rerun repart de
+            # toute facon d'un schema vide (DROP+CREATE en tete de script), donc ces
+            # commits intermediaires ne changent rien au comportement nominal, ils
+            # limitent seulement la perte en cas d'echec.
+            db.commit()
+
         print("Création des propositions de révision de référentiels...")
         creer_propositions_referentiel(db, ctx, etablissements)
+        db.commit()
 
         print("Création des propositions de reconduction de contrats...")
         creer_propositions_reconduction(db, ctx)
+        db.commit()
 
         print(f"Création de {cfg.n_offres_micro_job} offres de micro-jobs et de leurs missions...")
         creer_micro_jobs(db, ctx, cfg)

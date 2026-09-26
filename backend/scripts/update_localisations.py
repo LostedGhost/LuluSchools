@@ -1,14 +1,12 @@
 """Complement du mega seed (scripts/seed_mega.py) : renseigne latitude/longitude
-pour les etablissements deja crees SANS y toucher directement.
+pour des etablissements deja crees, sans y toucher directement.
 
-Contexte : seed_mega.py a ete ecrit avant l'ajout de la geolocalisation
-(migration 0003_etablissements_geolocalisation) et insere les etablissements
-directement via SQLAlchemy (pas via l'API/EtablissementCreate), donc sans jamais
-fixer latitude/longitude - ces colonnes sont nullables en base pour cette raison
-meme. Ce script est volontairement SEPARE de seed_mega.py (a la demande de
-l'utilisateur, qui a un peuplement en cours au moment ou ce script est ecrit) :
-a lancer APRES que les migrations 0002/0003 soient appliquees a la base cible et
-que le mega seed soit termine.
+Depuis que scripts/seed_mega.py fixe lui-meme latitude/longitude a la creation de
+chaque etablissement (meme logique de devinette qu'ici), ce script ne sert plus
+qu'a completer une base DEJA peuplee AVANT cet ajout (donc avec latitude/longitude
+encore NULL), ou a recalculer les positions d'un jeu de donnees existant sans
+tout re-seeder (--overwrite). A lancer APRES que les migrations 0002/0003 soient
+appliquees a la base cible.
 
 Comportement : devine une position plausible a partir du NOM de chaque
 etablissement (les noms generes par seed_mega.py referencent deja de vraies
