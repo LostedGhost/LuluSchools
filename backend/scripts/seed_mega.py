@@ -413,6 +413,7 @@ class Contexte:
         self.admins_etablissement: list[Utilisateur] = []
         self.admin_par_etablissement: dict[str, Utilisateur] = {}
         self.admin_ministeriel: Utilisateur | None = None
+        self.type_par_etablissement: dict[str, TypeEtablissement] = {}
         self.classes: list[Classe] = []
         self.classes_par_etablissement: dict[str, list[Classe]] = {}
         self.matieres_par_classe: dict[str, list[str]] = {}
@@ -442,6 +443,21 @@ class Contexte:
 
     def compter(self, table: str, n: int = 1) -> None:
         self.compteurs[table] = self.compteurs.get(table, 0) + n
+
+    def etudiants_valides(self) -> list[Eleve]:
+        """UC-57/58 (arbitrage utilisateur du 2026-09-26) : un ETUDIANT = un eleve
+        inscrit et valide dans un etablissement de type UP - seul role desormais
+        autorise cote PRESTATAIRE des micro-jobs et sur la marketplace (voir
+        app/core/etudiant.py::est_etudiant, meme regle reproduite ici sans requete DB
+        puisque `ctx.eleves_par_etablissement` ne contient deja que des inscriptions
+        VALIDEE avec compte)."""
+        return [
+            e
+            for etab_id, eleves in self.eleves_par_etablissement.items()
+            if self.type_par_etablissement.get(etab_id) == TypeEtablissement.UP
+            for e in eleves
+            if e.utilisateur_id
+        ]
 
 
 def creer_utilisateur(
@@ -639,6 +655,7 @@ def _finaliser_etablissement(db, ctx: Contexte, etab: Etablissement) -> None:
     )
     if ctx.rng.random() < 0.05:
         etab.actif = False
+    ctx.type_par_etablissement[etab.id] = etab.type
 
     for ordre in range(ctx.rng.randint(1, 3)):
         add(db, EtablissementPhoto(id=new_id(), etablissement_id=etab.id, lulufiles_file_id=LULUFILES_ID_PLACEHOLDER, ordre=ordre))
@@ -1609,6 +1626,77 @@ def creer_sessions_live_pour_classe(
                 ))
                 ctx.compter("participations_live")
 
+            creer_tableau_collaboratif_pour_session(db, ctx, session_live, enseignant, participants)
+
+
+MESSAGES_SESSION_LIVE = [
+    "Bonjour tout le monde, on commence dans 2 minutes.",
+    "Est-ce que tout le monde voit bien le tableau ?",
+    "Je n'ai pas bien compris ce point, pouvez-vous repeter ?",
+    "Merci, c'est beaucoup plus clair maintenant.",
+    "Pouvez-vous partager l'exercice a la fin de la session ?",
+]
+
+
+def creer_tableau_collaboratif_pour_session(
+    db, ctx: Contexte, session_live: SessionLive, enseignant: Utilisateur, participants: list[Eleve]
+) -> None:
+    """UC-25 (volet Professeur) : tableau collaboratif temps reel - seulement pour une
+    session qui a reellement demarre (EN_COURS/TERMINEE), jamais une PLANIFIEE (voir
+    l'appelant, qui ne rejoint deja des participants que dans ce cas)."""
+    panneau = PanneauTableau(id=new_id(), session_id=session_live.id, ordre=0)
+    add(db, panneau)
+    ctx.compter("panneaux_tableau")
+
+    auteurs_possibles = [enseignant.id] + [p.utilisateur_id for p in participants]
+    for _ in range(ctx.rng.randint(2, 6)):
+        type_trait = rng_choice_weighted(
+            ctx.rng, [TypeTraitTableau.TRAIT_LIBRE, TypeTraitTableau.TEXTE, TypeTraitTableau.EFFACEMENT], [0.6, 0.35, 0.05]
+        )
+        if type_trait == TypeTraitTableau.TEXTE:
+            donnees = {
+                "x": ctx.rng.randint(50, 800), "y": ctx.rng.randint(50, 500),
+                "texte": ctx.rng.choice(["Rappel : reviser le chapitre", "Exercice 3 page 42", "Point important a retenir"]),
+            }
+        elif type_trait == TypeTraitTableau.TRAIT_LIBRE:
+            donnees = {"points": [[ctx.rng.randint(0, 800), ctx.rng.randint(0, 500)] for _ in range(ctx.rng.randint(3, 8))]}
+        else:
+            donnees = {}
+        add(db, TraitTableau(
+            id=new_id(), panneau_id=panneau.id, auteur_id=ctx.rng.choice(auteurs_possibles),
+            type=type_trait, donnees=donnees,
+        ))
+        ctx.compter("traits_tableau")
+
+    for eleve in ctx.rng.sample(participants, k=min(len(participants), 2)):
+        add(db, PermissionEcritureTableau(
+            id=new_id(), session_id=session_live.id, eleve_utilisateur_id=eleve.utilisateur_id,
+            mode=ctx.rng.choice(list(ModePermissionEcriture)), accordee_par_id=enseignant.id,
+        ))
+        ctx.compter("permissions_ecriture_tableau")
+
+    for eleve in ctx.rng.sample(participants, k=min(len(participants), 2)):
+        add(db, DemandeCraie(
+            id=new_id(), session_id=session_live.id, eleve_utilisateur_id=eleve.utilisateur_id,
+            statut=ctx.rng.choice(list(StatutDemandeCraie)),
+        ))
+        ctx.compter("demandes_craie")
+
+    for auteur_id in ctx.rng.sample(auteurs_possibles, k=min(len(auteurs_possibles), 3)):
+        add(db, MessageSessionLive(id=new_id(), session_id=session_live.id, auteur_id=auteur_id, contenu=ctx.rng.choice(MESSAGES_SESSION_LIVE)))
+        ctx.compter("messages_session_live")
+
+    if session_live.statut == StatutSessionLive.TERMINEE:
+        add(db, CaptureTableauSession(
+            id=new_id(), session_id=session_live.id, panneau_id=panneau.id, lulufiles_file_id=LULUFILES_ID_PLACEHOLDER,
+        ))
+        ctx.compter("captures_tableau_session")
+        add(db, ResumeSessionLive(
+            id=new_id(), session_id=session_live.id,
+            contenu="Resume genere automatiquement : la session a couvert les points cles du chapitre, avec des echanges actifs entre les participants.",
+        ))
+        ctx.compter("resumes_session_live")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Transport & cantine (UC-11/UC-12) + contrôleurs (UC-11/12/17)
@@ -1756,32 +1844,39 @@ def creer_visite_virtuelle(db, ctx: Contexte, etablissement: Etablissement) -> N
 # ═══════════════════════════════════════════════════════════════════════════
 
 def creer_micro_jobs(db, ctx: Contexte, cfg: Config) -> None:
-    pool = list(ctx.tous_enseignants_signes) + list(ctx.tuteurs) + list(ctx.admins_etablissement)
+    """UC-57 (arbitrage utilisateur du 2026-09-26) : CLIENT (publier une offre, payer)
+    ouvert aux adultes ET aux etudiants, mais PRESTATAIRE (accepter une offre, etre
+    remunere) desormais reserve aux SEULS etudiants - un enseignant/tuteur/admin ne le
+    peut plus (revise par rapport au comportement pre-Phase-6, voir
+    micro_jobs/router.py::_exiger_prestataire_micro_job)."""
+    ids_adultes = [u.id for u in ctx.tous_enseignants_signes] + [u.id for u in ctx.tuteurs] + [u.id for u in ctx.admins_etablissement]
     if ctx.admin_ministeriel:
-        pool.append(ctx.admin_ministeriel)
-    if len(pool) < 2:
+        ids_adultes.append(ctx.admin_ministeriel.id)
+    ids_etudiants = [e.utilisateur_id for e in ctx.etudiants_valides()]
+    ids_clients = ids_adultes + ids_etudiants
+    if len(ids_clients) < 1 or not ids_etudiants:
         return
 
     offres = []
     for _ in range(cfg.n_offres_micro_job):
-        client = ctx.rng.choice(pool)
+        client_id = ctx.rng.choice(ids_clients)
         offre = OffreMicroJob(
-            id=new_id(), client_id=client.id, titre=ctx.rng.choice(TITRES_OFFRES_MICRO_JOB),
+            id=new_id(), client_id=client_id, titre=ctx.rng.choice(TITRES_OFFRES_MICRO_JOB),
             description="Service proposé par un membre de la communauté LuluSchools, disponible immédiatement.",
             prix=float(ctx.rng.choice([2000, 3500, 5000, 7500, 10000])), statut=StatutOffreMicroJob.OUVERTE,
             paiement_confirme=True, kkiapay_transaction_id=f"seed-tx-{new_id()}",
         )
         add(db, offre)
         ctx.compter("offres_micro_job")
-        offres.append((offre, client))
+        offres.append((offre, client_id))
 
-    for offre, client in offres:
+    for offre, client_id in offres:
         if ctx.rng.random() >= 0.65:
             continue
-        candidats_prestataire = [u for u in pool if u.id != client.id]
+        candidats_prestataire = [i for i in ids_etudiants if i != client_id]
         if not candidats_prestataire:
             continue
-        prestataire = ctx.rng.choice(candidats_prestataire)
+        prestataire_id = ctx.rng.choice(candidats_prestataire)
         offre.statut = StatutOffreMicroJob.FERMEE
 
         statut_mission = rng_choice_weighted(
@@ -1802,7 +1897,7 @@ def creer_micro_jobs(db, ctx: Contexte, cfg: Config) -> None:
             reference_paiement = f"MOMO-{ctx.rng.randint(100000, 999999)}"
 
         mission = MissionMicroJob(
-            id=new_id(), offre_id=offre.id, prestataire_id=prestataire.id, statut=statut_mission,
+            id=new_id(), offre_id=offre.id, prestataire_id=prestataire_id, statut=statut_mission,
             prix_paye=offre.prix, paiement_confirme=True,
             kkiapay_transaction_id=offre.kkiapay_transaction_id,
             date_declaration_fin=date_declaration_fin, date_limite_validation=date_limite_validation,
@@ -1895,6 +1990,12 @@ _STATUTS_TRANSACTION_RESERVE_ANNONCE = (
 
 
 def creer_marketplace_pour_etablissement(db, ctx: Contexte, cfg: Config, etablissement: Etablissement) -> None:
+    """UC-58 (arbitrage utilisateur du 2026-09-26) : la marketplace est desormais
+    reservee aux ETUDIANTS (etablissement de type UP, inscription valide) - resserre
+    par rapport au seul critere d'age >= 16 ans (Art. 446) du premier jet Phase 4, voir
+    marketplace/router.py::_verifier_eleve_de_l_etablissement."""
+    if etablissement.type != TypeEtablissement.UP:
+        return
     eleves_eligibles = [
         e
         for e in ctx.eleves_par_etablissement.get(etablissement.id, [])
@@ -2013,6 +2114,75 @@ def creer_marketplace_pour_etablissement(db, ctx: Contexte, cfg: Config, etablis
         # defaut a la creation, rien a modifier).
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Coffre-fort familial (UC-35, volet Élève/Tuteur, innovation)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def creer_coffre_fort_pour_etudiants(db, ctx: Contexte) -> None:
+    """UC-35 : opt-in strict (aucun plafond par defaut), ne concerne en pratique que
+    les etudiants (micro-jobs/marketplace desormais reserves aux etudiants, cf.
+    UC-57/58) - `reference_id` n'est pas une vraie ForeignKey (comme
+    DesignationControleur.evenement_id), un identifiant plausible suffit pour un seed
+    hors ligne qui ne rejoue pas les flux HTTP complets."""
+    etudiants = ctx.etudiants_valides()
+    for eleve in ctx.rng.sample(etudiants, k=min(len(etudiants), max(1, round(len(etudiants) * 0.3)))):
+        plafond_hebdo = ctx.rng.choice([None, 5000.0, 10000.0, 20000.0])
+        seuil_validation = ctx.rng.choice([None, 3000.0, 5000.0, 8000.0])
+        if plafond_hebdo is None and seuil_validation is None:
+            continue  # opt-in : au moins un des deux doit etre configure pour exister
+
+        add(db, PlafondFamilial(
+            id=new_id(), tuteur_id=eleve.tuteur_id, eleve_utilisateur_id=eleve.utilisateur_id,
+            plafond_hebdomadaire=plafond_hebdo, seuil_validation=seuil_validation,
+        ))
+        ctx.compter("plafonds_familiaux")
+
+        if seuil_validation is not None and ctx.rng.random() < 0.5:
+            montant = seuil_validation + ctx.rng.choice([500.0, 1500.0, 3000.0])
+            statut = ctx.rng.choice(list(StatutValidationParentale))
+            add(db, ValidationParentale(
+                id=new_id(), tuteur_id=eleve.tuteur_id, eleve_utilisateur_id=eleve.utilisateur_id,
+                module=ctx.rng.choice(list(ModuleDepenseCoffreFort)), reference_id=new_id(), montant=montant,
+                statut=statut,
+                motif_refus="Depense non justifiee aupres de la famille." if statut == StatutValidationParentale.REFUSEE else None,
+                decidee_at=_utcnow() - timedelta(days=ctx.rng.randint(1, 10)) if statut != StatutValidationParentale.EN_ATTENTE else None,
+            ))
+            ctx.compter("validations_parentales")
+
+        if plafond_hebdo is not None and ctx.rng.random() < 0.3:
+            add(db, AlerteDepassementPlafond(
+                id=new_id(), tuteur_id=eleve.tuteur_id, eleve_utilisateur_id=eleve.utilisateur_id,
+                module=ctx.rng.choice(list(ModuleDepenseCoffreFort)),
+                montant_semaine=plafond_hebdo + ctx.rng.choice([1000.0, 2000.0]), plafond=plafond_hebdo,
+            ))
+            ctx.compter("alertes_depassement_plafond")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Suspension aleatoire de comptes (ecran de supervision A++, UC-35/50)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def suspendre_comptes_aleatoires(db, ctx: Contexte) -> None:
+    """Sans au moins quelques comptes suspendus, l'ecran de supervision des
+    utilisateurs (GET /admin/utilisateurs, filtre par statut) n'a rien a montrer.
+    Jamais l'admin ministeriel lui-meme (seul compte createur de ce jeu de donnees -
+    on ne veut pas se retrouver bloque en testant contre ce jeu de donnees), jamais un
+    eleve (des milliers de comptes, peu de valeur de demonstration a en suspendre)."""
+    candidats = list(ctx.tous_enseignants_signes) + list(ctx.tuteurs) + list(ctx.admins_etablissement)
+    if not candidats or not ctx.admin_ministeriel:
+        return
+    n = max(1, round(len(candidats) * 0.02))
+    for utilisateur in ctx.rng.sample(candidats, k=min(n, len(candidats))):
+        utilisateur.actif = False
+        add(db, JournalAuditMinisteriel(
+            id=new_id(), acteur_id=ctx.admin_ministeriel.id, action="utilisateur.suspendre",
+            cible_type="utilisateur", cible_id=utilisateur.id,
+            motif="Compte suspendu (jeu de donnees seed).",
+        ))
+        ctx.compter("journal_audit_ministeriel")
+    ctx.compter("comptes_suspendus", min(n, len(candidats)))
+
+
 def creer_propositions_reconduction(db, ctx: Contexte) -> None:
     if len(ctx.contrats_signes) < 2:
         return
@@ -2114,16 +2284,30 @@ def executer_seed(cfg: Config, seed: int) -> Contexte:
                 eleves_de_la_classe = creer_inscriptions_pour_classe(db, ctx, cfg, classe, etablissement)
                 eleves_avec_compte = [e for e in eleves_de_la_classe if e.utilisateur_id]
                 enseignant = ctx.rng.choice(enseignants_disponibles)
-                add(db, AffectationEnseignant(enseignant_id=enseignant.id, classe_id=classe.id))
+                add(db, AffectationEnseignant(enseignant_id=enseignant.id, classe_id=classe.id, est_professeur_principal=True))
                 ctx.compter("affectations_enseignant")
+
+                # UC-23 : une seconde affectation (matiere ordinaire, jamais principale)
+                # quand l'etablissement dispose d'un second enseignant signe, pour
+                # exercer les deux portees de lecture de la vie scolaire (voir
+                # creer_vie_scolaire_pour_classe et EntreeVieScolaire.matiere).
+                enseignant_matiere = None
+                autres_enseignants = [e for e in enseignants_disponibles if e.id != enseignant.id]
+                if autres_enseignants:
+                    enseignant_matiere = ctx.rng.choice(autres_enseignants)
+                    add(db, AffectationEnseignant(enseignant_id=enseignant_matiere.id, classe_id=classe.id, est_professeur_principal=False))
+                    ctx.compter("affectations_enseignant")
 
                 creer_consentements_camera(db, ctx, eleves_avec_compte)
                 creer_pedagogie_pour_classe(db, ctx, cfg, classe, enseignant, eleves_avec_compte)
                 creer_evaluations_pour_classe(db, ctx, cfg, classe, etablissement, enseignant, eleves_avec_compte)
+                creer_vie_scolaire_pour_classe(db, ctx, classe, enseignant, enseignant_matiere, eleves_avec_compte)
                 creer_messagerie_groupe_classe(db, ctx, classe, etablissement, enseignant, eleves_avec_compte)
                 creer_sessions_live_pour_classe(db, ctx, cfg, classe, enseignant, eleves_avec_compte)
                 for eleve in eleves_avec_compte:
                     creer_dm_tuteur_enfant(db, ctx, eleve, eleve.tuteur_id)
+                    creer_el_professor_tuteur(db, ctx, eleve, etablissement.id)
+                    creer_el_professor_famille(db, ctx, eleve, etablissement.id)
 
             creer_actes_pour_etablissement(db, ctx, cfg, etablissement)
             creer_services_scolaires_pour_etablissement(db, ctx, cfg, etablissement)
@@ -2150,6 +2334,14 @@ def executer_seed(cfg: Config, seed: int) -> Contexte:
 
         print(f"Création de {cfg.n_offres_micro_job} offres de micro-jobs et de leurs missions...")
         creer_micro_jobs(db, ctx, cfg)
+        db.commit()
+
+        print("Création du Coffre-fort familial pour une partie des étudiants...")
+        creer_coffre_fort_pour_etudiants(db, ctx)
+        db.commit()
+
+        print("Suspension aléatoire de quelques comptes (écrans de supervision A++)...")
+        suspendre_comptes_aleatoires(db, ctx)
 
         print("Enregistrement en base (commit)...")
         db.commit()
