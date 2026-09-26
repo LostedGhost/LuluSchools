@@ -23,6 +23,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Bug reel trouve en appliquant cette migration pour la premiere fois contre un vrai
+    # Postgres (2026-09-26, lot admin ministeriel) : alembic_version.version_num est un
+    # VARCHAR(32) par defaut, mais nos identifiants de revision descriptifs depassent 32
+    # caracteres a partir de la revision suivante ('0003_etablissements_geolocalisation',
+    # 36 caracteres) - `alembic upgrade head` echouait donc silencieusement au moment de
+    # passer de 0002 a 0003 (jamais exerce avant : aucune des migrations 0002-0005 n'avait
+    # ete appliquee contre un Postgres reel jusqu'ici). Elargi ici (plutot que dans 0001,
+    # deja applique en production - voir PROJECT_MAP) pour que ce soit fait avant le
+    # premier identifiant de revision trop long.
+    op.alter_column('alembic_version', 'version_num', type_=sa.String(length=255))
+
     # offres_micro_job.prestataire_id (l'ancien "qui offre le service") devient
     # client_id (celui qui publie ET paie) - la contrainte de cle etrangere suit
     # automatiquement le renommage de colonne sous Postgres.
