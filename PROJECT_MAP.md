@@ -37,6 +37,20 @@ API backend sous préfixe `/api/v1` — contrat complet et à jour dans `docs/co
 **Phase 2/3** — étapes 1 à 6 validées (voir `SUIVI-PROJET.md`) : cas d'utilisation, diagrammes UML, contrat d'API, **backend complet** pour les 9 UC (UC-11 à UC-19) — tickets transport/cantine, contrôle d'accès, billetterie, messagerie, assistant El Professor, cours vidéo, cours en direct, visites 3D/drone, micro-jobs+séquestre — et **validation de bout en bout** (`backend/tests/test_e2e_parcours_phase2_3.py`, même principe que `test_e2e_parcours_complet.py` : un seul établissement/classe/enseignant/élève/tuteur réutilisés à travers les 9 UC dans l'ordre réel, paiement Kkiapay réellement bouclé à chaque étape payante). 8 nouveaux modules, 8 migrations (0013-0020) appliquées en réel, 124 tests au total (aucune régression). Étape 6 (frontend) : **8 des 9 UC ont une interface complète** — messagerie, El Professor, cours en direct, transport/cantine, billetterie, micro-jobs — pour les 5 rôles concernés, réutilisant le design system institutionnel (ADR-007/009) ; seul UC-19 (visites 3D/drone) reste un teaser « Bientôt disponible », par décision explicite de l'utilisateur (le choix technique de la visite 3D elle-même n'a pas encore été arbitré). Détail par module dans `backend/PROJECT_MAP.md` et `frontend/PROJECT_MAP.md`. Prochaine étape : 7 (intégration/correction des écarts) puis 8 (déploiement) pour ce lot Phase 2/3.
 
 ## Dernière synchronisation
+2026-09-26 (Phase 6, ideation) — Nouveau lot proposé (pas encore validé) :
+`docs/cahier-des-charges-refonte-admin-etablissement.md`, en réponse à une demande de
+refonte du profil A+ (admin établissement) en 6 points : rentrée scolaire + « vie
+scolaire » portable entre établissements (UC-39 à UC-42), classes enrichies avec année
+académique et console de filtrage multi-modules (UC-43 à UC-46), recrutement et actes
+académiques avec formulaire dynamique façon Google Forms (UC-47 à UC-53), ticketerie
+unifiée avec QR codes (UC-54 à UC-56), micro-jobs/marketplace réservés aux étudiants
+(UC-57 — **reverse la règle ADR-008** qui ouvrait les micro-jobs à tous les rôles adultes,
+à confirmer avant code). Constat structurant : aucune notion d'année académique n'existe
+dans le schéma actuel (`Classe` est une table perpétuelle) — devient une dimension de
+premier ordre dès le Lot 6.2, dont dépendent 6.1 et indirectement 6.6. Priorisation
+proposée : commencer par 6.2 (année académique + classes) puis 6.1 (rentrée/vie scolaire).
+En attente de validation utilisateur avant diagrammes UML/contrat d'API/code.
+
 2026-09-26 (Phase 5, frontend) — Frontend complet pour UC-23 à UC-38 : composant
 `DataTable` générique réutilisable (`frontend/src/components/DataTable.tsx`), 3 pages
 refondues (Établissements, Référentiels, Arbitrage micro-jobs — fin de la saisie manuelle
