@@ -365,6 +365,48 @@ def test_lister_postes_mes_candidatures_et_mes_contrats(
     assert len(mes_contrats.json()) == 1
 
 
+def test_tuteur_et_eleve_n_ont_aucun_acces_aux_endpoints_de_recrutement(
+    client, fake_llm_client, classe_avec_enseignant_et_eleve
+):
+    """Bug reel corrige (audit securite, 2026-09-26) : obtenir_candidature,
+    obtenir_lien_document_candidature et obtenir_lien_signature_contrat ne
+    verifiaient explicitement que ENSEIGNANT (proprietaire) et ADMIN_ETABLISSEMENT
+    (perimetre) via deux `if` independants, sans `else` - un role qui ne correspond a
+    aucun des deux (TUTEUR, ELEVE) traversait donc les deux conditions sans jamais etre
+    bloque et repartait avec la candidature/les documents/la signature de n'importe quel
+    enseignant candidat, y compris d'un autre etablissement."""
+    ctx = classe_avec_enseignant_et_eleve
+    poste = _creer_poste(client, ctx["admin_headers"], ctx["etablissement"]["id"])
+    fake_llm_client.score_par_defaut = 85.0
+    candidature = _postuler_et_relire(client, ctx["enseignant_headers"], poste["id"]).json()
+    document_id = candidature["documents"][0]["id"]
+
+    contrat = client.post(
+        f"/api/v1/candidatures/{candidature['id']}/contrat",
+        json={"syllabus": "Programme", "date_fin": (date.today() + timedelta(days=300)).isoformat()},
+        headers=ctx["admin_headers"],
+    ).json()
+    client.post(
+        f"/api/v1/contrats/{contrat['id']}/signer",
+        files={"signature_image": ("signature.png", io.BytesIO(b"trace-du-canvas-en-png"), "image/png")},
+        headers=ctx["enseignant_headers"],
+    )
+
+    for role, headers in (("tuteur", ctx["tuteur_headers"]), ("eleve", ctx["eleve_headers"])):
+        refus_candidature = client.get(f"/api/v1/candidatures/{candidature['id']}", headers=headers)
+        assert refus_candidature.status_code == 403, role
+
+        refus_document = client.get(f"/api/v1/documents-candidature/{document_id}/lien", headers=headers)
+        assert refus_document.status_code == 403, role
+
+        refus_signature = client.get(f"/api/v1/contrats/{contrat['id']}/lien-signature", headers=headers)
+        assert refus_signature.status_code == 403, role
+
+    # Non-regression : le candidat et l'A+ de l'etablissement gardent bien acces.
+    assert client.get(f"/api/v1/candidatures/{candidature['id']}", headers=ctx["enseignant_headers"]).status_code == 200
+    assert client.get(f"/api/v1/candidatures/{candidature['id']}", headers=ctx["admin_headers"]).status_code == 200
+
+
 def test_contestations_en_attente_visibles_par_admin(
     client, fake_llm_client, enseignant_headers, etablissement_avec_classe
 ):

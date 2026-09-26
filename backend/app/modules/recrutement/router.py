@@ -444,6 +444,20 @@ def obtenir_candidature(
     if candidature is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Candidature introuvable.")
 
+    # Bug reel corrige (audit securite, 2026-09-26) : les deux `if` ci-dessous ne
+    # couvraient explicitement que ENSEIGNANT/ADMIN_ETABLISSEMENT, sans `else` - un
+    # TUTEUR ou un ELEVE (qui ne correspond a aucun des deux) traversait donc les deux
+    # conditions sans jamais etre bloque et repartait avec la candidature de n'importe
+    # quel enseignant (documents/notes IA inclus). Seuls ENSEIGNANT (le candidat),
+    # ADMIN_ETABLISSEMENT (scope verifie ci-dessous) et ADMIN_MINISTERIEL (aucune
+    # restriction de perimetre, meme convention que verifier_portee_etablissement)
+    # ont une raison legitime de consulter cette ressource.
+    if utilisateur.role not in (
+        RoleUtilisateur.ENSEIGNANT,
+        RoleUtilisateur.ADMIN_ETABLISSEMENT,
+        RoleUtilisateur.ADMIN_MINISTERIEL,
+    ):
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas habilite a consulter cette candidature.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT and candidature.enseignant_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette candidature ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
@@ -467,6 +481,16 @@ def obtenir_lien_document_candidature(
     if document is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Document introuvable.")
     candidature = db.get(Candidature, document.candidature_id)
+    # Bug reel corrige (audit securite, 2026-09-26) : meme fall-through que
+    # obtenir_candidature ci-dessus - sans ce garde-fou, un TUTEUR ou un ELEVE
+    # recuperait le lien signe vers la piece d'identite/diplome de n'importe quel
+    # candidat enseignant.
+    if utilisateur.role not in (
+        RoleUtilisateur.ENSEIGNANT,
+        RoleUtilisateur.ADMIN_ETABLISSEMENT,
+        RoleUtilisateur.ADMIN_MINISTERIEL,
+    ):
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas habilite a consulter ce document.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT and candidature.enseignant_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce document ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
@@ -638,6 +662,15 @@ def obtenir_lien_signature_contrat(
     contrat = db.get(Contrat, contrat_id)
     if contrat is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Contrat introuvable.")
+    # Bug reel corrige (audit securite, 2026-09-26) : meme fall-through que
+    # obtenir_candidature ci-dessus - sans ce garde-fou, un TUTEUR ou un ELEVE
+    # recuperait l'image de signature de n'importe quel contrat enseignant.
+    if utilisateur.role not in (
+        RoleUtilisateur.ENSEIGNANT,
+        RoleUtilisateur.ADMIN_ETABLISSEMENT,
+        RoleUtilisateur.ADMIN_MINISTERIEL,
+    ):
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas habilite a consulter ce contrat.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT and contrat.enseignant_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce contrat ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
