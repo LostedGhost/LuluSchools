@@ -261,13 +261,19 @@ def mettre_a_jour_localisation(
     etablissement_id: str,
     payload: LocalisationUpdate,
     db: Session = Depends(get_db),
-    _admin_ministeriel: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
+    ),
 ) -> Etablissement:
-    """Corrige/renseigne les coordonnees d'un etablissement apres coup - reserve a
-    l'A++ comme le reste du cycle de vie d'un Etablissement (creation, code, etc.)."""
+    """Corrige/renseigne les coordonnees d'un etablissement apres coup - l'A++ peut le
+    faire pour n'importe quel etablissement (comme le reste de son cycle de vie), l'A+
+    seulement pour le sien (le plus souvent en etant physiquement sur place, via la
+    geolocalisation du navigateur cote frontend - saisie manuelle en secours)."""
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     etablissement.latitude = payload.latitude
     etablissement.longitude = payload.longitude
