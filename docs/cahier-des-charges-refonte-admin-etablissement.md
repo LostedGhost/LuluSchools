@@ -2,7 +2,7 @@
 
 > **Version** : 1.0 (draft) | **Date** : 2026-09-26 | **Statut** : En attente de validation avant tout diagramme UML / contrat d'API / code (méthode `lucio-dev`)
 
-Ce document couvre les 6 points soumis pour le profil A+, structurés en **6 lots** (numérotés 6.1 à 6.6, UC-39 à UC-57). Il propose aussi un **ordre de dépendance** entre lots, car un point structurant transverse (l'année académique) conditionne plusieurs des demandes. Les décisions ambiguës sont tranchées et marquées **[Délégué]** ; un point reverse une règle déjà validée (ADR-008) et est marqué **[Délégué — reverse ADR-008]**, à contester explicitement s'il ne correspond pas à l'intention.
+Ce document couvre les 6 points soumis pour le profil A+, structurés en **6 lots** (numérotés 6.1 à 6.6, UC-39 à UC-58). Il propose aussi un **ordre de dépendance** entre lots, car un point structurant transverse (l'année académique) conditionne plusieurs des demandes. Les décisions ambiguës sont tranchées et marquées **[Délégué]**. Le Lot 6.6 (micro-jobs/marketplace) reflète l'arbitrage explicite de l'utilisateur du 2026-09-26, qui corrige la première proposition de ce document.
 
 ---
 
@@ -106,13 +106,17 @@ Formaliser ce qui existe déjà en pièces détachées (`parrain_utilisateur_id`
 
 ---
 
-## Lot 6.6 — Micro-jobs et marketplace réservés aux étudiants
+## Lot 6.6 — Micro-jobs et marketplace : les étudiants gagnent de l'argent, les élèves EP/ES n'y entrent pas
 
-### UC-57 — Restreindre l'accès aux seuls comptes étudiants
-Micro-jobs et marketplace ne sont plus accessibles qu'aux comptes **étudiant** (élève inscrit et validé dans un établissement de type UP — même dérivation qu'UC-42), à l'exclusion des élèves EP/ES et de **tous les autres rôles** (tuteur, enseignant, admin_établissement, admin_ministériel).
+**Tranché par l'utilisateur (2026-09-26)**, corrige la première proposition de ce document : les adultes (Enseignant/Tuteur/A+/A++) gardent l'accès aux micro-jobs — seuls les élèves EP/ES en sont exclus. Mais puisque les micro-jobs sont pensés comme un moyen pour les **étudiants** de se faire de l'argent de poche, les adultes ne doivent plus pouvoir **répondre** à une offre (rôle PRESTATAIRE, celui qui est rémunéré) — ils peuvent en revanche continuer à **publier et payer** une offre (rôle CLIENT, celui qui embauche).
 
-> **[Délégué — reverse ADR-008]** : ceci **annule** la règle actuelle des micro-jobs (ADR-008 addendum : « n'importe quel rôle authentifié, Eleve inclus, peut publier une offre en tant que CLIENT ; le rôle PRESTATAIRE reste réservé aux rôles majeurs, Enseignant/Tuteur/A+/A++ »). Appliqué tel qu'écrit dans la demande — tuteur/enseignant/admin perdent l'accès aux micro-jobs, qui devient une fonctionnalité 100 % étudiante, symétrique à la marketplace (déjà nommée « marketplace étudiante » depuis la Phase 4). Si l'intention était seulement d'exclure les élèves EP/ES en gardant les adultes, c'est le point à corriger en priorité avant le code — le reste du lot n'en dépend pas.
-- Marketplace : la restriction actuelle (« élève ≥16 ans ») devient « étudiant » au sens UC-42 (dérivé du type d'établissement, plus de la seule condition d'âge) — resserrement cohérent avec le nom déjà donné à la fonctionnalité.
+### UC-57 — Micro-jobs : CLIENT ouvert aux adultes + étudiants, PRESTATAIRE réservé aux étudiants
+- **CLIENT** (publie une offre, paie) : Enseignant, Tuteur, Admin_établissement, Admin_ministériel, **Étudiant** (élève inscrit et validé dans un établissement de type UP — même dérivation qu'UC-42). **Élève EP/ES exclu.**
+- **PRESTATAIRE** (accepte une offre, est rémunéré) : **Étudiant uniquement.** Les adultes (Enseignant/Tuteur/A+/A++), auparavant seuls rôles majeurs autorisés côté prestataire (ADR-008 addendum), en sont désormais exclus — cohérent avec l'objectif : les micro-jobs sont un revenu d'appoint étudiant, pas un service que les adultes de la plateforme se rendraient entre eux.
+- Ceci **révise** (et ne remplace pas entièrement) l'ADR-008 addendum : le principe « CLIENT ouvert largement / PRESTATAIRE restreint » reste vrai, seule la composition du groupe restreint change (adultes → étudiants).
+
+### UC-58 — Marketplace réservée aux étudiants (achat et vente)
+La marketplace reste strictement étudiant↔étudiant (aucun rôle adulte n'y a jamais eu accès, rien ne change de ce côté) : la restriction actuelle (« élève ≥16 ans du même établissement ») devient « étudiant du même établissement » au sens UC-42 — dérivée du type d'établissement (UP) plutôt que de la seule condition d'âge, resserrement cohérent avec le nom déjà donné à la fonctionnalité depuis la Phase 4 (« marketplace étudiante »).
 
 ---
 
