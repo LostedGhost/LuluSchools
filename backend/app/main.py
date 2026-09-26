@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.modules.actes.router import router as actes_router
@@ -65,6 +69,21 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 "details": {"fields": jsonable_encoder(exc.errors())},
             }
         },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Filet de secours : sans lui, toute exception non prevue (bug reel, panne d'un
+    service externe non couverte par un except specifique) atterrit sur le handler par
+    defaut de Starlette - une reponse SANS la forme {"error": {...}} du contrat, que le
+    frontend (messageErreur()) ne sait pas interpreter et remplace silencieusement par
+    un message generique ("reessayez"), sans jamais rien logger de son cote. Loggee ici
+    (visible dans les logs Render) pour rester diagnostiquable en production."""
+    logger.exception("Exception non geree sur %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "erreur_interne", "message": "Une erreur inattendue est survenue.", "details": {}}},
     )
 
 

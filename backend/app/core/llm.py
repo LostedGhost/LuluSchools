@@ -32,6 +32,19 @@ class DigestFamilleError(Exception):
     """Levee quand FreeLLM ne peut pas generer le digest hebdomadaire du Radar familial (UC-36)."""
 
 
+def _texte_ou_erreur(response, erreur_cls: type[Exception]) -> str:
+    """`response.choices[0]` peut lever IndexError si FreeLLM renvoie une liste `choices`
+    vide (routage "auto" qui echoue silencieusement plutot que de renvoyer une erreur
+    HTTP) - non couvert par le `except OpenAIError` qui entoure uniquement l'appel HTTP
+    lui-meme. Sans ce garde-fou, cette IndexError remontait non geree jusqu'au handler
+    Starlette par defaut, qui renvoie une reponse SANS la forme {"error": {...}} du
+    contrat - le frontend (messageErreur()) ne peut alors qu'afficher son message
+    generique de secours, sans aucune trace exploitable cote serveur non plus."""
+    if not response.choices:
+        raise erreur_cls("Reponse FreeLLM sans contenu (aucun choix retourne).")
+    return (response.choices[0].message.content or "").strip()
+
+
 class FreeLLMClient:
     """Tous les appels LLM du projet passent par FreeLLM (ADR-002), jamais l'API Anthropic
     en direct. FreeLLM n'accepte que des images en vision : les PDF sont convertis en
@@ -66,7 +79,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise DocumentScoringError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, DocumentScoringError)
         correspondance = re.search(r"\d+(\.\d+)?", texte)
         if correspondance is None:
             raise DocumentScoringError(f"Reponse FreeLLM non interpretable comme un score : {texte!r}")
@@ -98,7 +111,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise CorrectionError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, CorrectionError)
         correspondance = re.search(r"\d+(\.\d+)?", texte)
         if correspondance is None:
             raise CorrectionError(f"Reponse FreeLLM non interpretable comme un score : {texte!r}")
@@ -141,7 +154,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise CorrectionError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, CorrectionError)
         correspondance = re.search(r"\d+(\.\d+)?", texte)
         if correspondance is None:
             raise CorrectionError(f"Reponse FreeLLM non interpretable comme une note : {texte!r}")
@@ -165,7 +178,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise QuizGenerationError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, QuizGenerationError)
         debut, fin = texte.find("["), texte.rfind("]")
         if debut == -1 or fin == -1:
             raise QuizGenerationError(f"Reponse FreeLLM non interpretable comme un quiz JSON : {texte!r}")
@@ -213,7 +226,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, ElProfessorError)
         if not texte:
             raise ElProfessorError("Reponse FreeLLM vide.")
         return texte
@@ -247,7 +260,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, ElProfessorError)
         if not texte:
             raise ElProfessorError("Reponse FreeLLM vide.")
         return texte
@@ -283,7 +296,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, ElProfessorError)
         if not texte:
             raise ElProfessorError("Reponse FreeLLM vide.")
         return texte
@@ -326,7 +339,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, ElProfessorError)
         if not texte:
             raise ElProfessorError("Reponse FreeLLM vide.")
         return texte
@@ -359,7 +372,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise DigestFamilleError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, DigestFamilleError)
         if not texte:
             raise DigestFamilleError("Reponse FreeLLM vide.")
         return texte
@@ -391,7 +404,7 @@ class FreeLLMClient:
         except OpenAIError as exc:
             raise ResumeSessionLiveError("FreeLLM indisponible ou a refuse la requete.") from exc
 
-        texte = (response.choices[0].message.content or "").strip()
+        texte = _texte_ou_erreur(response, ResumeSessionLiveError)
         if not texte:
             raise ResumeSessionLiveError("Reponse FreeLLM vide.")
         return texte
