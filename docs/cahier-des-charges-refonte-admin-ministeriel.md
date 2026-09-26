@@ -1,8 +1,8 @@
 # Refonte du portail Admin Ministériel (A++) — Cahier des charges
 
-> **Version** : 1.0 (draft) | **Date** : 2026-09-26 | **Statut** : En attente de validation utilisateur avant tout diagramme UML / contrat d'API / code (méthode `lucio-dev`)
+> **Version** : 1.1 | **Date** : 2026-09-26 | **Statut** : **Validé** (y compris tous les points `[Délégué]`, confirmés tels qu'écrits) — étape 1 close, diagrammes UML faits (`docs/diagrammes-uml-phase-5-admin-ministeriel.md`, contrat d'API fusionné dans ce même document à la demande explicite de l'utilisateur), passage direct au backend
 
-Ce document n'est **pas** un cas d'utilisation verrouillé. C'est une proposition structurée, à valider point par point (ou à amender), qui deviendra ensuite `docs/cas-utilisation-phase-5-admin-ministeriel.md` une fois figée. Les décisions de structuration ambiguës (pas de règle métier explicite du cahier des charges Phase 1/2/3) ont été tranchées de façon autonome et sont marquées **[Délégué]** — à contester si elles ne correspondent pas à l'intention.
+Ce document fait désormais foi comme cas d'utilisation verrouillé pour ce lot (numérotation UC-23 à UC-38 conservée). Les décisions de structuration ambiguës (pas de règle métier explicite du cahier des charges Phase 1/2/3) ont été tranchées de façon autonome, marquées **[Délégué]**, et validées sans changement.
 
 ---
 
