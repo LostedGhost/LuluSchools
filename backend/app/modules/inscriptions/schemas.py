@@ -40,6 +40,7 @@ class InscriptionAvecEleveOut(InscriptionOut):
     eleve_nom: str
     eleve_prenom: str
     eleve_matricule: str | None
+    eleve_utilisateur_id: str | None
 
 
 class EleveMeOut(BaseModel):

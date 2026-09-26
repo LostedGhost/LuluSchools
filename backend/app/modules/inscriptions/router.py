@@ -309,6 +309,7 @@ def inscriptions_a_valider(
                 "eleve_nom": eleve.nom,
                 "eleve_prenom": eleve.prenom,
                 "eleve_matricule": eleve.matricule,
+                "eleve_utilisateur_id": eleve.utilisateur_id,
             }
         )
     return resultat
@@ -341,6 +342,7 @@ def mes_inscriptions(
                 "eleve_nom": eleve.nom,
                 "eleve_prenom": eleve.prenom,
                 "eleve_matricule": eleve.matricule,
+                "eleve_utilisateur_id": eleve.utilisateur_id,
             }
         )
     return resultat

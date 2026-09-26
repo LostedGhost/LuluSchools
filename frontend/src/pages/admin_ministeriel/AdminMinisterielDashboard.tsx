@@ -25,6 +25,7 @@ import {
   Clock,
   Ruler,
   GraduationCap,
+  Gavel,
 } from "lucide-react";
 
 export function AdminMinisterielDashboard() {
@@ -103,6 +104,19 @@ export function AdminMinisterielDashboard() {
           ? `${countEnAttente} à arbitrer`
           : `${countValides} validé(s)`,
       urgent: countEnAttente > 0,
+    },
+    {
+      to: "/admin-ministeriel/micro-jobs-arbitrage",
+      label: "Arbitrage Micro-jobs",
+      desc: "Tranchez les contestations de missions entre membres de la communauté et validez les reversements aux prestataires.",
+      icon: Gavel,
+      tone: "primary" as const,
+      accentVar: "var(--primary)",
+      tintVar: "var(--primary-tint)",
+      deepVar: "var(--primary-deep)",
+      count: null,
+      badgeLabel: "Arbitrer",
+      urgent: false,
     },
   ];
 

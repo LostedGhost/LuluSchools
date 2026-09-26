@@ -121,10 +121,34 @@ def _etablissements_concernes(db: Session, conversation: Conversation) -> set[st
     return etablissements
 
 
+def _enrichir_conversation(db: Session, conversation: Conversation, utilisateur: Utilisateur) -> ConversationOut:
+    base = ConversationOut.model_validate(conversation)
+    if conversation.type == TypeConversation.GROUPE_CLASSE:
+        classe = db.get(Classe, conversation.classe_id)
+        base.classe_niveau = classe.niveau if classe else None
+        return base
+
+    autre_participation = (
+        db.query(ParticipantConversation)
+        .filter(
+            ParticipantConversation.conversation_id == conversation.id,
+            ParticipantConversation.utilisateur_id != utilisateur.id,
+        )
+        .first()
+    )
+    if autre_participation is not None:
+        autre = db.get(Utilisateur, autre_participation.utilisateur_id)
+        if autre is not None:
+            base.autre_participant_id = autre.id
+            base.autre_participant_nom = autre.nom
+            base.autre_participant_prenom = autre.prenom
+    return base
+
+
 @router.get("/conversations", response_model=list[ConversationOut])
 def mes_conversations(
     db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
-) -> list[Conversation]:
+) -> list[ConversationOut]:
     classe_ids = _mes_classe_ids(db, utilisateur)
     groupes = (
         db.query(Conversation).filter(Conversation.classe_id.in_(classe_ids)).all() if classe_ids else []
@@ -136,7 +160,8 @@ def mes_conversations(
         .all()
     ]
     dms = db.query(Conversation).filter(Conversation.id.in_(dm_ids)).all() if dm_ids else []
-    return sorted(groupes + dms, key=lambda c: c.created_at, reverse=True)
+    conversations = sorted(groupes + dms, key=lambda c: c.created_at, reverse=True)
+    return [_enrichir_conversation(db, c, utilisateur) for c in conversations]
 
 
 @router.post("/conversations", response_model=ConversationOut, status_code=status.HTTP_201_CREATED)
@@ -144,7 +169,7 @@ def creer_conversation_dm(
     payload: ConversationCreate,
     db: Session = Depends(get_db),
     utilisateur: Utilisateur = Depends(get_current_active_user),
-) -> Conversation:
+) -> ConversationOut:
     autre = db.get(Utilisateur, payload.participant_id)
     if autre is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur introuvable.")
@@ -185,7 +210,7 @@ def creer_conversation_dm(
             .first()
         )
         if existante is not None:
-            return existante
+            return _enrichir_conversation(db, existante, utilisateur)
 
     conversation = Conversation(type=TypeConversation.DM)
     db.add(conversation)
@@ -194,26 +219,26 @@ def creer_conversation_dm(
     db.add(ParticipantConversation(conversation_id=conversation.id, utilisateur_id=autre.id))
     db.commit()
     db.refresh(conversation)
-    return conversation
+    return _enrichir_conversation(db, conversation, utilisateur)
 
 
 @router.get("/classes/{classe_id}/conversation", response_model=ConversationOut)
 def obtenir_conversation_classe(
     classe_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
-) -> Conversation:
+) -> ConversationOut:
     classe = db.get(Classe, classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
     conversation = db.query(Conversation).filter(Conversation.classe_id == classe_id).first()
     if conversation is None or not _est_participant(db, utilisateur, conversation):
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas membre de ce groupe de classe.")
-    return conversation
+    return _enrichir_conversation(db, conversation, utilisateur)
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageOut])
 def lister_messages(
     conversation_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
-) -> list[Message]:
+) -> list[MessageOut]:
     conversation = db.get(Conversation, conversation_id)
     if conversation is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Conversation introuvable.")
@@ -226,7 +251,17 @@ def lister_messages(
         .order_by(Message.created_at.desc())
         .all()
     )
-    return [m for m in messages if utilisateur.id not in (m.masque_par or [])]
+    visibles = [m for m in messages if utilisateur.id not in (m.masque_par or [])]
+    auteurs = {a.id: a for a in db.query(Utilisateur).filter(Utilisateur.id.in_({m.auteur_id for m in visibles})).all()}
+    resultat = []
+    for m in visibles:
+        sortie = MessageOut.model_validate(m)
+        auteur = auteurs.get(m.auteur_id)
+        if auteur is not None:
+            sortie.auteur_nom = auteur.nom
+            sortie.auteur_prenom = auteur.prenom
+        resultat.append(sortie)
+    return resultat
 
 
 @router.post(
@@ -237,7 +272,7 @@ def envoyer_message(
     payload: MessageCreate,
     db: Session = Depends(get_db),
     utilisateur: Utilisateur = Depends(get_current_active_user),
-) -> Message:
+) -> MessageOut:
     conversation = db.get(Conversation, conversation_id)
     if conversation is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Conversation introuvable.")
@@ -248,7 +283,10 @@ def envoyer_message(
     db.add(message)
     db.commit()
     db.refresh(message)
-    return message
+    sortie = MessageOut.model_validate(message)
+    sortie.auteur_nom = utilisateur.nom
+    sortie.auteur_prenom = utilisateur.prenom
+    return sortie
 
 
 @router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)

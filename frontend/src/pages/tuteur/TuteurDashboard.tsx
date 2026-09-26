@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { donnerConsentementParental, mesInscriptions } from "../../api/inscriptions";
+import { creerConversationDm } from "../../api/messagerie";
+import { donnerConsentementCameraLive } from "../../api/cours_direct";
 import { messageErreur } from "../../api/client";
 import type { InscriptionAvecEleveOut, StatutInscription } from "../../types/api";
 import {
@@ -14,7 +16,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import type { ReactNode } from "react";
-import { UserPlus, ChevronRight, AlertCircle, Clock, CheckCircle2, XCircle, GraduationCap, ClipboardList, TriangleAlert } from "lucide-react";
+import { UserPlus, ChevronRight, AlertCircle, Clock, CheckCircle2, XCircle, GraduationCap, ClipboardList, TriangleAlert, MessageCircle, Video, Bus, Ticket, Handshake } from "lucide-react";
 
 type BadgeToneLocal = "neutral" | "success" | "error" | "pending";
 
@@ -39,9 +41,13 @@ const STATUS_ICON: Record<StatutInscription, ReactNode> = {
 };
 
 export function TuteurDashboard() {
+  const navigate = useNavigate();
   const [inscriptions, setInscriptions] = useState<InscriptionAvecEleveOut[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCoursId, setEnCoursId] = useState<string | null>(null);
+  const [contactEnCoursId, setContactEnCoursId] = useState<string | null>(null);
+  const [cameraEnCoursId, setCameraEnCoursId] = useState<string | null>(null);
+  const [cameraAutoriseeIds, setCameraAutoriseeIds] = useState<Set<string>>(new Set());
 
   const charger = () => {
     mesInscriptions()
@@ -61,6 +67,32 @@ export function TuteurDashboard() {
       setErreur(messageErreur(err));
     } finally {
       setEnCoursId(null);
+    }
+  };
+
+  const contacterEnfant = async (eleveUtilisateurId: string, inscriptionId: string) => {
+    setContactEnCoursId(inscriptionId);
+    setErreur(null);
+    try {
+      const res = await creerConversationDm(eleveUtilisateurId);
+      navigate(`/messagerie/${res.data.id}`);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'ouvrir la conversation."));
+    } finally {
+      setContactEnCoursId(null);
+    }
+  };
+
+  const autoriserCamera = async (eleveUtilisateurId: string, inscriptionId: string) => {
+    setCameraEnCoursId(inscriptionId);
+    setErreur(null);
+    try {
+      await donnerConsentementCameraLive(eleveUtilisateurId);
+      setCameraAutoriseeIds((prev) => new Set(prev).add(inscriptionId));
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'enregistrer votre consentement."));
+    } finally {
+      setCameraEnCoursId(null);
     }
   };
 
@@ -98,6 +130,23 @@ export function TuteurDashboard() {
       </div>
 
       <ErrorBanner>{erreur}</ErrorBanner>
+
+      {/* Raccourcis vie scolaire */}
+      <div className="grid-3" style={{ marginBottom: "24px", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+        {[
+          { to: "/tuteur/services", icon: <Bus size={20} />, tone: "action" as const, label: "Transport & cantine" },
+          { to: "/billetterie", icon: <Ticket size={20} />, tone: "reward" as const, label: "Billetterie" },
+          { to: "/micro-jobs", icon: <Handshake size={20} />, tone: "primary" as const, label: "Micro-jobs" },
+          { to: "/messagerie", icon: <MessageCircle size={20} />, tone: "info" as const, label: "Messagerie" },
+        ].map((item) => (
+          <Link key={item.to} to={item.to} style={{ textDecoration: "none" }}>
+            <div className="card card-hover" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px 16px" }}>
+              <span style={{ color: `var(--${item.tone}-deep, var(--${item.tone}))`, display: "inline-flex" }} aria-hidden="true">{item.icon}</span>
+              <span style={{ fontWeight: 600, fontSize: "var(--text-sm)", color: "var(--ink)" }}>{item.label}</span>
+            </div>
+          </Link>
+        ))}
+      </div>
 
       {/* KPI */}
       {inscriptions && inscriptions.length > 0 && (
@@ -260,6 +309,32 @@ export function TuteurDashboard() {
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                 <Badge tone={statut.tone}>{statut.label}</Badge>
+                {inscription.statut === "validee" && inscription.eleve_utilisateur_id && (
+                  <Btn
+                    variant="outline"
+                    size="sm"
+                    loading={contactEnCoursId === inscription.id}
+                    onClick={() => contacterEnfant(inscription.eleve_utilisateur_id!, inscription.id)}
+                    leftIcon={<MessageCircle size={14} />}
+                  >
+                    Contacter {inscription.eleve_prenom}
+                  </Btn>
+                )}
+                {inscription.statut === "validee" && inscription.eleve_utilisateur_id && (
+                  cameraAutoriseeIds.has(inscription.id) ? (
+                    <Badge tone="success">Caméra autorisée</Badge>
+                  ) : (
+                    <Btn
+                      variant="outline"
+                      size="sm"
+                      loading={cameraEnCoursId === inscription.id}
+                      onClick={() => autoriserCamera(inscription.eleve_utilisateur_id!, inscription.id)}
+                      leftIcon={<Video size={14} />}
+                    >
+                      Autoriser la caméra (cours en direct)
+                    </Btn>
+                  )
+                )}
                 {needsConsent && (
                   <Btn
                     variant="action"

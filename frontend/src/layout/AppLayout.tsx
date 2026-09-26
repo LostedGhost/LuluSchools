@@ -22,6 +22,15 @@ import {
   PencilRuler,
   UserCheck,
   Scale,
+  MessageCircle,
+  Flag,
+  Radio,
+  Bus,
+  Ticket,
+  ShieldCheck,
+  CalendarDays,
+  Handshake,
+  Gavel,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -73,6 +82,10 @@ function navPourRole(role: string | undefined): NavItem[] {
     return [
       { to: "/tuteur", label: "Mes enfants", icon: <Users size={iconSize} />, end: true },
       { to: "/tuteur/nouvelle-inscription", label: "Nouvelle inscription", icon: <UserCheck size={iconSize} /> },
+      { to: "/tuteur/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
+      { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
+      { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
+      { to: "/messagerie", label: "Messagerie", icon: <MessageCircle size={iconSize} /> },
     ];
   }
   if (role === "eleve") {
@@ -82,6 +95,10 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/eleve/devoirs", label: "Devoirs", icon: <ClipboardList size={iconSize} /> },
       { to: "/eleve/bulletin", label: "Bulletin", icon: <Award size={iconSize} /> },
       { to: "/eleve/actes", label: "Actes académiques", icon: <FileText size={iconSize} /> },
+      { to: "/eleve/cours-direct", label: "Cours en direct", icon: <Radio size={iconSize} /> },
+      { to: "/eleve/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
+      { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
+      { to: "/messagerie", label: "Messagerie", icon: <MessageCircle size={iconSize} /> },
     ];
   }
   if (role === "enseignant") {
@@ -92,6 +109,11 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/enseignant/contrats", label: "Mes contrats", icon: <FileText size={iconSize} /> },
       { to: "/enseignant/cours", label: "Mes cours", icon: <BookOpen size={iconSize} /> },
       { to: "/enseignant/devoirs", label: "Mes devoirs", icon: <PencilRuler size={iconSize} /> },
+      { to: "/enseignant/cours-direct", label: "Cours en direct", icon: <Radio size={iconSize} /> },
+      { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
+      { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
+      { to: "/valider-acces", label: "Valider un accès", icon: <ShieldCheck size={iconSize} /> },
+      { to: "/messagerie", label: "Messagerie", icon: <MessageCircle size={iconSize} /> },
     ];
   }
   if (role === "admin_etablissement") {
@@ -103,6 +125,11 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/admin-etablissement/contestations", label: "Contestations", icon: <Scale size={iconSize} /> },
       { to: "/admin-etablissement/actes", label: "Actes académiques", icon: <FileText size={iconSize} /> },
       { to: "/admin-etablissement/referentiels", label: "Référentiels", icon: <Settings size={iconSize} /> },
+      { to: "/admin-etablissement/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
+      { to: "/admin-etablissement/evenements", label: "Événements", icon: <CalendarDays size={iconSize} /> },
+      { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
+      { to: "/valider-acces", label: "Valider un accès", icon: <ShieldCheck size={iconSize} /> },
+      { to: "/admin-etablissement/signalements", label: "Signalements", icon: <Flag size={iconSize} /> },
     ];
   }
   if (role === "admin_ministeriel") {
@@ -110,6 +137,7 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/admin-ministeriel", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
       { to: "/admin-ministeriel/etablissements", label: "Établissements", icon: <Building2 size={iconSize} /> },
       { to: "/admin-ministeriel/referentiels", label: "Référentiels", icon: <Settings size={iconSize} /> },
+      { to: "/admin-ministeriel/micro-jobs-arbitrage", label: "Arbitrage micro-jobs", icon: <Gavel size={iconSize} /> },
     ];
   }
   return [];

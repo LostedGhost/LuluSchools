@@ -312,6 +312,9 @@ def test_eleve_retrouve_son_profil_et_sa_classe_actuelle(
 
     tuteur_apres = client.get("/api/v1/tuteurs/me/inscriptions", headers=tuteur_headers).json()
     assert tuteur_apres[0]["eleve_matricule"] is not None
+    # UC-13 (messagerie) : le tuteur a besoin de l'utilisateur_id de son enfant pour
+    # ouvrir un DM avec lui, sans avoir a le redemander ailleurs.
+    assert tuteur_apres[0]["eleve_utilisateur_id"] is not None
 
     identifiants = next(m for m in reversed(fake_email_client.sent) if "login_id" in m)
     login_eleve = client.post(

@@ -79,6 +79,7 @@ export interface InscriptionAvecEleveOut extends InscriptionOut {
   eleve_nom: string;
   eleve_prenom: string;
   eleve_matricule: string | null;
+  eleve_utilisateur_id: string | null;
 }
 
 export interface EleveMeOut {
@@ -348,6 +349,10 @@ export interface ConversationOut {
   id: string;
   type: TypeConversation;
   classe_id: string | null;
+  classe_niveau: string | null;
+  autre_participant_id: string | null;
+  autre_participant_nom: string | null;
+  autre_participant_prenom: string | null;
   created_at: string;
 }
 
@@ -355,6 +360,8 @@ export interface MessageOut {
   id: string;
   conversation_id: string;
   auteur_id: string;
+  auteur_nom: string | null;
+  auteur_prenom: string | null;
   contenu: string;
   created_at: string;
 }

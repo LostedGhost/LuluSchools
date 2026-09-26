@@ -10,6 +10,8 @@ def test_groupe_classe_cree_automatiquement_et_accessible_a_ses_membres(client, 
     assert conv_tuteur.status_code == 200
     assert conv_enseignant.json()["id"] == conv_eleve.json()["id"] == conv_tuteur.json()["id"]
 
+    assert conv_eleve.json()["classe_niveau"] == ctx["classe"]["niveau"]
+
     conversation_id = conv_eleve.json()["id"]
     envoi = client.post(
         f"/api/v1/conversations/{conversation_id}/messages",
@@ -17,6 +19,7 @@ def test_groupe_classe_cree_automatiquement_et_accessible_a_ses_membres(client, 
         headers=ctx["eleve_headers"],
     )
     assert envoi.status_code == 201
+    assert envoi.json()["auteur_nom"] is not None
 
     messages_vus_par_enseignant = client.get(
         f"/api/v1/conversations/{conversation_id}/messages", headers=ctx["enseignant_headers"]
@@ -24,6 +27,9 @@ def test_groupe_classe_cree_automatiquement_et_accessible_a_ses_membres(client, 
     assert messages_vus_par_enseignant.status_code == 200
     assert len(messages_vus_par_enseignant.json()) == 1
     assert messages_vus_par_enseignant.json()[0]["contenu"] == "Bonjour a tous"
+    # Bug potentiel evite : sans le nom de l'auteur, un groupe de classe a plusieurs
+    # participants serait illisible (impossible de savoir qui a ecrit quoi).
+    assert messages_vus_par_enseignant.json()[0]["auteur_nom"] is not None
 
     aussi_dans_mes_conversations = client.get("/api/v1/conversations", headers=ctx["eleve_headers"])
     assert conversation_id in [c["id"] for c in aussi_dans_mes_conversations.json()]
@@ -51,6 +57,10 @@ def test_dm_tuteur_eleve_autorise_seulement_pour_son_propre_enfant(client, class
 
     ok = client.post("/api/v1/conversations", json={"participant_id": eleve_id}, headers=ctx["tuteur_headers"])
     assert ok.status_code == 201
+    # Sans l'identite de "l'autre" participant, un DM serait impossible a afficher
+    # utilement dans la liste des conversations.
+    assert ok.json()["autre_participant_id"] == eleve_id
+    assert ok.json()["autre_participant_nom"] is not None
 
     # Un meme DM redemande renvoie la conversation existante, pas un doublon.
     encore = client.post("/api/v1/conversations", json={"participant_id": eleve_id}, headers=ctx["tuteur_headers"])

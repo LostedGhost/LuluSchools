@@ -15,6 +15,13 @@ import {
   BookOpen,
   Flame,
   Landmark,
+  MessageCircle,
+  Radio,
+  Sparkles,
+  Bus,
+  Ticket,
+  Handshake,
+  Box,
 } from "lucide-react";
 
 // Chargé à la demande : Three.js pèse à lui seul plus que tout le reste de
@@ -75,6 +82,58 @@ const FEATURES = [
     tone: "primary",
     title: "Conforme & sécurisé",
     desc: "Consentement parental, signature électronique, protection des données des mineurs (Art. 446) — rien n'est laissé au hasard.",
+  },
+];
+
+const NOUVEAUTES = [
+  {
+    icon: <MessageCircle size={26} />,
+    tone: "info",
+    title: "Messagerie interne",
+    desc: "Groupe de classe et messages privés, avec modération intégrée pour l'établissement.",
+    bientot: false,
+  },
+  {
+    icon: <Radio size={26} />,
+    tone: "primary",
+    title: "Cours en direct",
+    desc: "Sessions live planifiées par l'enseignant, avec consentement caméra du tuteur pour les mineurs.",
+    bientot: false,
+  },
+  {
+    icon: <Sparkles size={26} />,
+    tone: "magic",
+    title: "El Professor",
+    desc: "Un assistant pédagogique IA disponible sur chaque cours pour répondre aux questions des élèves.",
+    bientot: false,
+  },
+  {
+    icon: <Bus size={26} />,
+    tone: "action",
+    title: "Transport & cantine",
+    desc: "Achat de tickets, contrôle d'accès par un agent désigné, remboursement jusqu'à la veille 18h.",
+    bientot: false,
+  },
+  {
+    icon: <Ticket size={26} />,
+    tone: "reward",
+    title: "Billetterie d'événements",
+    desc: "Kermesses, spectacles et cérémonies : réservez et payez votre billet en ligne.",
+    bientot: false,
+  },
+  {
+    icon: <Handshake size={26} />,
+    tone: "primary",
+    title: "Micro-jobs communautaires",
+    desc: "Enseignants, tuteurs et établissements s'échangent des services ponctuels, paiement sécurisé par séquestre.",
+    bientot: false,
+  },
+  {
+    icon: <Box size={26} />,
+    tone: "info",
+    title: "Visites virtuelles 3D",
+    desc: "Explorez un établissement en 3D avant d'y inscrire votre enfant.",
+    bientot: true,
   },
 ];
 
@@ -466,6 +525,78 @@ export function LandingPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* ── Nouveautés Phase 2/3 ── */}
+      <section
+        style={{
+          background: "var(--surface-2)",
+          borderTop: "2px dashed var(--border)",
+          borderBottom: "2px dashed var(--border)",
+          padding: "80px 0",
+        }}
+      >
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
+          <div style={{ textAlign: "center", marginBottom: "56px" }}>
+            <p className="text-eyebrow" style={{ marginBottom: "12px", display: "block" }}>
+              Au-delà de la classe
+            </p>
+            <h2 className="text-headline" style={{ margin: "0 0 12px", color: "var(--ink)" }}>
+              La vie scolaire, toute entière.
+            </h2>
+            <p style={{ color: "var(--ink-soft)", maxWidth: "52ch", margin: "0 auto", fontSize: "var(--text-lg)" }}>
+              Communication, transport, cantine, événements et bien plus — tout ce qui entoure l'école, au même endroit.
+            </p>
+          </div>
+
+          <div className="grid-3">
+            {NOUVEAUTES.map((f, i) => (
+              <div
+                key={f.title}
+                className="card card-hover anim-float-in"
+                style={{ animationDelay: `${i * 60}ms`, position: "relative", opacity: f.bientot ? 0.85 : 1 }}
+              >
+                {f.bientot && (
+                  <span
+                    className="chip chip-pending"
+                    style={{ position: "absolute", top: "16px", right: "16px" }}
+                  >
+                    Bientôt disponible
+                  </span>
+                )}
+                <div
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "var(--radius-md)",
+                    background: `var(--${f.tone}-tint)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: `var(--${f.tone}-deep, var(--${f.tone}))`,
+                    marginBottom: "16px",
+                  }}
+                >
+                  {f.icon}
+                </div>
+                <h3
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--text-lg)",
+                    fontWeight: 600,
+                    margin: "0 0 8px",
+                    color: "var(--ink)",
+                  }}
+                >
+                  {f.title}
+                </h3>
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)", margin: 0, lineHeight: 1.65 }}>
+                  {f.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ── XP Demo strip ── */}

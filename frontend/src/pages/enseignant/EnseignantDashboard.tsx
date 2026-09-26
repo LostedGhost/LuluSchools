@@ -10,6 +10,11 @@ import {
   TrendingUp,
   CheckCircle2,
   Bot,
+  Radio,
+  Ticket,
+  ShieldCheck,
+  Handshake,
+  MessageCircle,
 } from "lucide-react";
 
 const NAV_CARDS = [
@@ -47,6 +52,41 @@ const NAV_CARDS = [
     tone: "action" as const,
     title: "Mes devoirs",
     desc: "Créer, corriger, noter",
+  },
+  {
+    to: "/enseignant/cours-direct",
+    icon: <Radio size={24} />,
+    tone: "primary" as const,
+    title: "Cours en direct",
+    desc: "Planifier et animer des sessions live",
+  },
+  {
+    to: "/billetterie",
+    icon: <Ticket size={24} />,
+    tone: "reward" as const,
+    title: "Billetterie",
+    desc: "Événements de mon établissement",
+  },
+  {
+    to: "/micro-jobs",
+    icon: <Handshake size={24} />,
+    tone: "action" as const,
+    title: "Micro-jobs",
+    desc: "Proposer ou accepter un service ponctuel",
+  },
+  {
+    to: "/valider-acces",
+    icon: <ShieldCheck size={24} />,
+    tone: "info" as const,
+    title: "Valider un accès",
+    desc: "Si vous êtes contrôleur désigné",
+  },
+  {
+    to: "/messagerie",
+    icon: <MessageCircle size={24} />,
+    tone: "info" as const,
+    title: "Messagerie",
+    desc: "Groupes de classe et messages privés",
   },
 ];
 

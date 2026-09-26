@@ -9,7 +9,7 @@ import {
   LevelBadge,
   type MedalDef,
 } from "../../components/gamification";
-import { BookOpen, ClipboardList, Trophy, FileText, ClipboardCheck, Target, PenLine, Flag } from "lucide-react";
+import { BookOpen, ClipboardList, Trophy, FileText, ClipboardCheck, Target, PenLine, Flag, Radio, Bus, Ticket, MessageCircle } from "lucide-react";
 
 /* Données de gamification simulées (à remplacer par des vraies API quand disponibles) */
 const DEMO_STREAK = 12;
@@ -158,6 +158,34 @@ export function EleveDashboard() {
               tone: "magic" as const,
               title: "Actes académiques",
               desc: "Demandes d'actes et réclamations",
+            },
+            {
+              to: "/eleve/cours-direct",
+              icon: <Radio size={24} />,
+              tone: "primary" as const,
+              title: "Cours en direct",
+              desc: "Rejoindre une session live de ma classe",
+            },
+            {
+              to: "/eleve/services",
+              icon: <Bus size={24} />,
+              tone: "action" as const,
+              title: "Transport & cantine",
+              desc: "Réserver mes tickets",
+            },
+            {
+              to: "/billetterie",
+              icon: <Ticket size={24} />,
+              tone: "reward" as const,
+              title: "Billetterie",
+              desc: "Événements de mon établissement",
+            },
+            {
+              to: "/messagerie",
+              icon: <MessageCircle size={24} />,
+              tone: "info" as const,
+              title: "Messagerie",
+              desc: "Groupe de classe et messages privés",
             },
           ].map((item) => (
             <Link

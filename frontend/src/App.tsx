@@ -15,6 +15,7 @@ import { DashboardRedirect } from "./pages/DashboardRedirect";
 
 import { TuteurDashboard } from "./pages/tuteur/TuteurDashboard";
 import { NouvelleInscriptionPage } from "./pages/tuteur/NouvelleInscriptionPage";
+import { ServicesScolairesPage as TuteurServicesScolairesPage } from "./pages/tuteur/ServicesScolairesPage";
 
 import { EleveDashboard } from "./pages/eleve/EleveDashboard";
 import { CoursListPage } from "./pages/eleve/CoursListPage";
@@ -23,6 +24,8 @@ import { DevoirsListPage } from "./pages/eleve/DevoirsListPage";
 import { DevoirDetailPage } from "./pages/eleve/DevoirDetailPage";
 import { BulletinPage } from "./pages/eleve/BulletinPage";
 import { ActesPage } from "./pages/eleve/ActesPage";
+import { CoursDirectPage } from "./pages/eleve/CoursDirectPage";
+import { ServicesScolairesPage as EleveServicesScolairesPage } from "./pages/eleve/ServicesScolairesPage";
 
 import { EnseignantDashboard } from "./pages/enseignant/EnseignantDashboard";
 import { PostesListPage } from "./pages/enseignant/PostesListPage";
@@ -31,6 +34,7 @@ import { MesCandidaturesPage } from "./pages/enseignant/MesCandidaturesPage";
 import { MesContratsPage } from "./pages/enseignant/MesContratsPage";
 import { MesCoursPage } from "./pages/enseignant/MesCoursPage";
 import { MesDevoirsPage } from "./pages/enseignant/MesDevoirsPage";
+import { SessionsLivePage } from "./pages/enseignant/SessionsLivePage";
 
 import { AdminEtabDashboard } from "./pages/admin_etablissement/AdminEtabDashboard";
 import { ClassesPage } from "./pages/admin_etablissement/ClassesPage";
@@ -39,10 +43,20 @@ import { RecrutementPage } from "./pages/admin_etablissement/RecrutementPage";
 import { ContestationsPage } from "./pages/admin_etablissement/ContestationsPage";
 import { ActesAdminPage } from "./pages/admin_etablissement/ActesAdminPage";
 import { ReferentielsEtabPage } from "./pages/admin_etablissement/ReferentielsEtabPage";
+import { ServicesScolairesAdminPage } from "./pages/admin_etablissement/ServicesScolairesAdminPage";
+import { EvenementsAdminPage } from "./pages/admin_etablissement/EvenementsAdminPage";
 
 import { AdminMinisterielDashboard } from "./pages/admin_ministeriel/AdminMinisterielDashboard";
 import { EtablissementsPage } from "./pages/admin_ministeriel/EtablissementsPage";
 import { ReferentielsPage } from "./pages/admin_ministeriel/ReferentielsPage";
+
+import { MessagerieListPage } from "./pages/messagerie/MessagerieListPage";
+import { ConversationPage } from "./pages/messagerie/ConversationPage";
+import { SignalementsPage } from "./pages/admin_etablissement/SignalementsPage";
+import { BilletteriePage } from "./pages/billetterie/BilletteriePage";
+import { ValiderAccesPage } from "./pages/controle_acces/ValiderAccesPage";
+import { MicroJobsPage } from "./pages/micro_jobs/MicroJobsPage";
+import { MicroJobsArbitragePage } from "./pages/admin_ministeriel/MicroJobsArbitragePage";
 
 function App() {
   return (
@@ -101,6 +115,14 @@ function App() {
               element={
                 <RequireAuth roles={["tuteur"]}>
                   <NouvelleInscriptionPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/services"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <TuteurServicesScolairesPage />
                 </RequireAuth>
               }
             />
@@ -172,6 +194,26 @@ function App() {
                 </RequireAuth>
               }
             />
+            <Route
+              path="/eleve/cours-direct"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <EleveProfileProvider>
+                    <CoursDirectPage />
+                  </EleveProfileProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/eleve/services"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <EleveProfileProvider>
+                    <EleveServicesScolairesPage />
+                  </EleveProfileProvider>
+                </RequireAuth>
+              }
+            />
 
             {/* Enseignant */}
             <Route
@@ -227,6 +269,14 @@ function App() {
               element={
                 <RequireAuth roles={["enseignant"]}>
                   <MesDevoirsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/enseignant/cours-direct"
+              element={
+                <RequireAuth roles={["enseignant"]}>
+                  <SessionsLivePage />
                 </RequireAuth>
               }
             />
@@ -298,6 +348,94 @@ function App() {
                 <RequireAuth roles={["admin_etablissement"]}>
                   <AdminEtabProvider>
                     <ReferentielsEtabPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/services"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <ServicesScolairesAdminPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/evenements"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <EvenementsAdminPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+
+            {/* Messagerie (tuteur, eleve, enseignant) */}
+            <Route
+              path="/messagerie"
+              element={
+                <RequireAuth roles={["tuteur", "eleve", "enseignant"]}>
+                  <MessagerieListPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/messagerie/:conversationId"
+              element={
+                <RequireAuth roles={["tuteur", "eleve", "enseignant"]}>
+                  <ConversationPage />
+                </RequireAuth>
+              }
+            />
+
+            {/* Billetterie (achat, tous roles consommateurs) */}
+            <Route
+              path="/billetterie"
+              element={
+                <RequireAuth roles={["tuteur", "eleve", "enseignant", "admin_etablissement"]}>
+                  <BilletteriePage />
+                </RequireAuth>
+              }
+            />
+
+            {/* Controle d'acces (contrôleurs designes : enseignant ou admin etablissement) */}
+            <Route
+              path="/valider-acces"
+              element={
+                <RequireAuth roles={["enseignant", "admin_etablissement"]}>
+                  <ValiderAccesPage />
+                </RequireAuth>
+              }
+            />
+
+            {/* Micro-jobs (enseignant, tuteur, admin etablissement, admin ministeriel) */}
+            <Route
+              path="/micro-jobs"
+              element={
+                <RequireAuth roles={["enseignant", "tuteur", "admin_etablissement", "admin_ministeriel"]}>
+                  <MicroJobsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-ministeriel/micro-jobs-arbitrage"
+              element={
+                <RequireAuth roles={["admin_ministeriel"]}>
+                  <MicroJobsArbitragePage />
+                </RequireAuth>
+              }
+            />
+
+            {/* Admin etablissement (A+) — signalements messagerie */}
+            <Route
+              path="/admin-etablissement/signalements"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <SignalementsPage />
                   </AdminEtabProvider>
                 </RequireAuth>
               }

@@ -28,6 +28,9 @@ import {
   Landmark,
   ClipboardList,
   AlertTriangle,
+  Bus,
+  CalendarDays,
+  Flag,
 } from "lucide-react";
 
 interface EtabMetrics {
@@ -177,6 +180,45 @@ export function AdminEtabDashboard() {
         metrics.demandesActesCount !== null
           ? `${metrics.demandesActesCount} demande(s)`
           : "Catalogue",
+      urgent: false,
+    },
+    {
+      to: "/admin-etablissement/services",
+      label: "Transport & Cantine",
+      desc: "Configurez les lignes de transport, les services de cantine et désignez les contrôleurs d'accès.",
+      icon: Bus,
+      tone: "action" as const,
+      accentVar: "var(--action)",
+      tintVar: "var(--action-tint)",
+      deepVar: "var(--action-deep)",
+      count: null,
+      badgeLabel: "Configurer",
+      urgent: false,
+    },
+    {
+      to: "/admin-etablissement/evenements",
+      label: "Billetterie d'Événements",
+      desc: "Créez des événements scolaires, désignez un parrain et vendez des billets en ligne.",
+      icon: CalendarDays,
+      tone: "reward" as const,
+      accentVar: "var(--reward)",
+      tintVar: "var(--reward-tint)",
+      deepVar: "var(--reward-deep)",
+      count: null,
+      badgeLabel: "Gérer",
+      urgent: false,
+    },
+    {
+      to: "/admin-etablissement/signalements",
+      label: "Signalements Messagerie",
+      desc: "Examinez les messages signalés par les membres de l'établissement et clôturez chaque dossier.",
+      icon: Flag,
+      tone: "magic" as const,
+      accentVar: "var(--magic)",
+      tintVar: "var(--magic-tint)",
+      deepVar: "var(--magic-deep)",
+      count: null,
+      badgeLabel: "Modérer",
       urgent: false,
     },
   ];
