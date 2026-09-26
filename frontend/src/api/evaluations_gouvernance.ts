@@ -26,3 +26,11 @@ export function proposerReferentiel(referentielId: string, coefficient: number) 
 export function validerReferentiel(referentielId: string) {
   return api.post<ReferentielOut>(`/referentiels-coefficients/${referentielId}/valider`);
 }
+
+export function modifierReferentiel(referentielId: string, coefficient: number) {
+  return api.patch<ReferentielOut>(`/referentiels-coefficients/${referentielId}`, { coefficient });
+}
+
+export function validerReferentielsEnLot(ids: string[]) {
+  return api.post<ReferentielOut[]>("/referentiels-coefficients/valider-lot", { ids });
+}

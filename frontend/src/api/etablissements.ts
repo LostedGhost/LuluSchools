@@ -124,3 +124,11 @@ export function ajouterPhotoEtablissement(etablissementId: string, fichier: File
 export function supprimerPhotoEtablissement(etablissementId: string, photoId: string) {
   return api.delete(`/etablissements/${etablissementId}/photos/${photoId}`);
 }
+
+export function modifierDescriptionEtablissement(etablissementId: string, description: string | null) {
+  return api.patch<EtablissementOut>(`/etablissements/${etablissementId}/description`, { description });
+}
+
+export function actionGroupeeEtablissements(ids: string[], action: "suspendre" | "reactiver", motif: string) {
+  return api.post<EtablissementOut[]>("/etablissements/action-groupee", { ids, action, motif });
+}

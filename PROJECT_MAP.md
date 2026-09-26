@@ -37,6 +37,23 @@ API backend sous préfixe `/api/v1` — contrat complet et à jour dans `docs/co
 **Phase 2/3** — étapes 1 à 6 validées (voir `SUIVI-PROJET.md`) : cas d'utilisation, diagrammes UML, contrat d'API, **backend complet** pour les 9 UC (UC-11 à UC-19) — tickets transport/cantine, contrôle d'accès, billetterie, messagerie, assistant El Professor, cours vidéo, cours en direct, visites 3D/drone, micro-jobs+séquestre — et **validation de bout en bout** (`backend/tests/test_e2e_parcours_phase2_3.py`, même principe que `test_e2e_parcours_complet.py` : un seul établissement/classe/enseignant/élève/tuteur réutilisés à travers les 9 UC dans l'ordre réel, paiement Kkiapay réellement bouclé à chaque étape payante). 8 nouveaux modules, 8 migrations (0013-0020) appliquées en réel, 124 tests au total (aucune régression). Étape 6 (frontend) : **8 des 9 UC ont une interface complète** — messagerie, El Professor, cours en direct, transport/cantine, billetterie, micro-jobs — pour les 5 rôles concernés, réutilisant le design system institutionnel (ADR-007/009) ; seul UC-19 (visites 3D/drone) reste un teaser « Bientôt disponible », par décision explicite de l'utilisateur (le choix technique de la visite 3D elle-même n'a pas encore été arbitré). Détail par module dans `backend/PROJECT_MAP.md` et `frontend/PROJECT_MAP.md`. Prochaine étape : 7 (intégration/correction des écarts) puis 8 (déploiement) pour ce lot Phase 2/3.
 
 ## Dernière synchronisation
+2026-09-26 (Phase 5, frontend) — Frontend complet pour UC-23 à UC-38 : composant
+`DataTable` générique réutilisable (`frontend/src/components/DataTable.tsx`), 3 pages
+refondues (Établissements, Référentiels, Arbitrage micro-jobs — fin de la saisie manuelle
+d'ID) et 4 nouvelles pages (Utilisateurs, Contenus pédagogiques, Événements, Journal
+d'audit). En vérifiant en navigateur réel contre les données `seed_mega.py` déjà présentes
+en local (6227 utilisateurs, jamais exploitées jusqu'ici faute de Postgres local
+disponible dans les sessions précédentes), révélé et corrigé un vrai bug : `GET /me` et le
+nouveau `GET /admin/utilisateurs` renvoyaient 500 sur tout compte seedé avec un e-mail
+`.test` (validation Pydantic `EmailStr` trop stricte pour un champ d'affichage agrégeant
+des milliers de comptes) — corrigé en repassant `AdminUtilisateurOut.email` en `str`
+simple. Vérifié par `tsc -b`/`vite build` au vert et par des appels réels (navigateur +
+curl) contre le backend réel : établissement suspendu/réactivé en masse (disparition/
+réapparition confirmée dans l'annuaire public), référentiel validé en lot puis modifié en
+ligne, compte suspendu puis bloqué sur un endpoint protégé puis réactivé — chaque action
+retrouvée dans le journal d'audit. Détail complet dans `frontend/PROJECT_MAP.md`.
+Prochaine étape : étape 7 (intégration et correction des écarts).
+
 2026-09-26 (Phase 5, backend) — Cahier des charges validé (points `[Délégué]` confirmés),
 diagrammes UML faits (`docs/diagrammes-uml-phase-5-admin-ministeriel.md`, contrat d'API
 fusionné dans le même document sur demande explicite), **backend complet** pour UC-23 à

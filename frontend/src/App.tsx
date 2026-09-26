@@ -53,6 +53,10 @@ import { EvenementsAdminPage } from "./pages/admin_etablissement/EvenementsAdmin
 import { AdminMinisterielDashboard } from "./pages/admin_ministeriel/AdminMinisterielDashboard";
 import { EtablissementsPage } from "./pages/admin_ministeriel/EtablissementsPage";
 import { ReferentielsPage } from "./pages/admin_ministeriel/ReferentielsPage";
+import { UtilisateursPage as UtilisateursMinisterielPage } from "./pages/admin_ministeriel/UtilisateursPage";
+import { ContenusPage } from "./pages/admin_ministeriel/ContenusPage";
+import { EvenementsSupervisionPage } from "./pages/admin_ministeriel/EvenementsSupervisionPage";
+import { JournalAuditPage } from "./pages/admin_ministeriel/JournalAuditPage";
 
 import { MessagerieListPage } from "./pages/messagerie/MessagerieListPage";
 import { ConversationPage } from "./pages/messagerie/ConversationPage";
@@ -505,6 +509,38 @@ function App() {
               element={
                 <RequireAuth roles={["admin_ministeriel"]}>
                   <ReferentielsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-ministeriel/utilisateurs"
+              element={
+                <RequireAuth roles={["admin_ministeriel"]}>
+                  <UtilisateursMinisterielPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-ministeriel/contenus"
+              element={
+                <RequireAuth roles={["admin_ministeriel"]}>
+                  <ContenusPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-ministeriel/evenements"
+              element={
+                <RequireAuth roles={["admin_ministeriel"]}>
+                  <EvenementsSupervisionPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-ministeriel/journal-audit"
+              element={
+                <RequireAuth roles={["admin_ministeriel"]}>
+                  <JournalAuditPage />
                 </RequireAuth>
               }
             />

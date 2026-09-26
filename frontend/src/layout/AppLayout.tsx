@@ -143,6 +143,10 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/admin-ministeriel/etablissements", label: "Établissements", icon: <Building2 size={iconSize} /> },
       { to: "/admin-ministeriel/referentiels", label: "Référentiels", icon: <Settings size={iconSize} /> },
       { to: "/admin-ministeriel/micro-jobs-arbitrage", label: "Arbitrage micro-jobs", icon: <Gavel size={iconSize} /> },
+      { to: "/admin-ministeriel/utilisateurs", label: "Utilisateurs", icon: <Users size={iconSize} /> },
+      { to: "/admin-ministeriel/contenus", label: "Contenus pédagogiques", icon: <BookOpen size={iconSize} /> },
+      { to: "/admin-ministeriel/evenements", label: "Événements", icon: <CalendarDays size={iconSize} /> },
+      { to: "/admin-ministeriel/journal-audit", label: "Journal d'audit", icon: <ScrollText size={iconSize} /> },
     ];
   }
   return [];

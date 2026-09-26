@@ -1,5 +1,11 @@
 import { api } from "./client";
-import type { ContestationMicroJobOut, MissionMicroJobOut, OffreMicroJobOut } from "../types/api";
+import type {
+  ContestationMicroJobDetailOut,
+  ContestationMicroJobOut,
+  MissionAReverserOut,
+  MissionMicroJobOut,
+  OffreMicroJobOut,
+} from "../types/api";
 
 export function listerOffres() {
   return api.get<OffreMicroJobOut[]>("/micro-jobs/offres");
@@ -54,4 +60,12 @@ export function reverserPrestataire(missionId: string, referencePaiement: string
 
 export function mesMissions() {
   return api.get<MissionMicroJobOut[]>("/mes-missions-micro-job");
+}
+
+export function listerContestationsMicroJob(statut: "en_attente" | "acceptee" | "rejetee" = "en_attente") {
+  return api.get<ContestationMicroJobDetailOut[]>("/contestations-micro-job", { params: { statut } });
+}
+
+export function listerMissionsAReverser() {
+  return api.get<MissionAReverserOut[]>("/missions-micro-job/a-reverser");
 }

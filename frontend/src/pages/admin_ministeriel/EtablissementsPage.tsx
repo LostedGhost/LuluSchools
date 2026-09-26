@@ -1,26 +1,34 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { creerEtablissement, listerEtablissements, mettreAJourLocalisation } from "../../api/etablissements";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  actionGroupeeEtablissements,
+  creerEtablissement,
+  listerEtablissements,
+  mettreAJourLocalisation,
+  modifierDescriptionEtablissement,
+} from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
 import type { EtablissementOut, TypeEtablissement } from "../../types/api";
 import {
   Badge,
   Btn,
   Card,
-  EmptyState,
   ErrorBanner,
   Field,
   PageTitle,
   SectionHead,
   Select,
-  SkeletonCard,
   SuccessBanner,
+  TextArea,
   TextInput,
 } from "../../components/ui";
+import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { LocationPicker } from "../../components/LocationPicker";
-import { Building2, MapPin } from "lucide-react";
+import { PhotosEtablissementManager } from "../../components/PhotosEtablissementManager";
+import { Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { lienGoogleMaps } from "../../utils/geo";
-import { PHOTOS_PAR_DEFAUT } from "../../utils/photosParDefaut";
 import { estRempli, estEmailValide } from "../../utils/validation";
+
+const TYPE_LABEL: Record<TypeEtablissement, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur" };
 
 export function EtablissementsPage() {
   const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
@@ -38,6 +46,19 @@ export function EtablissementsPage() {
   const [succes, setSucces] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [champErreurs, setChampErreurs] = useState<{ nom?: string; adminNom?: string; adminPrenom?: string; adminEmail?: string; localisation?: string }>({});
+
+  // Table + recherche/filtre (UC-25)
+  const [recherche, setRecherche] = useState("");
+  const [filtreType, setFiltreType] = useState<"" | TypeEtablissement>("");
+  const [filtreActif, setFiltreActif] = useState<"" | "actif" | "suspendu">("");
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [enCoursActionGroupee, setEnCoursActionGroupee] = useState(false);
+  const [motifActionGroupee, setMotifActionGroupee] = useState("");
+
+  // Fiche détaillée (UC-23/24/40) : ouverte en cliquant une ligne
+  const [ficheOuverteId, setFicheOuverteId] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [enregistrementDescription, setEnregistrementDescription] = useState(false);
   const [editionLocalisationId, setEditionLocalisationId] = useState<string | null>(null);
   const [latModif, setLatModif] = useState("");
   const [lngModif, setLngModif] = useState("");
@@ -97,6 +118,29 @@ export function EtablissementsPage() {
     }
   };
 
+  const ouvrirFiche = (etablissement: EtablissementOut) => {
+    if (ficheOuverteId === etablissement.id) {
+      setFicheOuverteId(null);
+      return;
+    }
+    setFicheOuverteId(etablissement.id);
+    setDescription(etablissement.description ?? "");
+    setEditionLocalisationId(null);
+  };
+
+  const enregistrerDescription = async (etablissementId: string) => {
+    setEnregistrementDescription(true);
+    setErreur(null);
+    try {
+      await modifierDescriptionEtablissement(etablissementId, description || null);
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'enregistrer la description."));
+    } finally {
+      setEnregistrementDescription(false);
+    }
+  };
+
   const ouvrirEditionLocalisation = (etablissement: EtablissementOut) => {
     setEditionLocalisationId(etablissement.id);
     setLatModif(etablissement.latitude?.toString() ?? "");
@@ -122,6 +166,76 @@ export function EtablissementsPage() {
       setEnCoursModif(false);
     }
   };
+
+  const appliquerActionGroupee = async (action: "suspendre" | "reactiver") => {
+    if (!estRempli(motifActionGroupee)) {
+      setErreur("Un motif est requis pour cette action groupée.");
+      return;
+    }
+    setEnCoursActionGroupee(true);
+    setErreur(null);
+    try {
+      await actionGroupeeEtablissements(Array.from(selection), action, motifActionGroupee);
+      setSelection(new Set());
+      setMotifActionGroupee("");
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'appliquer cette action groupée."));
+    } finally {
+      setEnCoursActionGroupee(false);
+    }
+  };
+
+  const etablissementsFiltres = useMemo(() => {
+    return etablissements.filter((e) => {
+      if (recherche && !`${e.nom} ${e.code_etablissement}`.toLowerCase().includes(recherche.toLowerCase())) return false;
+      if (filtreType && e.type !== filtreType) return false;
+      if (filtreActif === "actif" && !e.actif) return false;
+      if (filtreActif === "suspendu" && e.actif) return false;
+      return true;
+    });
+  }, [etablissements, recherche, filtreType, filtreActif]);
+
+  const colonnes: DataTableColumn<EtablissementOut>[] = [
+    {
+      key: "nom",
+      header: "Établissement",
+      render: (e) => (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Building2 size={16} style={{ color: "var(--primary-deep)", flexShrink: 0 }} />
+          <span style={{ fontWeight: 600 }}>{e.nom}</span>
+          {!e.actif && <Badge tone="error">Suspendu</Badge>}
+        </div>
+      ),
+    },
+    { key: "code", header: "Code", render: (e) => <span className="monospace text-sm">{e.code_etablissement}</span> },
+    { key: "type", header: "Type", render: (e) => <Badge tone="info">{TYPE_LABEL[e.type]}</Badge> },
+    { key: "statut", header: "Statut", render: (e) => (e.statut === "public" ? "Public" : "Privé") },
+    {
+      key: "localisation",
+      header: "Localisation",
+      render: (e) =>
+        e.latitude !== null && e.longitude !== null ? (
+          <a
+            href={lienGoogleMaps(e.latitude, e.longitude)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(ev) => ev.stopPropagation()}
+            style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "var(--primary-deep)" }}
+          >
+            <MapPin size={14} /> Voir
+          </a>
+        ) : (
+          <span style={{ color: "var(--ink-faint)" }}>Non renseignée</span>
+        ),
+    },
+    {
+      key: "fiche",
+      header: "",
+      render: (e) => (ficheOuverteId === e.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />),
+      width: "32px",
+    },
+  ];
 
   return (
     <div className="page-content">
@@ -190,57 +304,105 @@ export function EtablissementsPage() {
         </Card>
       )}
 
-      <SectionHead title="Établissements du réseau" />
-      {chargement ? (
-        <div className="grid-3">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      ) : etablissements.length === 0 ? (
-        <EmptyState photo={PHOTOS_PAR_DEFAUT.ES[0].url} title="Aucun établissement" desc="Créez le premier établissement du réseau ci-dessus." />
-      ) : (
-        <div className="grid-3">
-          {etablissements.map((e) => (
-            <Card key={e.id}>
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}>
-                <div style={{
-                  width: "40px", height: "40px", borderRadius: "var(--radius-md)",
-                  background: "var(--primary-tint)", color: "var(--primary-deep)",
-                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                }} aria-hidden="true">
-                  <Building2 size={20} />
-                </div>
-                <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.nom}</span>
-              </div>
-              <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
-                <Badge tone="neutral">{e.code_etablissement}</Badge>
-                <Badge tone="info">{e.type}</Badge>
-              </div>
+      <SectionHead title="Établissements du réseau" desc="Cliquez une ligne pour voir la fiche complète (photos, description, localisation)." />
 
-              {editionLocalisationId === e.id ? (
-                <div style={{ paddingTop: "var(--space-3)", borderTop: "1px dashed var(--border)" }}>
-                  <LocationPicker latitude={latModif} longitude={lngModif} onChange={(lat, lng) => { setLatModif(lat); setLngModif(lng); }} />
-                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                    <Btn size="sm" variant="primary" loading={enCoursModif} onClick={() => enregistrerLocalisation(e.id)}>Enregistrer</Btn>
-                    <Btn size="sm" variant="ghost" onClick={() => setEditionLocalisationId(null)}>Annuler</Btn>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", paddingTop: "var(--space-3)", borderTop: "1px dashed var(--border)" }}>
-                  {e.latitude !== null && e.longitude !== null ? (
-                    <a href={lienGoogleMaps(e.latitude, e.longitude)} target="_blank" rel="noopener noreferrer" className="text-sm" style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "var(--primary-deep)" }}>
-                      <MapPin size={14} /> Voir sur Google Maps
-                    </a>
-                  ) : (
-                    <span className="text-sm" style={{ color: "var(--ink-faint)" }}>Position non renseignée</span>
-                  )}
-                  <Btn size="sm" variant="ghost" onClick={() => ouvrirEditionLocalisation(e)}>Modifier</Btn>
-                </div>
-              )}
-            </Card>
-          ))}
+      <DataTable
+        columns={colonnes}
+        rows={etablissementsFiltres}
+        rowKey={(e) => e.id}
+        loading={chargement}
+        emptyTitle="Aucun établissement"
+        emptyDesc="Créez le premier établissement du réseau ci-dessus."
+        searchValue={recherche}
+        onSearchChange={setRecherche}
+        searchPlaceholder="Rechercher par nom ou code..."
+        filters={
+          <>
+            <Select value={filtreType} onChange={(e) => setFiltreType(e.target.value as "" | TypeEtablissement)} style={{ width: "160px" }}>
+              <option value="">Tous les types</option>
+              <option value="EP">Primaire</option>
+              <option value="ES">Secondaire</option>
+              <option value="UP">Supérieur</option>
+            </Select>
+            <Select value={filtreActif} onChange={(e) => setFiltreActif(e.target.value as "" | "actif" | "suspendu")} style={{ width: "160px" }}>
+              <option value="">Tous statuts</option>
+              <option value="actif">Actifs</option>
+              <option value="suspendu">Suspendus</option>
+            </Select>
+          </>
+        }
+        selectable
+        selectedIds={selection}
+        onSelectionChange={setSelection}
+        onRowClick={ouvrirFiche}
+        bulkActions={[
+          {
+            label: "Suspendre",
+            icon: <Ban size={14} />,
+            variant: "action",
+            loading: enCoursActionGroupee,
+            onClick: () => appliquerActionGroupee("suspendre"),
+          },
+          {
+            label: "Réactiver",
+            icon: <CheckCircle2 size={14} />,
+            variant: "outline",
+            loading: enCoursActionGroupee,
+            onClick: () => appliquerActionGroupee("reactiver"),
+          },
+        ]}
+      />
+
+      {selection.size > 0 && (
+        <div style={{ marginTop: "10px" }}>
+          <Field label="Motif de l'action groupée (obligatoire)" helper="Journalisé dans le journal d'audit ministériel.">
+            <TextInput value={motifActionGroupee} onChange={(e) => setMotifActionGroupee(e.target.value)} placeholder="Ex. Contrôle administratif en cours" />
+          </Field>
         </div>
+      )}
+
+      {ficheOuverteId && (
+        <Card className="mt-6 anim-slide-up" style={{ borderColor: "var(--primary)", borderWidth: "2px" }}>
+          {(() => {
+            const etablissement = etablissements.find((e) => e.id === ficheOuverteId);
+            if (!etablissement) return null;
+            return (
+              <>
+                <SectionHead title={etablissement.nom} desc="Fiche complète : description, photos et localisation." />
+
+                <Field label="Description">
+                  <TextArea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Présentation de l'établissement (affichée sur l'annuaire public)."
+                    rows={4}
+                  />
+                </Field>
+                <div style={{ marginTop: "8px" }}>
+                  <Btn size="sm" variant="primary" loading={enregistrementDescription} onClick={() => enregistrerDescription(etablissement.id)}>
+                    Enregistrer la description
+                  </Btn>
+                </div>
+
+                <div style={{ marginTop: "var(--space-4)", paddingTop: "var(--space-4)", borderTop: "1px dashed var(--border)" }}>
+                  {editionLocalisationId === etablissement.id ? (
+                    <>
+                      <LocationPicker latitude={latModif} longitude={lngModif} onChange={(lat, lng) => { setLatModif(lat); setLngModif(lng); }} />
+                      <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                        <Btn size="sm" variant="primary" loading={enCoursModif} onClick={() => enregistrerLocalisation(etablissement.id)}>Enregistrer</Btn>
+                        <Btn size="sm" variant="ghost" onClick={() => setEditionLocalisationId(null)}>Annuler</Btn>
+                      </div>
+                    </>
+                  ) : (
+                    <Btn size="sm" variant="outline" onClick={() => ouvrirEditionLocalisation(etablissement)}>Modifier la localisation</Btn>
+                  )}
+                </div>
+
+                <PhotosEtablissementManager etablissementId={etablissement.id} />
+              </>
+            );
+          })()}
+        </Card>
       )}
     </div>
   );

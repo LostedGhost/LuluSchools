@@ -95,7 +95,11 @@ class MeOut(BaseModel):
 
 class AdminUtilisateurOut(BaseModel):
     """UC-34/49 (lot admin ministeriel) : vue nationale, champs strictement necessaires -
-    jamais mot_de_passe_hash ni casier judiciaire (voir cahier des charges, risque R2)."""
+    jamais mot_de_passe_hash ni casier judiciaire (voir cahier des charges, risque R2).
+    `email` en `str` simple (pas `EmailStr`) : contrairement a `MeOut` (un utilisateur ne
+    lit que son propre profil), cette liste agrege potentiellement des milliers de comptes
+    - une seule adresse mal formee dans un jeu de donnees ancien ferait echouer (500)
+    l'ecran de supervision tout entier si la validation stricte etait appliquee ici."""
 
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
@@ -103,7 +107,7 @@ class AdminUtilisateurOut(BaseModel):
     nom: str
     prenom: str
     login_id: str
-    email: EmailStr | None
+    email: str | None
     role: str
     actif: bool
     mot_de_passe_temporaire: bool

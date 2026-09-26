@@ -36,7 +36,7 @@ Le serveur de dev proxy `/api` vers `http://127.0.0.1:8000` (backend local) — 
 - **Élève** : `EleveDashboard`, `CoursListPage` + `QuizPage` (quiz généré par IA, tentatives illimitées, historique via `GET /quiz/{id}/mes-tentatives`), `DevoirsListPage` + `DevoirDetailPage` (soumission d'un devoir puis **suivi en direct de la correction IA en arrière-plan** — `statut=en_correction` affiché immédiatement, `setInterval` de 3s qui relit `GET /devoirs/{id}/ma-soumission` jusqu'à résolution, cohérent avec ADR-005), `BulletinPage` (sélecteur de trimestre), `ActesPage` (demande d'acte du catalogue ou réclamation, paiement Kkiapay pour les actes payants).
 - **Enseignant** : `SignupPage role="enseignant"`, `PostesListPage` + `PostulerPage` (candidature multipart), `MesCandidaturesPage` (suivi + contestation), `MesContratsPage` (signature via `SignatureCanvas`), `MesCoursPage` (publication de cours, génération de quiz IA), `MesDevoirsPage` (création de devoir à questions dynamiques, révision manuelle des soumissions en `echec_correction` avec saisie des points par question — pas de crédit automatique).
 - **A+ (admin établissement)** : `AdminEtabDashboard`, `ClassesPage` (création + liste), `InscriptionsAValiderPage` (valider/rejeter), `RecrutementPage` (ouvrir un poste, lister les candidatures d'un poste via `GET /postes/{id}/candidatures`, **créer le contrat** d'une candidature éligible, révision manuelle des documents en `echec_notation`), `ContestationsPage` (accepter/rejeter), `ActesAdminPage` (catalogue + traitement des demandes).
-- **A++ (admin ministériel)** : `EtablissementsPage` (création d'établissement + provisionnement de son A+, réutilise le même flux d'e-mail temporaire que UC-01/UC-04), `ReferentielsPage` (fixer un référentiel national, valider une proposition d'A+ — pas de vue de proposition côté A+ pour l'instant, voir Limites).
+- **A++ (admin ministériel)** : `EtablissementsPage` (création d'établissement + provisionnement de son A+, réutilise le même flux d'e-mail temporaire que UC-01/UC-04), `ReferentielsPage` (fixer un référentiel national, valider une proposition d'A+ — pas de vue de proposition côté A+ pour l'instant, voir Limites). **Refondues en Phase 5**, voir section dédiée ci-dessous.
 
 ## Validé en navigateur réel (pas seulement `npm run build`)
 L'intégralité des 5 parcours a été rejouée manuellement dans le navigateur (built-in browser tool), contre une instance réelle du backend (`uvicorn`) et la vraie base PostgreSQL, **sans mocks à aucun moment** : création de comptes (tuteur, enseignant, e-mails réels via Brevo), OTP, connexion, changement de mot de passe temporaire, inscription + validation, matricule généré et vérifié, candidature + notation IA réelle (échec de notation observé et corrigé manuellement, exactement le scénario que l'écran de révision manuelle est censé couvrir), création de contrat par un A+, **signature électronique par tracé au pointeur** (canvas → PNG → upload LuluFiles réel), publication de cours, génération réelle de quiz par FreeLLM (questions en français, pertinentes) et tentative notée, création de devoir et soumission avec **correction réelle par FreeLLM en arrière-plan** suivie via polling jusqu'au résultat, bulletin pondéré calculé correctement, réclamation de note soumise puis acceptée par l'A+, création d'établissement par l'A++ (e-mail temporaire réel envoyé à son A+), référentiel de coefficient créé.
@@ -66,13 +66,69 @@ Frontend complet pour les 9 UC de la Phase 2/3, à l'exception explicite des vis
 - **Correction trouvée en construisant cette page (étape 6)** : le backend restreignait la lecture du catalogue (`GET .../marketplace/annonces` et `GET /marketplace/annonces/{id}`) aux seuls élèves — impossible pour l'A+ de consulter une annonce, alors qu'UC-20 prévoit explicitement qu'il puisse retirer une annonce "sans devoir attendre un signalement". RBAC élargi à l'A+ de l'établissement concerné côté backend (`backend/app/modules/marketplace/router.py`), avec un test dédié.
 - Raccourcis ajoutés : entrée « Marketplace » sur la nav élève et A+ (`AppLayout.tsx`).
 
+## Parcours construits (étape 6) — Phase 5 (UC-23 à UC-38, refonte admin ministériel)
+
+Refonte complète du portail A++, jusqu'ici limité à 3 pages isolées — voir
+`docs/cahier-des-charges-refonte-admin-ministeriel.md` et
+`docs/diagrammes-uml-phase-5-admin-ministeriel.md`.
+
+- `src/components/DataTable.tsx` — composant générique (tri via colonnes déjà triées côté
+  appelant, pagination serveur ou statique, recherche dynamique, filtres custom, sélection
+  multiple + barre d'actions groupées contextuelle), socle de tous les écrans de ce lot.
+  Conçu pour être réutilisable par d'autres profils plus tard, mais seuls les écrans A++
+  le consomment dans ce lot (pas de dérive de périmètre).
+- `src/api/admin.ts` — nouveau module regroupant les appels de supervision transverse
+  (utilisateurs, cours, devoirs, événements, journal d'audit) ; `etablissements.ts` et
+  `evaluations_gouvernance.ts` et `micro_jobs.ts` étendus pour les capacités existantes.
+- **`EtablissementsPage`** (refondue) : datatable avec recherche/filtre/sélection, actions
+  groupées suspendre/réactiver (motif obligatoire), fiche détaillée par clic sur une ligne
+  (description éditable + `PhotosEtablissementManager` déjà existant, réutilisé tel quel —
+  l'A++ peut désormais gérer les photos/description de n'importe quel établissement, pas
+  seulement l'A+ propriétaire, le backend l'autorisait déjà via `verifier_portee_etablissement`).
+- **`ReferentielsPage`** (refondue) : datatable, édition directe du coefficient d'un
+  référentiel en vigueur (icône crayon inline), validation groupée des propositions en
+  attente, autocomplétion niveau/matière (`<datalist>`, dérivée des valeurs déjà chargées,
+  aucun nouvel endpoint).
+- **`MicroJobsArbitragePage`** (refondue) : deux files d'attente (`DataTable`) — contestations
+  en attente et missions à reverser — avec tout le contexte (montant, parties, motif,
+  contact mobile money du prestataire) chargé avant la décision. Remplace la saisie
+  manuelle d'un identifiant technique (limite connue depuis la Phase 2/3, voir ci-dessous).
+- **`UtilisateursPage`** (nouveau) : recherche nationale par nom/e-mail/matricule, filtre
+  rôle/statut, suspension/réactivation de compte (motif obligatoire pour suspendre,
+  auto-suspension bloquée côté backend).
+- **`ContenusPage`** (nouveau) : supervision agrégée des cours et devoirs (deux datatables),
+  masquage/démasquage non destructif (motif obligatoire, exclu de la vue élève).
+- **`EvenementsSupervisionPage`** (nouveau) : supervision agrégée des événements, annulation
+  d'urgence (le RBAC `annuler_evenement` autorisait déjà l'A++ via `_est_organisateur`,
+  aucun changement backend nécessaire pour ce point précis).
+- **`JournalAuditPage`** (nouveau) : lecture seule du nouveau journal d'audit ministériel,
+  filtrable par type de cible.
+- Nav (`AppLayout.tsx`) et tableau de bord (`AdminMinisterielDashboard.tsx`) étendus avec
+  les 4 nouveaux modules.
+- **Bug réel trouvé en écrivant `AdminUtilisateurOut`** : le champ `email` avait d'abord été
+  typé `EmailStr` côté backend (même convention que `MeOut`) — mais cette liste agrège
+  potentiellement des milliers de comptes, et une seule adresse mal formée dans un jeu de
+  données ancien (seed généré avant que `84aef93` corrige le domaine `.test` → `.example`)
+  faisait échouer (500) l'écran de supervision tout entier. Reproduit en se connectant en
+  navigateur réel contre les données de `seed_mega.py` déjà présentes en local (6227
+  utilisateurs) : `GET /me` puis `GET /admin/utilisateurs` renvoyaient 500 sur des comptes
+  seedés avec un e-mail `.test`. Corrigé en repassant `AdminUtilisateurOut.email` en `str`
+  simple (pas de perte : c'est un champ d'affichage, jamais réinjecté dans un formulaire).
+- Validé par `tsc -b` + `vite build` (aucune erreur) et par des appels réels en navigateur/
+  curl contre le backend réel et les données `seed_mega.py` (établissement suspendu/
+  réactivé avec disparition/réapparition dans l'annuaire public, référentiel validé en lot
+  puis modifié en ligne, compte enseignant suspendu puis bloqué sur un endpoint protégé
+  puis réactivé, chaque action retrouvée dans `GET /admin/journal-audit`) — pas un parcours
+  manuel exhaustif page par page comme la Phase 1, pour limiter le coût (voir demande
+  explicite de l'utilisateur de vérifier le fonctionnement structurel plutôt que le rendu).
+
 ## Limites connues (non bloquantes pour un MVP, à traiter avant une mise en production plus large)
 - Pas de vue A+ pour proposer une révision de référentiel de coefficient (`POST /referentiels-coefficients/{id}/proposition`) — seule la création/validation côté A++ a une UI.
 - La correction manuelle d'une soumission en échec IA (`MesDevoirsPage`) affiche le texte de la réponse et un champ de points par question, mais pas le corrigé/barème attendu côté enseignant au même endroit (il doit s'en souvenir ou rouvrir le devoir).
 - `MesCoursPage`/`MesDevoirsPage` affichent l'établissement par son id si `listerEtablissements()` n'a pas encore résolu au moment du rendu (le nom apparaît dès que la requête aboutit) — cosmétique, pas fonctionnel.
 - Pas de tests automatisés frontend (ni unitaires ni end-to-end) — seule la validation manuelle en navigateur ci-dessus existe. À évaluer avant la mise en production (Playwright ou équivalent).
 - **Désignation de contrôleur/parrain (UC-11/12/17)** : saisie manuelle de l'`utilisateur_id` brut par l'A+, faute d'un endpoint de recherche d'utilisateur côté backend — utilisable, mais suppose que l'administrateur connaît déjà l'identifiant technique (à communiquer hors plateforme pour l'instant).
-- **Validation d'un ticket/billet (`ValiderAccesPage`)**, **arbitrage d'une contestation micro-job (`MicroJobsArbitragePage`)** et **litige/reversement marketplace (`MarketplaceAdminPage`)** : même limite — aucun endpoint ne liste les tickets/contestations/transactions en attente pour un contrôleur/arbitre donné, la saisie de l'identifiant est manuelle. Fonctionnel (le backend valide bien les droits), mais suppose une communication de l'identifiant hors plateforme (guichet physique avec justificatif, ticket de support, etc.).
+- **Validation d'un ticket/billet (`ValiderAccesPage`)** et **litige/reversement marketplace (`MarketplaceAdminPage`)** : même limite — aucun endpoint ne liste les tickets/transactions en attente pour un contrôleur/arbitre donné, la saisie de l'identifiant est manuelle. Fonctionnel (le backend valide bien les droits), mais suppose une communication de l'identifiant hors plateforme (guichet physique avec justificatif, ticket de support, etc.). **L'arbitrage micro-job n'a plus cette limite depuis la Phase 5** (`MicroJobsArbitragePage` a désormais une vraie file d'attente) — le même pattern (`GET /marketplace/contestations` avec contexte enrichi) pourrait être repris pour la marketplace dans un lot futur, hors périmètre de ce lot ministériel.
 - **Frontend Phase 2/3 validé par `tsc -b` + `vite build` + suite pytest backend (124/124), pas par un parcours manuel complet en navigateur rôle par rôle** comme la Phase 1 (§ ci-dessus) — la création de comptes de test pour les 9 UC (tuteur/élève/enseignant/A+/A++, inscriptions validées, contrats signés, etc.) n'a pas été rejouée dans cette passe pour limiter le coût. Seule la landing page (page publique, sans authentification) a été vérifiée en navigateur réel (rendu de la nouvelle section « Au-delà de la classe » et du badge « Bientôt disponible », zéro erreur console). À faire avant mise en production.
 - **Frontend Phase 4 (marketplace) même limite que ci-dessus** : validé par `tsc -b` (aucune erreur) + `vite build` (bundle généré sans nouvelle erreur) + suite pytest backend (144/144, RBAC élargi inclus), pas par un parcours manuel en navigateur — aucune instance Postgres locale disponible dans cet environnement de développement pour peupler des comptes de test réels (`seed_mega.py` exige une vraie base). À rejouer manuellement (élève : publier/réserver/payer/confirmer, A+ : signaler/retirer/trancher/reverser) dès qu'un Postgres local ou de staging est accessible, avant mise en production.
 

@@ -51,6 +51,8 @@ export interface EtablissementOut {
   code_etablissement: string;
   latitude: number | null;
   longitude: number | null;
+  description: string | null;
+  actif: boolean;
 }
 
 export interface ClasseOut {
@@ -484,6 +486,105 @@ export interface ContestationMicroJobOut {
   motif: string;
   statut: StatutContestationMicroJob;
   decision_motif: string | null;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-23 à UC-38 : refonte admin ministériel (supervision)
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface ContestationMicroJobDetailOut {
+  id: string;
+  mission_id: string;
+  motif: string;
+  statut: StatutContestationMicroJob;
+  decision_motif: string | null;
+  created_at: string;
+  offre_titre: string;
+  prix: number;
+  client_nom: string;
+  client_prenom: string;
+  prestataire_nom: string;
+  prestataire_prenom: string;
+}
+
+export interface MissionAReverserOut {
+  id: string;
+  offre_titre: string;
+  prix_paye: number;
+  prestataire_id: string;
+  prestataire_nom: string;
+  prestataire_prenom: string;
+  prestataire_telephone: string | null;
+  date_declaration_fin: string | null;
+}
+
+export interface AdminUtilisateurOut {
+  id: string;
+  nom: string;
+  prenom: string;
+  login_id: string;
+  email: string | null;
+  role: string;
+  actif: boolean;
+  mot_de_passe_temporaire: boolean;
+  created_at: string;
+}
+
+export interface AdminCoursOut {
+  id: string;
+  titre: string;
+  chapitre: string;
+  format: string;
+  classe_id: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  enseignant_id: string;
+  enseignant_nom: string;
+  enseignant_prenom: string;
+  masque: boolean;
+  created_at: string;
+}
+
+export interface AdminDevoirOut {
+  id: string;
+  titre: string;
+  matiere: string;
+  classe_id: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  enseignant_id: string;
+  enseignant_nom: string;
+  enseignant_prenom: string;
+  masque: boolean;
+  created_at: string;
+}
+
+export interface AdminEvenementOut {
+  id: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  titre: string;
+  lieu: string;
+  date_heure: string;
+  capacite_max: number;
+  statut: "ouvert" | "annule";
+}
+
+export interface JournalAuditOut {
+  id: string;
+  acteur_id: string;
+  action: string;
+  cible_type: string;
+  cible_id: string;
+  motif: string | null;
+  created_at: string;
+}
+
+export interface PageOut<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 /* ═══════════════════════════════════════════════════════════════
