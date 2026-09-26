@@ -1,6 +1,6 @@
 # Refonte du portail Admin Établissement (A+) — Cahier des charges
 
-> **Version** : 1.0 (draft) | **Date** : 2026-09-26 | **Statut** : En attente de validation avant tout diagramme UML / contrat d'API / code (méthode `lucio-dev`)
+> **Version** : 1.1 | **Date** : 2026-09-26 | **Statut** : **Validé** — diagrammes UML faits (`docs/diagrammes-uml-phase-6-admin-etablissement.md`, contrat d'API fusionné, `filiere` révisé en texte libre après relecture de `seed_mega.py`), passage direct au backend
 
 Ce document couvre les 6 points soumis pour le profil A+, structurés en **6 lots** (numérotés 6.1 à 6.6, UC-39 à UC-58). Il propose aussi un **ordre de dépendance** entre lots, car un point structurant transverse (l'année académique) conditionne plusieurs des demandes. Les décisions ambiguës sont tranchées et marquées **[Délégué]**. Le Lot 6.6 (micro-jobs/marketplace) reflète l'arbitrage explicite de l'utilisateur du 2026-09-26, qui corrige la première proposition de ce document.
 
