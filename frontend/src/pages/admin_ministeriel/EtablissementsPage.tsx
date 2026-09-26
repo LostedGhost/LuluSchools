@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { creerEtablissement, listerEtablissements } from "../../api/etablissements";
+import { creerEtablissement, listerEtablissements, mettreAJourLocalisation } from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
 import type { EtablissementOut, TypeEtablissement } from "../../types/api";
 import {
@@ -16,7 +16,9 @@ import {
   SuccessBanner,
   TextInput,
 } from "../../components/ui";
-import { Building2 } from "lucide-react";
+import { LocationPicker } from "../../components/LocationPicker";
+import { Building2, MapPin } from "lucide-react";
+import { lienGoogleMaps } from "../../utils/geo";
 import { estRempli, estEmailValide } from "../../utils/validation";
 
 export function EtablissementsPage() {
@@ -29,10 +31,16 @@ export function EtablissementsPage() {
   const [adminNom, setAdminNom] = useState("");
   const [adminPrenom, setAdminPrenom] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
-  const [champErreurs, setChampErreurs] = useState<{ nom?: string; adminNom?: string; adminPrenom?: string; adminEmail?: string }>({});
+  const [champErreurs, setChampErreurs] = useState<{ nom?: string; adminNom?: string; adminPrenom?: string; adminEmail?: string; localisation?: string }>({});
+  const [editionLocalisationId, setEditionLocalisationId] = useState<string | null>(null);
+  const [latModif, setLatModif] = useState("");
+  const [lngModif, setLngModif] = useState("");
+  const [enCoursModif, setEnCoursModif] = useState(false);
 
   const charger = () => {
     setChargement(true);
@@ -54,6 +62,11 @@ export function EtablissementsPage() {
     if (!estRempli(adminNom)) erreurs.adminNom = "Nom de l'administrateur requis.";
     if (!estRempli(adminPrenom)) erreurs.adminPrenom = "Prénom de l'administrateur requis.";
     if (!estEmailValide(adminEmail)) erreurs.adminEmail = "Adresse e-mail invalide.";
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (!estRempli(latitude) || !estRempli(longitude) || Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      erreurs.localisation = "Coordonnées requises (utilisez le bouton de géolocalisation ou saisissez-les manuellement).";
+    }
     setChampErreurs(erreurs);
     if (Object.keys(erreurs).length > 0) return;
 
@@ -64,18 +77,48 @@ export function EtablissementsPage() {
         type,
         statut,
         admin: { nom: adminNom, prenom: adminPrenom, email: adminEmail },
+        latitude: lat,
+        longitude: lng,
       });
       setSucces(`Établissement créé. Identifiants temporaires envoyés à ${adminEmail}.`);
       setNom("");
       setAdminNom("");
       setAdminPrenom("");
       setAdminEmail("");
+      setLatitude("");
+      setLongitude("");
       setShowForm(false);
       charger();
     } catch (err) {
       setErreur(messageErreur(err, "Impossible de créer l'établissement."));
     } finally {
       setEnCours(false);
+    }
+  };
+
+  const ouvrirEditionLocalisation = (etablissement: EtablissementOut) => {
+    setEditionLocalisationId(etablissement.id);
+    setLatModif(etablissement.latitude?.toString() ?? "");
+    setLngModif(etablissement.longitude?.toString() ?? "");
+  };
+
+  const enregistrerLocalisation = async (etablissementId: string) => {
+    const lat = Number(latModif);
+    const lng = Number(lngModif);
+    if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setErreur("Coordonnées invalides.");
+      return;
+    }
+    setEnCoursModif(true);
+    setErreur(null);
+    try {
+      await mettreAJourLocalisation(etablissementId, lat, lng);
+      setEditionLocalisationId(null);
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de mettre à jour la localisation."));
+    } finally {
+      setEnCoursModif(false);
     }
   };
 
@@ -128,6 +171,17 @@ export function EtablissementsPage() {
                 <TextInput type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
               </Field>
             </div>
+            <p className="text-eyebrow">Localisation</p>
+            <div className="grid-2">
+              <LocationPicker
+                latitude={latitude}
+                longitude={longitude}
+                onChange={(lat, lng) => { setLatitude(lat); setLongitude(lng); }}
+              />
+            </div>
+            {champErreurs.localisation && (
+              <p className="text-sm" style={{ color: "var(--action-deep)", margin: 0 }}>{champErreurs.localisation}</p>
+            )}
             <Btn type="submit" variant="primary" loading={enCours}>
               Créer l'établissement
             </Btn>
@@ -158,10 +212,31 @@ export function EtablissementsPage() {
                 </div>
                 <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.nom}</span>
               </div>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
                 <Badge tone="neutral">{e.code_etablissement}</Badge>
                 <Badge tone="info">{e.type}</Badge>
               </div>
+
+              {editionLocalisationId === e.id ? (
+                <div style={{ paddingTop: "var(--space-3)", borderTop: "1px dashed var(--border)" }}>
+                  <LocationPicker latitude={latModif} longitude={lngModif} onChange={(lat, lng) => { setLatModif(lat); setLngModif(lng); }} />
+                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                    <Btn size="sm" variant="primary" loading={enCoursModif} onClick={() => enregistrerLocalisation(e.id)}>Enregistrer</Btn>
+                    <Btn size="sm" variant="ghost" onClick={() => setEditionLocalisationId(null)}>Annuler</Btn>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", paddingTop: "var(--space-3)", borderTop: "1px dashed var(--border)" }}>
+                  {e.latitude !== null && e.longitude !== null ? (
+                    <a href={lienGoogleMaps(e.latitude, e.longitude)} target="_blank" rel="noopener noreferrer" className="text-sm" style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "var(--primary-deep)" }}>
+                      <MapPin size={14} /> Voir sur Google Maps
+                    </a>
+                  ) : (
+                    <span className="text-sm" style={{ color: "var(--ink-faint)" }}>Position non renseignée</span>
+                  )}
+                  <Btn size="sm" variant="ghost" onClick={() => ouvrirEditionLocalisation(e)}>Modifier</Btn>
+                </div>
+              )}
             </Card>
           ))}
         </div>

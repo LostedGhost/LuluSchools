@@ -14,10 +14,16 @@ export interface EtablissementPayload {
   type: "EP" | "ES" | "UP";
   statut: "public" | "prive";
   admin: { nom: string; prenom: string; email: string };
+  latitude: number;
+  longitude: number;
 }
 
 export function creerEtablissement(payload: EtablissementPayload) {
   return api.post<EtablissementOut>("/etablissements", payload);
+}
+
+export function mettreAJourLocalisation(etablissementId: string, latitude: number, longitude: number) {
+  return api.post<EtablissementOut>(`/etablissements/${etablissementId}/localisation`, { latitude, longitude });
 }
 
 export interface ClassePayload {
@@ -41,6 +47,8 @@ export interface EtablissementVitrine {
   statut: "public" | "prive";
   nb_classes: number;
   nb_postes_ouverts: number;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface PosteVitrine {

@@ -49,6 +49,8 @@ export interface EtablissementOut {
   type: TypeEtablissement;
   statut: StatutEtablissement;
   code_etablissement: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface ClasseOut {

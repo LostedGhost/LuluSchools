@@ -1,112 +1,25 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  annuairePublic,
-  photosPubliques,
-  type EtablissementVitrine,
-  type PhotoPublique,
-} from "../api/etablissements";
-import { Carousel } from "../components/Carousel";
+import { annuairePublic, type EtablissementVitrine } from "../api/etablissements";
 import { lienGoogleMaps } from "../utils/geo";
 import {
   Search,
   Building2,
   GraduationCap,
   School,
-  Briefcase,
   ChevronRight,
   ChevronLeft,
   ArrowLeft,
   MapPin,
+  Navigation,
 } from "lucide-react";
 
 const TYPE_LABEL: Record<string, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur" };
-const TYPE_ICON: Record<string, ReactNode> = {
-  EP: <School size={20} />,
-  ES: <Building2 size={20} />,
-  UP: <GraduationCap size={20} />,
-};
+const TYPE_ICON: Record<string, typeof School> = { EP: School, ES: Building2, UP: GraduationCap };
 
 const PAGE_SIZE = 12;
 
-function EtablissementCard({ etab }: { etab: EtablissementVitrine }) {
-  const [photos, setPhotos] = useState<PhotoPublique[]>([]);
-
-  useEffect(() => {
-    let vivant = true;
-    photosPubliques(etab.id)
-      .then((res) => {
-        if (vivant) setPhotos(res.data);
-      })
-      .catch(() => undefined);
-    return () => {
-      vivant = false;
-    };
-  }, [etab.id]);
-
-  return (
-    <div className="vitrine-card" style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "var(--space-3)" }}>
-        <Carousel images={photos.map((p) => ({ id: p.id, url: p.url }))} />
-      </div>
-      <div style={{ padding: "0 var(--space-5) var(--space-5)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-          <span
-            style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "var(--radius-md)",
-              background: "var(--primary-tint)",
-              color: "var(--primary-deep)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            aria-hidden="true"
-          >
-            {TYPE_ICON[etab.type]}
-          </span>
-          <span className="chip chip-neutral" style={{ fontSize: "11px" }}>{TYPE_LABEL[etab.type]}</span>
-        </div>
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", fontWeight: 700, margin: "0 0 6px", color: "var(--ink)" }}>
-          {etab.nom}
-        </h3>
-        <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)", margin: "0 0 10px" }}>
-          {etab.statut === "public" ? "Établissement public" : "Établissement privé"} · {etab.nb_classes} classe{etab.nb_classes > 1 ? "s" : ""}
-        </p>
-        {etab.latitude !== null && etab.longitude !== null && (
-          <div style={{ marginBottom: "14px" }}>
-            <a
-              href={lienGoogleMaps(etab.latitude, etab.longitude)}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "var(--text-sm)", color: "var(--ink-soft)", textDecoration: "none" }}
-            >
-              <MapPin size={14} aria-hidden="true" /> Voir la position sur Google Maps
-            </a>
-          </div>
-        )}
-        {etab.nb_postes_ouverts > 0 ? (
-          <Link
-            to="/inscription-enseignant"
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--primary-deep)", textDecoration: "none" }}
-          >
-            <Briefcase size={14} aria-hidden="true" /> {etab.nb_postes_ouverts} poste{etab.nb_postes_ouverts > 1 ? "s" : ""} ouvert{etab.nb_postes_ouverts > 1 ? "s" : ""}
-          </Link>
-        ) : (
-          <Link
-            to="/inscription-tuteur"
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--ink-soft)", textDecoration: "none" }}
-          >
-            Inscriptions ouvertes <ChevronRight size={14} aria-hidden="true" />
-          </Link>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function EtablissementsAnnuairePage() {
+export function CartesPage() {
   const [items, setItems] = useState<EtablissementVitrine[] | null>(null);
   const [total, setTotal] = useState(0);
   const [erreur, setErreur] = useState(false);
@@ -129,6 +42,8 @@ export function EtablissementsAnnuairePage() {
   }, [q, type, page]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const itemsAvecPosition = items?.filter((e) => e.latitude !== null && e.longitude !== null) ?? [];
+  const itemsSansPosition = items?.filter((e) => e.latitude === null || e.longitude === null) ?? [];
 
   return (
     <div style={{ background: "var(--bg)", color: "var(--ink)", minHeight: "100dvh" }}>
@@ -143,19 +58,19 @@ export function EtablissementsAnnuairePage() {
           <span style={{ fontFamily: "var(--font-brand)", fontSize: "var(--text-xl)", color: "var(--ink)" }}>
             Lulu<span style={{ color: "var(--primary)" }}>·</span>Schools
           </span>
-          <Link to="/cartes" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--ink-soft)", fontWeight: 600, fontSize: "var(--text-sm)", textDecoration: "none" }}>
-            <MapPin size={16} /> Cartes
+          <Link to="/etablissements" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--ink-soft)", fontWeight: 600, fontSize: "var(--text-sm)", textDecoration: "none" }}>
+            <Building2 size={16} /> Annuaire
           </Link>
         </div>
       </header>
 
       <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 24px 80px" }}>
-        <p className="text-eyebrow" style={{ marginBottom: "10px" }}>Annuaire national</p>
+        <p className="text-eyebrow" style={{ marginBottom: "10px" }}>Cartes</p>
         <h1 className="text-headline" style={{ margin: "0 0 12px", color: "var(--ink)" }}>
-          Tous les établissements partenaires
+          Se diriger vers un établissement
         </h1>
         <p style={{ color: "var(--ink-soft)", maxWidth: "60ch", margin: "0 0 32px", fontSize: "var(--text-lg)" }}>
-          {total} établissement{total > 1 ? "s" : ""} sur la plateforme. Recherchez par nom ou filtrez par niveau.
+          Retrouvez la position de chaque établissement partenaire et ouvrez l'itinéraire dans Google Maps.
         </p>
 
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "32px" }}>
@@ -193,7 +108,6 @@ export function EtablissementsAnnuairePage() {
           <div className="grid-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="vitrine-card">
-                <div className="skeleton" style={{ height: "140px", marginBottom: "16px" }} />
                 <div className="skeleton" style={{ height: "18px", width: "70%", marginBottom: "10px" }} />
                 <div className="skeleton" style={{ height: "14px", width: "50%" }} />
               </div>
@@ -203,13 +117,13 @@ export function EtablissementsAnnuairePage() {
 
         {erreur && (
           <div className="card-soft" style={{ textAlign: "center", padding: "48px 24px" }}>
-            <p style={{ color: "var(--ink-soft)", margin: 0 }}>Impossible de charger l'annuaire pour le moment.</p>
+            <p style={{ color: "var(--ink-soft)", margin: 0 }}>Impossible de charger la carte pour le moment.</p>
           </div>
         )}
 
         {items && items.length === 0 && !erreur && (
           <div className="card-soft" style={{ textAlign: "center", padding: "48px 24px" }}>
-            <Building2 size={28} style={{ color: "var(--ink-faint)", marginBottom: "12px" }} aria-hidden="true" />
+            <MapPin size={28} style={{ color: "var(--ink-faint)", marginBottom: "12px" }} aria-hidden="true" />
             <p style={{ color: "var(--ink-soft)", margin: 0 }}>Aucun établissement ne correspond à votre recherche.</p>
           </div>
         )}
@@ -217,10 +131,48 @@ export function EtablissementsAnnuairePage() {
         {items && items.length > 0 && (
           <>
             <div className="grid-3">
-              {items.map((etab) => (
-                <EtablissementCard key={etab.id} etab={etab} />
-              ))}
+              {itemsAvecPosition.map((etab) => {
+                const Icon = TYPE_ICON[etab.type];
+                return (
+                  <a
+                    key={etab.id}
+                    href={lienGoogleMaps(etab.latitude!, etab.longitude!)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="vitrine-card card-hover"
+                    style={{ textDecoration: "none", color: "inherit", display: "block" }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+                      <span
+                        style={{
+                          width: "40px", height: "40px", borderRadius: "var(--radius-md)",
+                          background: "var(--primary-tint)", color: "var(--primary-deep)",
+                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        }}
+                        aria-hidden="true"
+                      >
+                        <Icon size={20} />
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h3 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-base)", fontWeight: 700, margin: 0, color: "var(--ink)" }}>
+                          {etab.nom}
+                        </h3>
+                        <span className="chip chip-neutral" style={{ fontSize: "11px", marginTop: "4px" }}>{TYPE_LABEL[etab.type]}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--primary-deep)" }}>
+                      <Navigation size={14} aria-hidden="true" /> Itinéraire Google Maps
+                    </div>
+                  </a>
+                );
+              })}
             </div>
+
+            {itemsSansPosition.length > 0 && (
+              <p style={{ marginTop: "24px", fontSize: "var(--text-sm)", color: "var(--ink-faint)" }}>
+                {itemsSansPosition.length} établissement{itemsSansPosition.length > 1 ? "s" : ""} de cette page n'{itemsSansPosition.length > 1 ? "ont" : "a"} pas encore de position renseignée.
+              </p>
+            )}
 
             {totalPages > 1 && (
               <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "40px" }}>

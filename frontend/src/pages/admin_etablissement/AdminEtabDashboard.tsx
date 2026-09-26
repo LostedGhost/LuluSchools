@@ -13,6 +13,7 @@ import { listerClasses } from "../../api/etablissements";
 import { listerPostes, contestationsEnAttente } from "../../api/recrutement";
 import { demandesActesEtablissement } from "../../api/actes";
 import { PhotosEtablissementManager } from "../../components/PhotosEtablissementManager";
+import { LocalisationEtablissementManager } from "../../components/LocalisationEtablissementManager";
 import {
   School,
   UserCheck,
@@ -761,6 +762,11 @@ export function AdminEtabDashboard() {
         </div>
       </div>
 
+      <LocalisationEtablissementManager
+        etablissementId={etablissement.id}
+        latitude={etablissement.latitude}
+        longitude={etablissement.longitude}
+      />
       <PhotosEtablissementManager etablissementId={etablissement.id} />
     </div>
   );

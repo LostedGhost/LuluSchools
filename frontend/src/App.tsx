@@ -8,6 +8,7 @@ import { AdminEtabProvider } from "./admin/AdminEtabContext";
 
 import { LandingPage } from "./pages/LandingPage";
 import { EtablissementsAnnuairePage } from "./pages/EtablissementsAnnuairePage";
+import { CartesPage } from "./pages/CartesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
@@ -67,6 +68,7 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/etablissements" element={<EtablissementsAnnuairePage />} />
+            <Route path="/cartes" element={<CartesPage />} />
             <Route
               path="/connexion"
               element={

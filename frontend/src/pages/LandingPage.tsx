@@ -233,6 +233,7 @@ export function LandingPage() {
             {[
               { label: "Notre mission", href: "#features" },
               { label: "Établissements", href: "/etablissements" },
+              { label: "Cartes", href: "/cartes" },
             ].map((item) => {
               const navItemStyle = {
                 padding: "8px 16px",
