@@ -1326,23 +1326,24 @@ def creer_micro_jobs(db, ctx: Contexte, cfg: Config) -> None:
 
     offres = []
     for _ in range(cfg.n_offres_micro_job):
-        prestataire = ctx.rng.choice(pool)
+        client = ctx.rng.choice(pool)
         offre = OffreMicroJob(
-            id=new_id(), prestataire_id=prestataire.id, titre=ctx.rng.choice(TITRES_OFFRES_MICRO_JOB),
+            id=new_id(), client_id=client.id, titre=ctx.rng.choice(TITRES_OFFRES_MICRO_JOB),
             description="Service proposé par un membre de la communauté LuluSchools, disponible immédiatement.",
             prix=float(ctx.rng.choice([2000, 3500, 5000, 7500, 10000])), statut=StatutOffreMicroJob.OUVERTE,
+            paiement_confirme=True, kkiapay_transaction_id=f"seed-tx-{new_id()}",
         )
         add(db, offre)
         ctx.compter("offres_micro_job")
-        offres.append((offre, prestataire))
+        offres.append((offre, client))
 
-    for offre, prestataire in offres:
+    for offre, client in offres:
         if ctx.rng.random() >= 0.65:
             continue
-        candidats_client = [u for u in pool if u.id != prestataire.id]
-        if not candidats_client:
+        candidats_prestataire = [u for u in pool if u.id != client.id]
+        if not candidats_prestataire:
             continue
-        client = ctx.rng.choice(candidats_client)
+        prestataire = ctx.rng.choice(candidats_prestataire)
         offre.statut = StatutOffreMicroJob.FERMEE
 
         statut_mission = rng_choice_weighted(
@@ -1353,7 +1354,6 @@ def creer_micro_jobs(db, ctx: Contexte, cfg: Config) -> None:
             ],
             [0.15, 0.15, 0.25, 0.15, 0.1, 0.2],
         )
-        paiement_confirme = statut_mission != StatutMissionMicroJob.EN_COURS or ctx.rng.random() < 0.7
         date_declaration_fin = None
         date_limite_validation = None
         reference_paiement = None
@@ -1364,9 +1364,9 @@ def creer_micro_jobs(db, ctx: Contexte, cfg: Config) -> None:
             reference_paiement = f"MOMO-{ctx.rng.randint(100000, 999999)}"
 
         mission = MissionMicroJob(
-            id=new_id(), offre_id=offre.id, client_id=client.id, statut=statut_mission,
-            prix_paye=offre.prix, paiement_confirme=paiement_confirme,
-            kkiapay_transaction_id=f"seed-tx-{new_id()}" if paiement_confirme else None,
+            id=new_id(), offre_id=offre.id, prestataire_id=prestataire.id, statut=statut_mission,
+            prix_paye=offre.prix, paiement_confirme=True,
+            kkiapay_transaction_id=offre.kkiapay_transaction_id,
             date_declaration_fin=date_declaration_fin, date_limite_validation=date_limite_validation,
             reference_paiement_prestataire=reference_paiement,
         )
