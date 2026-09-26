@@ -86,7 +86,7 @@ services:
       # Liste JSON cote backend - ajouter le domaine Netlify ici aussi si ce
       # deploiement est active en parallele (voir docs/deploiement-render-vercel.md).
       - key: CORS_ALLOW_ORIGINS
-        value: '["https://lulu-schools.vercel.app"]'
+        value: '["https://lulu-schools.vercel.app", "https://lulu-schools.graciotopanou.online"]'
 
 databases:
   - name: luluschools-db
