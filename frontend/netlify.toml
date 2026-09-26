@@ -1,0 +1,28 @@
+# Alternative a Vercel (voir frontend/vercel.json) pour le meme frontend statique - voir
+# docs/deploiement-render-vercel.md pour la procedure complete et les limites du plan
+# gratuit Netlify (systeme de credits, plus restrictif que Vercel sur ce point).
+#
+# Ce fichier vit dans frontend/ (comme vercel.json) : dans l'UI Netlify, "Base directory"
+# doit etre regle sur `frontend` (depot monorepo) - command/publish ci-dessous sont alors
+# relatifs a ce dossier, pas a la racine du depot.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Proxy /api/* vers le backend Render, comme le rewrite de vercel.json : le navigateur ne
+# voit qu'une seule origine (pas de CORS a gerer cote navigateur pour le flux normal).
+# A mettre a jour avec l'URL reelle du service Render (voir render.yaml / ADR-006).
+[[redirects]]
+  from = "/api/*"
+  to = "https://luluschools-backend.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Repli SPA (react-router-dom en BrowserRouter) : sans cette regle, recharger ou ouvrir
+# directement une route imbriquee (ex. /eleve/cours/123) renvoie un 404 Netlify au lieu de
+# laisser React Router gerer la route cote client.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

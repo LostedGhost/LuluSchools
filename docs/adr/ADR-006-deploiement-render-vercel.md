@@ -1,4 +1,4 @@
-# ADR-006 : Déploiement via Render (backend) et Vercel (frontend), pas de VPS
+# ADR-006 : Déploiement via Render (backend) et Vercel/Netlify (frontend), pas de VPS
 
 ## Statut
 Accepté (remplace le plan de déploiement décrit dans `docs/choix-technique-phase1.md` § Déploiement — VPS Linux + Nginx + Gunicorn + systemd + Certbot — décision explicite de l'utilisateur).
@@ -32,3 +32,11 @@ Décision produit (pas légale) déléguée par l'utilisateur — voir mémoire 
 - **Base PostgreSQL gratuite Render : expire 30 jours après création**, suppression définitive 14 jours après (pas de sauvegarde automatique). Risque accepté explicitement pour un pilote court ; voir `docs/deploiement-render-vercel.md` § Limites pour la procédure de sauvegarde manuelle et le seuil à partir duquel repasser sur un plan payant.
 
 Point encore ouvert, non tranchable ici : l'app LuluSchools portant un mandat ministériel (acteur A++), un usage au-delà d'une démo interne pourrait sortir du cadre "usage personnel/non commercial" des CGU du plan gratuit Vercel (Hobby) — à vérifier avec Vercel (ou passer sur un plan Pro) avant toute ouverture publique large, pas seulement un pilote restreint.
+
+## Addendum 2026-09-26 — Netlify comme deuxième option frontend
+
+Ajout demandé : `frontend/netlify.toml`, config équivalente à `vercel.json` (proxy `/api/*` + repli SPA), pour permettre de déployer le frontend sur Netlify en plus de (ou à la place de) Vercel sans changer le code. Netlify n'écarte pas Vercel — les deux configs coexistent dans le dépôt.
+
+En vérifiant Netlify, deux points factuels à connaître avant de l'activer en auto-déploiement (voir `docs/deploiement-render-vercel.md` § Limites) : son plan gratuit est passé (comptes créés après le 2025-09-04) à un système de **crédits** (300/mois, sans dépassement, tous les sites de l'équipe mis en pause une fois épuisés) où **chaque déploiement de production coûte 15 crédits** — un rythme de commits élevé peut donc épuiser le quota par le seul volume de déploiements, indépendamment du trafic. Recommandation par défaut `[Délégué]` : garder Netlify en déploiement manuel (`Trigger deploy`) tant qu'il ne sert que de solution de secours, plutôt que de le brancher sur `autoDeploy` comme Vercel.
+
+En même temps, correction d'un bug latent trouvé en écrivant la config Netlify : `vercel.json` n'avait pas de repli SPA (`/(.*) → /index.html`) — recharger une route imbriquée (React Router, `BrowserRouter`) devait déjà renvoyer un 404 sur Vercel. Corrigé dans les deux configs.

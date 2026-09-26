@@ -11,7 +11,7 @@ Construit avec la méthode spec-first [`lucio-dev`](https://github.com/LostedGho
 - **Paiement** : Kkiapay
 - **Accès LLM** (notation automatique de documents, etc.) : [FreeLLM](https://github.com/LostedGhost/freellm-lucio), API compatible OpenAI
 - **Stockage de fichiers** : [LuluFiles](https://lulufiles-api.onrender.com) pour tout document sauf le casier judiciaire, chiffré et gardé en base plutôt que confié à un tiers pour raisons légales (Art. 395)
-- **Déploiement** : Render (backend + PostgreSQL, plan gratuit) et Vercel (frontend) — voir [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.md) et [ADR-006](docs/adr/ADR-006-deploiement-render-vercel.md)
+- **Déploiement** : Render (backend + PostgreSQL, plan gratuit) et Vercel ou Netlify (frontend, deux configs équivalentes disponibles) — voir [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.md) et [ADR-006](docs/adr/ADR-006-deploiement-render-vercel.md)
 - **CI/CD** : GitHub Actions (tests + lint + build sur chaque push/PR, `.github/workflows/`) ; le déploiement lui-même reste géré nativement par Render et Vercel (redéploiement automatique sur push `main`)
 
 Détail complet et justification des choix : [docs/choix-technique-phase1.md](docs/choix-technique-phase1.md) et les ADR dans [docs/adr/](docs/adr/).
