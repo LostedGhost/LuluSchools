@@ -3,6 +3,7 @@ import { useAdminEtab } from "../../admin/AdminEtabContext";
 import { creerClasse, listerClasses } from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
 import type { ClasseOut, PolitiqueDepassement } from "../../types/api";
+import { AffectationsClasseManager } from "../../components/AffectationsClasseManager";
 import {
   Badge,
   Btn,
@@ -17,7 +18,7 @@ import {
   SuccessBanner,
   TextInput,
 } from "../../components/ui";
-import { PlusCircle, RefreshCw, Users, Layers, School } from "lucide-react";
+import { PlusCircle, RefreshCw, Users, Layers, School, GraduationCap } from "lucide-react";
 import { estRempli, erreurEntierPositif } from "../../utils/validation";
 
 const LIBELLES_POLITIQUE: Record<
@@ -40,6 +41,7 @@ export function ClassesPage() {
   const [enCours, setEnCours] = useState(false);
   const [chargement, setChargement] = useState(true);
   const [champErreurs, setChampErreurs] = useState<{ niveau?: string; capacite?: string }>({});
+  const [classeOuverteId, setClasseOuverteId] = useState<string | null>(null);
 
   const charger = () => {
     setChargement(true);
@@ -301,6 +303,17 @@ export function ClassesPage() {
                     Ouvert aux inscriptions
                   </span>
                 </div>
+
+                <Btn
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 w-full"
+                  leftIcon={<GraduationCap size={14} />}
+                  onClick={() => setClasseOuverteId(classeOuverteId === c.id ? null : c.id)}
+                >
+                  {classeOuverteId === c.id ? "Masquer les enseignants affectés" : "Gérer les enseignants affectés"}
+                </Btn>
+                {classeOuverteId === c.id && <AffectationsClasseManager classeId={c.id} />}
               </Card>
             );
           })}

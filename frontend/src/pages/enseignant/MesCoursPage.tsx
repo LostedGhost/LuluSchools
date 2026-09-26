@@ -1,9 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { listerClasses, listerEtablissements } from "../../api/etablissements";
+import { mesClassesAffectees } from "../../api/etablissements";
 import { creerQuiz, listerCours, listerQuiz, obtenirLienFichierCours, publierCours } from "../../api/pedagogie";
-import { mesContrats } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
-import type { ClasseOut, CoursOut, EtablissementOut, FormatCours, QuizOut } from "../../types/api";
+import type { ClasseOut, CoursOut, FormatCours, QuizOut } from "../../types/api";
 import {
   Btn,
   Field,
@@ -49,9 +48,6 @@ const MATIERES = [
 ];
 
 export function MesCoursPage() {
-  const [etablissementIds, setEtablissementIds] = useState<string[]>([]);
-  const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
-  const [etablissementId, setEtablissementId] = useState("");
   const [classes, setClasses] = useState<ClasseOut[]>([]);
   const [classeId, setClasseId] = useState("");
   const [formClasseId, setFormClasseId] = useState("");
@@ -73,28 +69,7 @@ export function MesCoursPage() {
   const [chargementLienId, setChargementLienId] = useState<string | null>(null);
 
   useEffect(() => {
-    mesContrats()
-      .then((res) => {
-        const ids = Array.from(
-          new Set(res.data.filter((c) => c.statut === "signe").map((c) => c.etablissement_id)),
-        );
-        setEtablissementIds(ids);
-        if (ids.length > 0) {
-          setEtablissementId((prev) => prev || ids[0]);
-        }
-      })
-      .catch((err) => setErreur(messageErreur(err)));
-    listerEtablissements()
-      .then((res) => setEtablissements(res.data))
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (!etablissementId) {
-      setClasses([]);
-      return;
-    }
-    listerClasses(etablissementId)
+    mesClassesAffectees()
       .then((res) => {
         setClasses(res.data);
         if (res.data.length > 0) {
@@ -103,7 +78,7 @@ export function MesCoursPage() {
         }
       })
       .catch((err) => setErreur(messageErreur(err)));
-  }, [etablissementId]);
+  }, []);
 
   const chargerCours = () => {
     if (!classeId) {
@@ -375,26 +350,6 @@ export function MesCoursPage() {
           alignItems: "flex-end",
         }}
       >
-        <div style={{ flex: 1, minWidth: "220px" }}>
-          <Field label="Établissement">
-            <Select
-              value={etablissementId}
-              onChange={(e: any) => {
-                setEtablissementId(e.target.value);
-                setClasseId("");
-                setFormClasseId("");
-              }}
-            >
-              <option value="">Sélectionner un établissement...</option>
-              {etablissementIds.map((id) => (
-                <option key={id} value={id}>
-                  {etablissements.find((e) => e.id === id)?.nom ?? id}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-
         <div style={{ flex: 1, minWidth: "200px" }}>
           <Field label="Classe / Niveau">
             <Select
@@ -403,7 +358,6 @@ export function MesCoursPage() {
                 setClasseId(e.target.value);
                 setFormClasseId(e.target.value);
               }}
-              disabled={!etablissementId}
             >
               <option value="">Toutes les classes...</option>
               {classes.map((c) => (
@@ -417,11 +371,17 @@ export function MesCoursPage() {
       </div>
 
       {/* Course List / Empty States */}
-      {!classeId ? (
+      {classes.length === 0 ? (
+        <EmptyState
+          icon={<School size={24} />}
+          title="Aucune classe affectée"
+          desc="Aucune classe ne vous a encore été affectée par l'administration de votre établissement."
+        />
+      ) : !classeId ? (
         <EmptyState
           icon={<School size={24} />}
           title="Sélectionnez une classe"
-          desc="Veuillez choisir un établissement et une classe pour afficher les cours."
+          desc="Veuillez choisir une classe pour afficher les cours."
         />
       ) : chargementCours ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

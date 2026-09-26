@@ -1,9 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { listerClasses, listerEtablissements } from "../../api/etablissements";
+import { mesClassesAffectees } from "../../api/etablissements";
 import { demarrerSessionLive, listerSessionsLive, planifierSessionLive, terminerSessionLive } from "../../api/cours_direct";
-import { mesContrats } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
-import type { ClasseOut, EtablissementOut, SessionLiveDemarreeOut, SessionLiveOut } from "../../types/api";
+import type { ClasseOut, SessionLiveDemarreeOut, SessionLiveOut } from "../../types/api";
 import {
   Badge,
   Btn,
@@ -32,9 +31,6 @@ const STATUT_LABEL: Record<SessionLiveOut["statut"], string> = {
 };
 
 export function SessionsLivePage() {
-  const [etablissementIds, setEtablissementIds] = useState<string[]>([]);
-  const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
-  const [etablissementId, setEtablissementId] = useState("");
   const [classes, setClasses] = useState<ClasseOut[]>([]);
   const [classeId, setClasseId] = useState("");
   const [sessions, setSessions] = useState<SessionLiveOut[]>([]);
@@ -47,30 +43,13 @@ export function SessionsLivePage() {
   const [sessionActive, setSessionActive] = useState<SessionLiveDemarreeOut | null>(null);
 
   useEffect(() => {
-    mesContrats()
-      .then((res) => {
-        const ids = Array.from(new Set(res.data.filter((c) => c.statut === "signe").map((c) => c.etablissement_id)));
-        setEtablissementIds(ids);
-        if (ids.length > 0) setEtablissementId((prev) => prev || ids[0]);
-      })
-      .catch((err) => setErreur(messageErreur(err)));
-    listerEtablissements()
-      .then((res) => setEtablissements(res.data))
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (!etablissementId) {
-      setClasses([]);
-      return;
-    }
-    listerClasses(etablissementId)
+    mesClassesAffectees()
       .then((res) => {
         setClasses(res.data);
         if (res.data.length > 0) setClasseId((prev) => prev || res.data[0].id);
       })
       .catch((err) => setErreur(messageErreur(err)));
-  }, [etablissementId]);
+  }, []);
 
   const chargerSessions = () => {
     if (!classeId) {
@@ -169,19 +148,9 @@ export function SessionsLivePage() {
 
       {/* Sélecteur classe */}
       <div className="card card-soft" style={{ display: "flex", gap: "16px", marginBottom: "28px", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div style={{ flex: 1, minWidth: "220px" }}>
-          <Field label="Établissement">
-            <Select value={etablissementId} onChange={(e: any) => { setEtablissementId(e.target.value); setClasseId(""); }}>
-              <option value="">Sélectionner un établissement...</option>
-              {etablissementIds.map((id) => (
-                <option key={id} value={id}>{etablissements.find((e) => e.id === id)?.nom ?? id}</option>
-              ))}
-            </Select>
-          </Field>
-        </div>
         <div style={{ flex: 1, minWidth: "200px" }}>
           <Field label="Classe / Niveau">
-            <Select value={classeId} onChange={(e: any) => setClasseId(e.target.value)} disabled={!etablissementId}>
+            <Select value={classeId} onChange={(e: any) => setClasseId(e.target.value)}>
               <option value="">Sélectionner une classe...</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>{c.niveau}</option>
@@ -205,8 +174,10 @@ export function SessionsLivePage() {
         </div>
       )}
 
-      {!classeId ? (
-        <EmptyState icon={<School size={24} />} title="Sélectionnez une classe" desc="Choisissez un établissement et une classe pour gérer vos sessions en direct." />
+      {classes.length === 0 ? (
+        <EmptyState icon={<School size={24} />} title="Aucune classe affectée" desc="Aucune classe ne vous a encore été affectée par l'administration de votre établissement." />
+      ) : !classeId ? (
+        <EmptyState icon={<School size={24} />} title="Sélectionnez une classe" desc="Choisissez une classe pour gérer vos sessions en direct." />
       ) : chargement ? (
         <div className="space-y-4"><SkeletonCard /><SkeletonCard /></div>
       ) : sessions.length === 0 ? (

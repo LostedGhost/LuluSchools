@@ -61,6 +61,12 @@ export interface ClasseOut {
   politique_depassement: PolitiqueDepassement;
 }
 
+export interface AffectationEnseignantOut {
+  id: string;
+  enseignant_id: string;
+  classe_id: string;
+}
+
 export type Nationalite = "nationale" | "etrangere";
 export type StatutInscription =
   | "en_attente_consentement_parental"

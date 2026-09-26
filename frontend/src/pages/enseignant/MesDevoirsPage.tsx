@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { listerClasses, listerEtablissements } from "../../api/etablissements";
+import { mesClassesAffectees } from "../../api/etablissements";
 import {
   corrigerSoumission,
   creerDevoir,
@@ -8,17 +8,13 @@ import {
   soumissionsARevoir,
   type QuestionDevoirPayload,
 } from "../../api/evaluations";
-import { mesContrats } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
-import type { BaremeDevoir, ClasseOut, DevoirOut, EtablissementOut, SoumissionOut } from "../../types/api";
+import type { BaremeDevoir, ClasseOut, DevoirOut, SoumissionOut } from "../../types/api";
 import { Card, ErrorBanner, Field, SectionHead, Btn, TextInput, Select, EmptyState } from "../../components/ui";
 import { AIBadge } from "../../components/gamification";
 import { estRempli, erreurDateFuture } from "../../utils/validation";
 
 export function MesDevoirsPage() {
-  const [etablissementIds, setEtablissementIds] = useState<string[]>([]);
-  const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
-  const [etablissementId, setEtablissementId] = useState("");
   const [classes, setClasses] = useState<ClasseOut[]>([]);
   const [classeId, setClasseId] = useState("");
   const [devoirs, setDevoirs] = useState<DevoirOut[]>([]);
@@ -38,25 +34,10 @@ export function MesDevoirsPage() {
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    mesContrats()
-      .then((res) => {
-        const ids = Array.from(
-          new Set(res.data.filter((c) => c.statut === "signe").map((c) => c.etablissement_id)),
-        );
-        setEtablissementIds(ids);
-      })
-      .catch((err) => setErreur(messageErreur(err)));
-    listerEtablissements()
-      .then((res) => setEtablissements(res.data))
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (!etablissementId) return;
-    listerClasses(etablissementId)
+    mesClassesAffectees()
       .then((res) => setClasses(res.data))
       .catch((err) => setErreur(messageErreur(err)));
-  }, [etablissementId]);
+  }, []);
 
   const chargerDevoirs = () => {
     if (!classeId) return;
@@ -179,30 +160,8 @@ export function MesDevoirsPage() {
       <Card className="mb-8 card-soft">
         <div className="flex flex-wrap gap-4">
           <div className="flex-1 min-w-[200px]">
-            <Field label="Établissement">
-              <Select
-                value={etablissementId}
-                onChange={(e) => {
-                  setEtablissementId(e.target.value);
-                  setClasseId("");
-                }}
-              >
-                <option value="">Sélectionner...</option>
-                {etablissementIds.map((id) => (
-                  <option key={id} value={id}>
-                    {etablissements.find((e) => e.id === id)?.nom ?? id}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-          <div className="flex-1 min-w-[200px]">
             <Field label="Classe">
-              <Select
-                value={classeId}
-                onChange={(e) => setClasseId(e.target.value)}
-                disabled={!etablissementId}
-              >
+              <Select value={classeId} onChange={(e) => setClasseId(e.target.value)}>
                 <option value="">Sélectionner...</option>
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -214,6 +173,10 @@ export function MesDevoirsPage() {
           </div>
         </div>
       </Card>
+
+      {classes.length === 0 && (
+        <EmptyState title="Aucune classe affectée" desc="Aucune classe ne vous a encore été affectée par l'administration de votre établissement." />
+      )}
 
       {classeId && isCreating && (
         <Card className="mb-8 anim-slide-up border-2" style={{ borderColor: 'var(--primary)' }}>
