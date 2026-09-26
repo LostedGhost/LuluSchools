@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.modules.etablissements.models import PolitiqueDepassement, StatutEtablissement, TypeEtablissement
 
@@ -18,6 +18,8 @@ class EtablissementCreate(BaseModel):
     type: TypeEtablissement
     statut: StatutEtablissement
     admin: AdminEtablissementCreate
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
 
 
 class EtablissementOut(BaseModel):
@@ -28,6 +30,15 @@ class EtablissementOut(BaseModel):
     type: TypeEtablissement
     statut: StatutEtablissement
     code_etablissement: str
+    latitude: float | None
+    longitude: float | None
+
+
+class LocalisationUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
 
 
 class ClasseCreate(BaseModel):
@@ -60,6 +71,8 @@ class EtablissementVitrineOut(BaseModel):
     statut: StatutEtablissement
     nb_classes: int
     nb_postes_ouverts: int
+    latitude: float | None
+    longitude: float | None
 
 
 class PosteVitrineOut(BaseModel):

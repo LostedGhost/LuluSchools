@@ -34,9 +34,10 @@ Posé avant le premier endpoint (étape 3 de la méthode `lucio-dev`), dérivé 
 
 | Méthode | Chemin | Rôle | UC | Notes |
 |---|---|---|---|---|
-| POST | `/etablissements` | A++ | — | Création d'un établissement (EP/ES/UP), attribue le code établissement (`EP01`, `ES01`, `UP01`…) ; crée aussi le premier compte A+ (mot de passe temporaire envoyé par e-mail, changement obligatoire à la première connexion). Le tout premier compte A++ n'a pas d'endpoint : il est provisionné une fois via `backend/scripts/seed_admin_ministeriel.py`, exécuté directement sur le serveur. |
-| GET | `/etablissements` / `/etablissements/{id}` | tout utilisateur authentifié | — | Lecture |
+| POST | `/etablissements` | A++ | — | Création d'un établissement (EP/ES/UP), attribue le code établissement (`EP01`, `ES01`, `UP01`…) ; crée aussi le premier compte A+ (mot de passe temporaire envoyé par e-mail, changement obligatoire à la première connexion). `latitude`/`longitude` **obligatoires** (`422` sinon, plages `[-90,90]`/`[-180,180]`) — ajout du 2026-09-26 pour la géolocalisation de tous les établissements (section "Cartes", position sur les pages de présentation). Le tout premier compte A++ n'a pas d'endpoint : il est provisionné une fois via `backend/scripts/seed_admin_ministeriel.py`, exécuté directement sur le serveur. |
+| GET | `/etablissements` / `/etablissements/{id}` | tout utilisateur authentifié | — | Lecture, inclut `latitude`/`longitude` (`null` pour un établissement créé avant cet ajout, tant que l'A++ ne les a pas renseignées) |
 | GET | `/etablissements/mon-etablissement` | A+ | — | L'établissement administré par l'A+ courant (non déductible de `GET /me`) |
+| POST | `/etablissements/{id}/localisation` | A++ | — | Corrige/renseigne `latitude`/`longitude` après coup (ex. établissement créé avant cet ajout) |
 | POST | `/etablissements/{id}/classes` | A+ | UC-02, UC-03 | Définit niveau, capacité, politique de dépassement |
 | GET | `/etablissements/{id}/classes` | tout utilisateur authentifié | — | Lecture |
 

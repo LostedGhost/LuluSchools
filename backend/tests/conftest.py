@@ -232,6 +232,8 @@ def etablissement_avec_classe(client, fake_email_client, admin_ministeriel_heade
             "type": "EP",
             "statut": "public",
             "admin": {"nom": "Kone", "prenom": "Fatou", "email": "fatou.kone.fixture@example.com"},
+            "latitude": 6.3703,
+            "longitude": 2.3912,
         },
         headers=admin_ministeriel_headers,
     ).json()

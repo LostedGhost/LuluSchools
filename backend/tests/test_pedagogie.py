@@ -64,6 +64,8 @@ def test_eleve_non_inscrit_ne_peut_pas_lister_les_cours(
             "type": "EP",
             "statut": "public",
             "admin": {"nom": "Zinsou", "prenom": "Paul", "email": "paul.zinsou@example.com"},
+            "latitude": 6.4969,
+            "longitude": 2.6289,
         },
         headers=admin_ministeriel_headers,
     ).json()

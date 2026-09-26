@@ -64,6 +64,8 @@ def test_parcours_complet_des_phases_2_et_3(
             "type": "ES",
             "statut": "prive",
             "admin": {"nom": "Agbo", "prenom": "Julienne", "email": "julienne.agbo.e2e23@example.com"},
+            "latitude": 6.4969,
+            "longitude": 2.6289,
         },
         headers=admin_ministeriel_headers,
     )

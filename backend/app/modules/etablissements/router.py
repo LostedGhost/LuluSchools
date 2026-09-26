@@ -23,6 +23,7 @@ from app.modules.etablissements.schemas import (
     EtablissementPhotoOut,
     EtablissementPhotoPubliqueOut,
     EtablissementVitrineOut,
+    LocalisationUpdate,
     PosteVitrineOut,
     VitrinePubliqueOut,
     VitrineTotauxOut,
@@ -59,6 +60,8 @@ def creer_etablissement(
         type=payload.type,
         statut=payload.statut,
         code_etablissement=_generer_code_etablissement(db, payload.type.value),
+        latitude=payload.latitude,
+        longitude=payload.longitude,
     )
     db.add(etablissement)
     db.flush()
@@ -158,6 +161,8 @@ def vitrine_publique(db: Session = Depends(get_db)) -> VitrinePubliqueOut:
             statut=e.statut,
             nb_classes=classes_par_etab.get(e.id, 0),
             nb_postes_ouverts=nb_postes_par_etab.get(e.id, 0),
+            latitude=e.latitude,
+            longitude=e.longitude,
         )
         for e in etablissements_en_avant
     ]
@@ -230,6 +235,8 @@ def annuaire_public(
             statut=e.statut,
             nb_classes=classes_par_etab.get(e.id, 0),
             nb_postes_ouverts=postes_par_etab.get(e.id, 0),
+            latitude=e.latitude,
+            longitude=e.longitude,
         )
         for e in page
     ]
@@ -246,6 +253,26 @@ def obtenir_etablissement(
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    return etablissement
+
+
+@router.post("/{etablissement_id}/localisation", response_model=EtablissementOut)
+def mettre_a_jour_localisation(
+    etablissement_id: str,
+    payload: LocalisationUpdate,
+    db: Session = Depends(get_db),
+    _admin_ministeriel: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Etablissement:
+    """Corrige/renseigne les coordonnees d'un etablissement apres coup - reserve a
+    l'A++ comme le reste du cycle de vie d'un Etablissement (creation, code, etc.)."""
+    etablissement = db.get(Etablissement, etablissement_id)
+    if etablissement is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+
+    etablissement.latitude = payload.latitude
+    etablissement.longitude = payload.longitude
+    db.commit()
+    db.refresh(etablissement)
     return etablissement
 
 

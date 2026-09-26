@@ -3,6 +3,8 @@ PAYLOAD_ETABLISSEMENT = {
     "type": "EP",
     "statut": "public",
     "admin": {"nom": "Kone", "prenom": "Fatou", "email": "fatou.kone@example.com"},
+    "latitude": 6.3703,
+    "longitude": 2.3912,
 }
 
 
@@ -13,7 +15,54 @@ def test_creation_etablissement_par_admin_ministeriel(client, fake_email_client,
     assert response.status_code == 201
     body = response.json()
     assert body["code_etablissement"] == "EP01"
+    assert body["latitude"] == 6.3703
+    assert body["longitude"] == 2.3912
     assert any(m["to_email"] == "fatou.kone@example.com" for m in fake_email_client.sent)
+
+
+def test_creation_etablissement_refusee_sans_coordonnees(client, admin_ministeriel_headers):
+    payload_sans_coordonnees = {k: v for k, v in PAYLOAD_ETABLISSEMENT.items() if k not in ("latitude", "longitude")}
+    response = client.post(
+        "/api/v1/etablissements", json=payload_sans_coordonnees, headers=admin_ministeriel_headers
+    )
+    assert response.status_code == 422
+
+
+def test_mise_a_jour_localisation(client, fake_email_client, admin_ministeriel_headers):
+    etablissement = client.post(
+        "/api/v1/etablissements", json=PAYLOAD_ETABLISSEMENT, headers=admin_ministeriel_headers
+    ).json()
+
+    mise_a_jour = client.post(
+        f"/api/v1/etablissements/{etablissement['id']}/localisation",
+        json={"latitude": 9.3372, "longitude": 2.6288},
+        headers=admin_ministeriel_headers,
+    )
+    assert mise_a_jour.status_code == 200
+    assert mise_a_jour.json()["latitude"] == 9.3372
+    assert mise_a_jour.json()["longitude"] == 2.6288
+
+
+def test_mise_a_jour_localisation_refusee_pour_non_admin_ministeriel(client, fake_email_client, admin_ministeriel_headers):
+    etablissement = client.post(
+        "/api/v1/etablissements", json=PAYLOAD_ETABLISSEMENT, headers=admin_ministeriel_headers
+    ).json()
+    client.post("/api/v1/auth/tuteurs", json={
+        "nom": "Dossou", "prenom": "Awa", "email": "awa.tuteur.geoloc@example.com", "mot_de_passe": "Password1",
+    })
+    code = fake_email_client.sent[-1]["code"]
+    client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": "awa.tuteur.geoloc@example.com", "code": code})
+    login = client.post(
+        "/api/v1/auth/login", json={"identifiant": "awa.tuteur.geoloc@example.com", "mot_de_passe": "Password1"}
+    ).json()
+    tuteur_headers = {"Authorization": f"Bearer {login['access_token']}"}
+
+    refus = client.post(
+        f"/api/v1/etablissements/{etablissement['id']}/localisation",
+        json={"latitude": 9.3372, "longitude": 2.6288},
+        headers=tuteur_headers,
+    )
+    assert refus.status_code == 403
 
 
 def test_creation_etablissement_refusee_pour_non_admin_ministeriel(client, fake_email_client):

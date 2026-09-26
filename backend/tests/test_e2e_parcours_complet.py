@@ -48,6 +48,8 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
             "type": "EP",
             "statut": "public",
             "admin": {"nom": "Kone", "prenom": "Fatou", "email": "fatou.kone.e2e@example.com"},
+            "latitude": 6.3703,
+            "longitude": 2.3912,
         },
         headers=admin_ministeriel_headers,
     )

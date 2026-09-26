@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -41,6 +41,11 @@ class Etablissement(Base):
     type: Mapped[TypeEtablissement] = mapped_column(Enum(TypeEtablissement))
     statut: Mapped[StatutEtablissement] = mapped_column(Enum(StatutEtablissement))
     code_etablissement: Mapped[str] = mapped_column(String(10), unique=True, index=True)
+    # Nullable en base pour ne jamais casser une ligne pre-existante a la migration,
+    # mais exigees par EtablissementCreate (obligatoires pour toute nouvelle creation) -
+    # objectif produit : une geolocalisation pour TOUS les etablissements, a terme.
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     classes: Mapped[list["Classe"]] = relationship(back_populates="etablissement")
