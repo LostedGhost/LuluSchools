@@ -175,9 +175,11 @@ Implémenté endpoint par endpoint après validation des cas d'utilisation (`../
 ## Seed de développement grandeur nature (`scripts/seed_mega.py`)
 
 Créé sur demande explicite de l'utilisateur (« tests grandeur nature »), pour disposer d'un
-jeu de données réaliste couvrant les 18 UC implémentés sans passer par des dizaines de
+jeu de données réaliste couvrant les UC implémentés sans passer par des dizaines de
 comptes créés manuellement. Usage : `cd backend && python scripts/seed_mega.py --yes`
 (`--scale` ajuste tous les volumes, `--seed` change le tirage aléatoire — reproductible).
+Étendu le 2026-09-26 pour couvrir la Phase 4 (marketplace étudiante, UC-20/21/22) en plus
+des 18 UC des Phases 1/2/3.
 
 **Ce qu'il fait** : réinitialise entièrement le schéma (`Base.metadata.drop_all` puis
 `create_all` — même technique que `tests/conftest.py` sur SQLite, appliquée ici à Postgres)
@@ -188,11 +190,25 @@ générales A1/A2/B/C/D et techniques F2-F4/G1-G3 encodées directement dans `Cl
 (pas de colonne `filiere` dédiée — le modèle n'en a pas, volontairement non modifié pour
 un simple seed), filières universitaires réalistes (Droit, Génie Civil, Informatique de
 Gestion, etc.) avec leurs propres matières. Résultat typique (`--scale 1.0`) : 370 classes,
-~4400 élèves/inscriptions, ~6200 utilisateurs, et un volume cohérent sur les 35 tables
+~4400 élèves/inscriptions, ~6200 utilisateurs, et un volume cohérent sur les 40 tables
 restantes (recrutement, pédagogie, évaluations, actes, messagerie, cours en direct,
-transport/cantine, billetterie, micro-jobs, visites virtuelles) — recensement exact dans le
-récapitulatif imprimé en fin d'exécution. Tous les comptes partagent le mot de passe
-`Password1!` (mot de passe permanent, flux OTP volontairement court-circuité).
+transport/cantine, billetterie, micro-jobs, visites virtuelles, **marketplace étudiante**)
+— recensement exact dans le récapitulatif imprimé en fin d'exécution. Tous les comptes
+partagent le mot de passe `Password1!` (mot de passe permanent, flux OTP volontairement
+court-circuité).
+
+**Marketplace (UC-20/21/22, ajouté le 2026-09-26)** : par établissement ayant au moins deux
+élèves ≥16 ans avec compte (seuil dupliqué de `AGE_MAJORITE_NUMERIQUE`, pas d'import d'un
+module de router dans ce script qui ne dépend sinon que de `models` purs), génère des
+annonces réalistes (fournitures, manuels, uniformes, électronique...), un signalement
+occasionnel (15 %, dont 60 % déjà traités par l'A+), puis pour 60 % des annonces une
+transaction couvrant tout le cycle de vie du séquestre (`en_attente_paiement` → `finalisee`
+ou `remboursee`/`annulee`), y compris les deux issues d'une contestation (acceptée →
+remboursement, rejetée → transaction confirmée) — le statut de l'`Annonce` liée est toujours
+recalculé en cohérence (`reservee`/`vendue`/`disponible`), jamais laissé désynchronisé de sa
+transaction. Vérifié par un script isolé (SQLite en mémoire, hors périmètre Postgres/Alembic
+de ce seed) rejouant la fonction sur 80 graines aléatoires différentes : les 8 statuts de
+transaction et les 3 décisions de contestation sont tous atteints sans erreur.
 
 **Piège réel rencontré et corrigé** : un premier jet faisait un seul `db.add()` par ligne
 puis un unique `commit()` final, en supposant que SQLAlchemy trierait automatiquement les
@@ -216,9 +232,13 @@ squashé en une seule révision (`0001_schema_initial`), rendant tout ancien con
 
 **Limites assumées** : `etablissement_photos` reste vide (nécessiterait de vrais envois
 LuluFiles, hors périmètre d'un seed hors-ligne) ; `otp_verifications` reste vide (flux OTP
-volontairement court-circuité, son absence est l'état normal en régime établi).
+volontairement court-circuité, son absence est l'état normal en régime établi) ;
+`photos_annonce_marketplace` réutilise le même identifiant LuluFiles factice que les cours
+PDF/vidéo (`LULUFILES_ID_PLACEHOLDER`), jamais un vrai envoi.
 
 ## Dernière synchronisation
+2026-09-26 (encore plus tard, marketplace, seed) — `scripts/seed_mega.py` étendu pour peupler la Phase 4 (marketplace étudiante) : `creer_marketplace_pour_etablissement`, appelée pour chaque établissement juste après `creer_visite_virtuelle`. Génère annonces + photo (placeholder LuluFiles) + signalements occasionnels + transactions couvrant tout le cycle de séquestre (y compris contestations acceptées/rejetées), avec le statut de l'annonce toujours recalculé en cohérence avec sa transaction. Vérifié isolément sur 80 graines aléatoires (SQLite en mémoire) avant intégration, aucune erreur, les 8 statuts de transaction et les 3 décisions de contestation tous atteints.
+
 2026-09-26 (encore plus tard, marketplace, e2e) — Étape 5 (validation de bout en bout) close pour la Phase 4 : `tests/test_e2e_parcours_phase4_marketplace.py` rejoue UC-20 → UC-21 → UC-22 dans l'ordre réel (annonce → signalement traité → réservation → paiement séquestré via webhook → remise → confirmation → reversement au vendeur par l'A+), un seul jeu d'établissement/classe/vendeur/acheteur — passé du premier coup. Scan de sécurité de la méthode `lucio-dev` exécuté (`bandit`+`pip-audit` installés pour l'occasion) : bandit 0 problème sur le nouveau module ; pip-audit signale 2 CVE sur `ecdsa` 0.19.2 (`PYSEC-2026-1325`, dépendance transitive de `python-jose`, sans fix disponible) — non bloquant, HS256 utilisé partout sur cette plateforme (jamais le chemin ECDSA vulnérable), dépendance antérieure à ce lot. Relecture manuelle de la checklist sécurité (IDOR, montants côté serveur, non-contournement du séquestre) sans anomalie trouvée. **143 tests passants au total**, aucune régression. Migration `0004` toujours pas vérifiée contre un vrai Postgres (aucune instance disponible dans cet environnement de dev) — à faire avant le déploiement.
 
 2026-09-26 (encore plus tard, marketplace) — Backend complet pour la Phase 4 (marketplace étudiante, UC-20/21/22) : module `app/modules/marketplace/` (annonces + photos LuluFiles + signalements + transactions/séquestre + contestations), migration `0004_marketplace.py`, webhook Kkiapay étendu (`_confirmer_transaction_marketplace`). Réutilise systématiquement des helpers déjà existants plutôt que d'en dupliquer : `AGE_MAJORITE_NUMERIQUE`/`_age_a` (inscriptions), `verifier_admin_de_l_etablissement` (contrôle d'accès), le pattern séquestre/validation tacite d'UC-18 et le pattern upload multipart de `recrutement.postuler`. Arbitrage et reversement confiés à l'A+ de l'établissement (pas l'A++, contrairement aux micro-jobs) car vendeur et acheteur sont toujours du même établissement. **11 nouveaux tests** (`tests/test_marketplace.py`), **141 tests passants au total**, aucune régression. Migration vérifiée par `alembic heads`/`history` (chaîne cohérente depuis `0003`) ; pas encore appliquée contre un Postgres réel dans cet environnement (aucune instance locale disponible ici) — à faire avant l'étape 5 (validation de bout en bout) ou le déploiement.

@@ -69,6 +69,18 @@ from app.modules.evaluations.models import (
 )
 from app.modules.identite.models import Enseignant, RoleUtilisateur, Tuteur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, Nationalite, StatutInscription
+from app.modules.marketplace.models import (
+    AnnonceMarketplace,
+    CategorieAnnonce,
+    ContestationMarketplace,
+    EtatArticle,
+    PhotoAnnonceMarketplace,
+    SignalementAnnonceMarketplace,
+    StatutAnnonce,
+    StatutContestationMarketplace,
+    StatutTransactionMarketplace,
+    TransactionMarketplace,
+)
 from app.modules.messagerie.models import (
     Conversation,
     Message,
@@ -147,6 +159,7 @@ class Config:
         self.n_offres_micro_job = max(4, round(40 * scale))
         self.types_actes_par_etab = max(1, round(3 * scale))
         self.demandes_actes_ratio = 0.2
+        self.annonces_marketplace_par_etab = max(2, round(6 * scale))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1476,6 +1489,183 @@ def creer_micro_jobs(db, ctx: Contexte, cfg: Config) -> None:
             ctx.compter("contestations_micro_job")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Marketplace étudiante (UC-20/21/22) : annonces, photos, signalements, séquestre
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Seuil identique a AGE_MAJORITE_NUMERIQUE (app/modules/inscriptions/router.py, Art. 446) :
+# duplique ici plutot que d'importer un module de router dans un script de seed, qui ne
+# depend sinon que de modules `models` purs.
+AGE_MINIMUM_MARKETPLACE = 16
+
+
+def _age_plausible_est_majeur_numerique(date_naissance: date) -> bool:
+    aujourd_hui = date.today()
+    age = aujourd_hui.year - date_naissance.year
+    if (aujourd_hui.month, aujourd_hui.day) < (date_naissance.month, date_naissance.day):
+        age -= 1
+    return age >= AGE_MINIMUM_MARKETPLACE
+
+TITRES_ANNONCES_MARKETPLACE: dict[CategorieAnnonce, list[str]] = {
+    CategorieAnnonce.FOURNITURES_SCOLAIRES: [
+        "Lot de cahiers 100 pages", "Trousse complète avec compas", "Sac à dos scolaire", "Ramette de feuilles simples",
+    ],
+    CategorieAnnonce.MANUELS_LIVRES: [
+        "Manuel de Mathématiques Terminale D", "Livre de Français 3ème", "Manuel de Physique-Chimie", "Dictionnaire Larousse",
+    ],
+    CategorieAnnonce.VETEMENTS_UNIFORMES: [
+        "Uniforme complet taille M", "Blouse d'EPS", "Chaussures de sport pointure 42", "Blazer d'établissement",
+    ],
+    CategorieAnnonce.ELECTRONIQUE: [
+        "Calculatrice scientifique Casio", "Clé USB 32 Go", "Écouteurs filaires", "Chargeur de téléphone",
+    ],
+    CategorieAnnonce.AUTRE: [
+        "Vélo d'occasion", "Ballon de football", "Montre étudiante", "Cadenas de casier",
+    ],
+}
+MOTIFS_SIGNALEMENT_ANNONCE = [
+    "Prix anormalement bas, doute sur l'authenticité de l'annonce.",
+    "Photo ne correspond pas à la description.",
+    "Annonce en double publiée par erreur.",
+]
+MOTIFS_CONTESTATION_MARKETPLACE = [
+    "L'article reçu ne correspond pas du tout à la description de l'annonce.",
+    "L'article reçu est dans un état bien pire qu'annoncé.",
+    "Remise jamais effectuée malgré la déclaration du vendeur.",
+]
+
+# Statuts non terminaux d'une transaction : l'annonce liée doit rester "reservee",
+# jamais "disponible" - coherent avec le router (voir _STATUTS_TRANSACTION_EN_COURS
+# dans app/modules/marketplace/router.py, ici etendu a CONFIRMEE qui attend encore
+# le reversement au vendeur avant de devenir VENDUE).
+_STATUTS_TRANSACTION_RESERVE_ANNONCE = (
+    StatutTransactionMarketplace.EN_ATTENTE_PAIEMENT,
+    StatutTransactionMarketplace.PAIEMENT_CONFIRME,
+    StatutTransactionMarketplace.REMISE_DECLAREE,
+    StatutTransactionMarketplace.CONTESTEE,
+    StatutTransactionMarketplace.CONFIRMEE,
+)
+
+
+def creer_marketplace_pour_etablissement(db, ctx: Contexte, cfg: Config, etablissement: Etablissement) -> None:
+    eleves_eligibles = [
+        e
+        for e in ctx.eleves_par_etablissement.get(etablissement.id, [])
+        if e.utilisateur_id and _age_plausible_est_majeur_numerique(e.date_naissance)
+    ]
+    if len(eleves_eligibles) < 2:
+        return
+    admin = ctx.admin_par_etablissement.get(etablissement.id)
+
+    annonces_avec_vendeur = []
+    for _ in range(cfg.annonces_marketplace_par_etab):
+        categorie = ctx.rng.choice(list(CategorieAnnonce))
+        vendeur = ctx.rng.choice(eleves_eligibles)
+        titre = ctx.rng.choice(TITRES_ANNONCES_MARKETPLACE[categorie])
+
+        annonce = AnnonceMarketplace(
+            id=new_id(), etablissement_id=etablissement.id, vendeur_id=vendeur.utilisateur_id,
+            titre=titre,
+            description=f"{titre}, proposé par un élève de l'établissement, remise en main propre uniquement.",
+            categorie=categorie, etat=ctx.rng.choice(list(EtatArticle)),
+            prix=float(ctx.rng.choice([500, 1000, 1500, 2500, 5000, 7500, 10000, 15000])),
+            statut=StatutAnnonce.DISPONIBLE,
+        )
+        add(db, annonce)
+        ctx.compter("annonces_marketplace")
+        add(db, PhotoAnnonceMarketplace(id=new_id(), annonce_id=annonce.id, lulufiles_file_id=LULUFILES_ID_PLACEHOLDER, ordre=0))
+        ctx.compter("photos_annonce_marketplace")
+        annonces_avec_vendeur.append((annonce, vendeur))
+
+        if ctx.rng.random() < 0.15:
+            candidats_signaleur = [e for e in eleves_eligibles if e.utilisateur_id != vendeur.utilisateur_id]
+            signaleur = ctx.rng.choice(candidats_signaleur) if candidats_signaleur else vendeur
+            traite = ctx.rng.random() < 0.6
+            add(db, SignalementAnnonceMarketplace(
+                id=new_id(), annonce_id=annonce.id, signale_par_id=signaleur.utilisateur_id,
+                traite=traite,
+                decision="Annonce examinée, conforme aux règles de la plateforme." if traite else None,
+                traite_par_id=admin.id if traite and admin else None,
+            ))
+            ctx.compter("signalements_annonce_marketplace")
+
+    for annonce, vendeur in annonces_avec_vendeur:
+        if ctx.rng.random() >= 0.6:
+            continue
+        candidats_acheteur = [e for e in eleves_eligibles if e.utilisateur_id != vendeur.utilisateur_id]
+        if not candidats_acheteur:
+            continue
+        acheteur = ctx.rng.choice(candidats_acheteur)
+
+        statut_transaction = rng_choice_weighted(
+            ctx.rng,
+            [
+                StatutTransactionMarketplace.EN_ATTENTE_PAIEMENT, StatutTransactionMarketplace.PAIEMENT_CONFIRME,
+                StatutTransactionMarketplace.REMISE_DECLAREE, StatutTransactionMarketplace.CONFIRMEE,
+                StatutTransactionMarketplace.CONTESTEE, StatutTransactionMarketplace.FINALISEE,
+                StatutTransactionMarketplace.REMBOURSEE, StatutTransactionMarketplace.ANNULEE,
+            ],
+            [0.1, 0.1, 0.15, 0.15, 0.1, 0.25, 0.1, 0.05],
+        )
+        paiement_confirme = statut_transaction != StatutTransactionMarketplace.EN_ATTENTE_PAIEMENT
+        date_remise_declaree = None
+        date_limite_confirmation = None
+        reference_paiement_vendeur = None
+        if statut_transaction in (
+            StatutTransactionMarketplace.REMISE_DECLAREE, StatutTransactionMarketplace.CONFIRMEE,
+            StatutTransactionMarketplace.CONTESTEE, StatutTransactionMarketplace.FINALISEE,
+            StatutTransactionMarketplace.REMBOURSEE,
+        ):
+            date_remise_declaree = _utcnow() - timedelta(days=ctx.rng.randint(1, 20))
+            date_limite_confirmation = date_remise_declaree + timedelta(days=5)
+        if statut_transaction == StatutTransactionMarketplace.FINALISEE:
+            reference_paiement_vendeur = f"MOMO-{ctx.rng.randint(100000, 999999)}"
+
+        transaction = TransactionMarketplace(
+            id=new_id(), annonce_id=annonce.id, acheteur_id=acheteur.utilisateur_id,
+            statut=statut_transaction, prix_paye=annonce.prix, paiement_confirme=paiement_confirme,
+            kkiapay_transaction_id=f"seed-tx-{new_id()}" if paiement_confirme else None,
+            date_remise_declaree=date_remise_declaree, date_limite_confirmation=date_limite_confirmation,
+            reference_paiement_vendeur=reference_paiement_vendeur,
+        )
+        add(db, transaction)
+        ctx.compter("transactions_marketplace")
+
+        if statut_transaction == StatutTransactionMarketplace.CONTESTEE:
+            if ctx.rng.random() < 0.35:
+                # Litige deja tranche par l'A+ en defaveur de l'acheteur (meme schema
+                # que la contestation micro-job rejetee, UC-18) : la transaction repasse
+                # CONFIRMEE, prete pour le reversement au vendeur.
+                transaction.statut = StatutTransactionMarketplace.CONFIRMEE
+                add(db, ContestationMarketplace(
+                    id=new_id(), transaction_id=transaction.id, motif=ctx.rng.choice(MOTIFS_CONTESTATION_MARKETPLACE),
+                    statut=StatutContestationMarketplace.REJETEE,
+                    decision_motif="Contestation jugée non fondée après examen, la transaction est confirmée.",
+                    decision_par_id=admin.id if admin else None,
+                ))
+            else:
+                add(db, ContestationMarketplace(
+                    id=new_id(), transaction_id=transaction.id, motif=ctx.rng.choice(MOTIFS_CONTESTATION_MARKETPLACE),
+                    statut=StatutContestationMarketplace.EN_ATTENTE,
+                ))
+            ctx.compter("contestations_marketplace")
+        elif statut_transaction == StatutTransactionMarketplace.REMBOURSEE:
+            add(db, ContestationMarketplace(
+                id=new_id(), transaction_id=transaction.id, motif=ctx.rng.choice(MOTIFS_CONTESTATION_MARKETPLACE),
+                statut=StatutContestationMarketplace.ACCEPTEE,
+                decision_motif="Contestation jugée fondée, l'acheteur est remboursé.",
+                decision_par_id=admin.id if admin else None,
+            ))
+            ctx.compter("contestations_marketplace")
+
+        if statut_transaction in _STATUTS_TRANSACTION_RESERVE_ANNONCE:
+            annonce.statut = StatutAnnonce.RESERVEE
+        elif statut_transaction == StatutTransactionMarketplace.FINALISEE:
+            annonce.statut = StatutAnnonce.VENDUE
+        # ANNULEE et REMBOURSEE : l'annonce redevient DISPONIBLE (deja sa valeur par
+        # defaut a la creation, rien a modifier).
+
+
 def creer_propositions_reconduction(db, ctx: Contexte) -> None:
     if len(ctx.contrats_signes) < 2:
         return
@@ -1590,6 +1780,7 @@ def executer_seed(cfg: Config, seed: int) -> Contexte:
             creer_services_scolaires_pour_etablissement(db, ctx, cfg, etablissement)
             creer_billetterie_pour_etablissement(db, ctx, cfg, etablissement)
             creer_visite_virtuelle(db, ctx, etablissement)
+            creer_marketplace_pour_etablissement(db, ctx, cfg, etablissement)
 
             # Commit apres chaque etablissement (et non un seul commit final) : sur une
             # base distante (Render), une erreur tardive (ex. micro-jobs) ne doit pas
