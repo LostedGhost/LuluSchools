@@ -14,9 +14,17 @@ attendue avant ce commit).
 UC-23 : au plus un professeur principal par classe (voir vie_scolaire) - simple
 booleen sur AffectationEnseignant, invariant "un seul par classe" applique cote
 applicatif (voir POST /classes/{id}/professeur-principal), pas par contrainte SQL.
-"""
-from datetime import datetime, timezone
 
+**Fusion du 2026-09-26** : cette migration ajoutait aussi `classes.annee_academique`,
+en parallele et sans le savoir de `0007_admin_etab` (branche soeur depuis
+`0005_affectation_enseignant`, developpee simultanement pour le lot admin
+etablissement) qui ajoute la MEME colonne. Sur un historique lineaire, les deux
+branches finissent toutes les deux appliquees avant la migration de fusion
+(`0015_fusion_lots`) sans ordre garanti entre elles - un second `ADD COLUMN` sur la
+meme colonne echoue toujours (`DuplicateColumn`), quel que soit l'ordre. Retire ici :
+`0007_admin_etab` en reste desormais l'unique proprietaire (colonne + index), cette
+migration ne touche plus que `affectations_enseignant.est_professeur_principal`.
+"""
 from alembic import op
 import sqlalchemy as sa
 
@@ -27,23 +35,7 @@ branch_labels = None
 depends_on = None
 
 
-def _annee_academique_courante() -> str:
-    aujourdhui = datetime.now(timezone.utc).date()
-    if aujourdhui.month >= 9:
-        return f"{aujourdhui.year}-{aujourdhui.year + 1}"
-    return f"{aujourdhui.year - 1}-{aujourdhui.year}"
-
-
 def upgrade() -> None:
-    op.add_column('classes', sa.Column('annee_academique', sa.String(length=9), nullable=True))
-    op.execute(
-        sa.text("UPDATE classes SET annee_academique = :annee WHERE annee_academique IS NULL").bindparams(
-            annee=_annee_academique_courante()
-        )
-    )
-    op.alter_column('classes', 'annee_academique', nullable=False)
-    op.create_index(op.f('ix_classes_annee_academique'), 'classes', ['annee_academique'])
-
     op.add_column(
         'affectations_enseignant',
         sa.Column('est_professeur_principal', sa.Boolean(), nullable=False, server_default=sa.false()),
@@ -52,5 +44,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_column('affectations_enseignant', 'est_professeur_principal')
-    op.drop_index(op.f('ix_classes_annee_academique'), table_name='classes')
-    op.drop_column('classes', 'annee_academique')

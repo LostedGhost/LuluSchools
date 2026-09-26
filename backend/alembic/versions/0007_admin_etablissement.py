@@ -11,6 +11,11 @@ reconduction sur Classe (UC-43/44/58/59), rentree scolaire (UC-39/55), photo ele
 (UC-42/57), formulaire dynamique partage recrutement+actes (UC-47/50/62/64) et livraison de
 document d'acte (UC-52/66). Un seul module par usage, mais regroupees dans une seule
 migration par cohesion de lot (meme convention que 0004_marketplace.py/0006_supervision_min.py).
+
+**Fusion du 2026-09-26** : `Classe.annee_academique` (index compris) est desormais
+uniquement ajoutee ici - la branche soeur `0006_annee_academique_et_professeur_principal`
+ajoutait independamment la meme colonne (`DuplicateColumn` a la fusion des deux
+branches sur un historique lineaire) ; retire de l'autre migration, voir son docstring.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -34,6 +39,7 @@ def upgrade() -> None:
         'classes', sa.Column('annee_academique', sa.String(length=20), nullable=False, server_default=ANNEE_ACADEMIQUE_BACKFILL)
     )
     op.alter_column('classes', 'annee_academique', server_default=None)
+    op.create_index(op.f('ix_classes_annee_academique'), 'classes', ['annee_academique'])
     op.add_column('classes', sa.Column('reconduite_depuis_id', sa.String(length=36), nullable=True))
     op.create_foreign_key(
         'fk_classes_reconduite_depuis_id_classes', 'classes', 'classes', ['reconduite_depuis_id'], ['id']
@@ -87,5 +93,6 @@ def downgrade() -> None:
 
     op.drop_constraint('fk_classes_reconduite_depuis_id_classes', 'classes', type_='foreignkey')
     op.drop_column('classes', 'reconduite_depuis_id')
+    op.drop_index(op.f('ix_classes_annee_academique'), table_name='classes')
     op.drop_column('classes', 'annee_academique')
     op.drop_column('classes', 'filiere')

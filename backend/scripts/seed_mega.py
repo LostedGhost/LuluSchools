@@ -40,27 +40,50 @@ from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
+from app.modules.audit.models import JournalAuditMinisteriel
 from app.modules.billetterie.models import BilletEvenement, Evenement, StatutBillet, StatutEvenement
+from app.modules.coffre_fort.models import (
+    AlerteDepassementPlafond,
+    ModuleDepenseCoffreFort,
+    PlafondFamilial,
+    StatutValidationParentale,
+    ValidationParentale,
+)
 from app.modules.controle_acces.models import DesignationControleur, ServiceControle
 from app.modules.cours_direct.models import (
+    CaptureTableauSession,
     ConsentementCameraLive,
+    DemandeCraie,
+    MessageSessionLive,
+    ModePermissionEcriture,
+    PanneauTableau,
     ParticipationLive,
+    PermissionEcritureTableau,
+    ResumeSessionLive,
     SessionLive,
+    StatutDemandeCraie,
     StatutSessionLive,
+    TraitTableau,
+    TypeTraitTableau,
 )
 from app.modules.etablissements.models import (
     AdminEtablissement,
     AffectationEnseignant,
     Classe,
     Etablissement,
+    EtablissementPhoto,
     PolitiqueDepassement,
+    RentreeScolaire,
     StatutEtablissement,
+    StatutRentree,
     TypeEtablissement,
+    annee_academique_courante,
 )
 from app.modules.evaluations.models import (
     BaremeDevoir,
     Bulletin,
     Devoir,
+    NatureEvaluation,
     QuestionDevoir,
     ReferentielCoefficient,
     ReponseSoumission,
@@ -98,13 +121,24 @@ from app.modules.micro_jobs.models import (
     StatutOffreMicroJob,
 )
 from app.modules.pedagogie.models import (
+    AlerteElProfessor,
     Cours,
     FormatCours,
     MessageElProfessor,
+    MessageElProfessorEnseignant,
+    MessageElProfessorFamille,
+    MessageElProfessorTuteur,
+    OrigineAlerteElProfessor,
     QuestionQuiz,
     Quiz,
     RoleMessageElProfessor,
+    RoleMessageElProfessorEnseignant,
+    RoleMessageElProfessorFamille,
+    RoleMessageElProfessorTuteur,
     SessionElProfessor,
+    SessionElProfessorEnseignant,
+    SessionElProfessorFamille,
+    SessionElProfessorTuteur,
     TentativeQuiz,
 )
 from app.modules.recrutement.models import (
@@ -131,6 +165,7 @@ from app.modules.services_scolaires.models import (
     TicketTransport,
     TypeRepasCantine,
 )
+from app.modules.vie_scolaire.models import EntreeVieScolaire, NatureEntreeVieScolaire
 from app.modules.visites_virtuelles.models import TypeVisiteVirtuelle, VisiteVirtuelle
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -474,16 +509,44 @@ def attribuer_matricule(ctx: Contexte, type_etablissement: TypeEtablissement, na
 # Établissements et classes
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _creer_classe(db, ctx: Contexte, etablissement: Etablissement, niveau: str, matieres: list[str], capacite: int) -> Classe:
+def _annee_precedente(annee_academique: str) -> str:
+    debut, fin = annee_academique.split("-")
+    return f"{int(debut) - 1}-{int(fin) - 1}"
+
+
+def _reconduire_depuis_annee_precedente(db, ctx: Contexte, classe: Classe) -> None:
+    """UC-44/59 : simule une reconduction d'une annee sur l'autre pour une partie des
+    classes - cree la classe "source" (annee academique precedente, jamais peuplee :
+    en production, seule la classe de l'annee en cours reste active) et fait pointer la
+    classe courante vers elle via reconduite_depuis_id, meme filiere/capacite/politique."""
+    if ctx.rng.random() >= 0.25:
+        return
+    classe_source = Classe(
+        id=new_id(), etablissement_id=classe.etablissement_id, niveau=classe.niveau,
+        filiere=classe.filiere, annee_academique=_annee_precedente(classe.annee_academique),
+        capacite=classe.capacite, politique_depassement=classe.politique_depassement,
+    )
+    add(db, classe_source)
+    ctx.compter("classes")
+    classe.reconduite_depuis_id = classe_source.id
+
+
+def _creer_classe(
+    db, ctx: Contexte, etablissement: Etablissement, niveau: str, matieres: list[str], capacite: int,
+    filiere: str | None = None,
+) -> Classe:
     classe = Classe(
         id=new_id(),
         etablissement_id=etablissement.id,
         niveau=niveau,
+        filiere=filiere,
+        annee_academique=annee_academique_courante(),
         capacite=capacite,
         politique_depassement=ctx.rng.choice(list(PolitiqueDepassement)),
     )
     add(db, classe)
     ctx.compter("classes")
+    _reconduire_depuis_annee_precedente(db, ctx, classe)
     conversation_id = new_id()
     add(db, Conversation(id=conversation_id, type=TypeConversation.GROUPE_CLASSE, classe_id=classe.id))
     ctx.compter("conversations")
@@ -566,6 +629,32 @@ def deviner_coordonnees(nom: str, etablissement_id: str) -> tuple[float, float]:
     return round(base[0] + dx, 6), round(base[1] + dy, 6)
 
 
+def _finaliser_etablissement(db, ctx: Contexte, etab: Etablissement) -> None:
+    """Description, suspension occasionnelle, photos et rentree scolaire - communs aux
+    3 types d'etablissement (UC-42/57 photo, UC-39/55 rentree, ecran de supervision A++)."""
+    etab.description = (
+        f"{etab.nom} est un etablissement {etab.type.value} "
+        f"{'public' if etab.statut == StatutEtablissement.PUBLIC else 'prive'} "
+        "reconnu par le ministere de l'Education, accueillant les eleves de son secteur."
+    )
+    if ctx.rng.random() < 0.05:
+        etab.actif = False
+
+    for ordre in range(ctx.rng.randint(1, 3)):
+        add(db, EtablissementPhoto(id=new_id(), etablissement_id=etab.id, lulufiles_file_id=LULUFILES_ID_PLACEHOLDER, ordre=ordre))
+        ctx.compter("etablissement_photos")
+
+    annee_courante = annee_academique_courante()
+    add(db, RentreeScolaire(id=new_id(), etablissement_id=etab.id, annee_academique=annee_courante, statut=StatutRentree.OUVERTE))
+    ctx.compter("rentrees_scolaires")
+    if ctx.rng.random() < 0.4:
+        add(db, RentreeScolaire(
+            id=new_id(), etablissement_id=etab.id, annee_academique=_annee_precedente(annee_courante),
+            statut=StatutRentree.FERMEE,
+        ))
+        ctx.compter("rentrees_scolaires")
+
+
 def creer_etablissement_primaire(db, ctx: Contexte, cfg: Config, nom: str) -> Etablissement:
     etab_id = new_id()
     latitude, longitude = deviner_coordonnees(nom, etab_id)
@@ -577,6 +666,7 @@ def creer_etablissement_primaire(db, ctx: Contexte, cfg: Config, nom: str) -> Et
     )
     add(db, etab)
     ctx.compter("etablissements")
+    _finaliser_etablissement(db, ctx, etab)
     for niveau in NIVEAUX_MATERNEL_PRIMAIRE:
         _creer_classe(db, ctx, etab, niveau, MATIERES_PRIMAIRE[niveau], _capacite_pour(ctx, cfg))
     return etab
@@ -593,6 +683,7 @@ def creer_etablissement_secondaire(db, ctx: Contexte, cfg: Config, nom: str, tec
     )
     add(db, etab)
     ctx.compter("etablissements")
+    _finaliser_etablissement(db, ctx, etab)
     for niveau in NIVEAUX_SECONDAIRE_TRONC_COMMUN:
         _creer_classe(db, ctx, etab, niveau, MATIERES_TRONC_COMMUN, _capacite_pour(ctx, cfg))
 
@@ -601,13 +692,13 @@ def creer_etablissement_secondaire(db, ctx: Contexte, cfg: Config, nom: str, tec
         for niveau_base in NIVEAUX_TECHNIQUE_2ND_CYCLE:
             for code in series_choisies:
                 matieres = MATIERES_TECHNIQUE_COMMUN + MATIERES_PAR_SERIE_TECHNIQUE[code]
-                _creer_classe(db, ctx, etab, f"{niveau_base} {code}", matieres, _capacite_pour(ctx, cfg))
+                _creer_classe(db, ctx, etab, niveau_base, matieres, _capacite_pour(ctx, cfg), filiere=SERIES_TECHNIQUES[code])
     else:
         series_choisies = ctx.rng.sample(list(SERIES_GENERALES), k=min(3, len(SERIES_GENERALES)))
         for niveau_base in ["2nde", "1ère", "Terminale"]:
             for code in series_choisies:
                 matieres = MATIERES_GENERAL_COMMUN + MATIERES_PAR_SERIE_GENERALE[code]
-                _creer_classe(db, ctx, etab, f"{niveau_base} {code}", matieres, _capacite_pour(ctx, cfg))
+                _creer_classe(db, ctx, etab, niveau_base, matieres, _capacite_pour(ctx, cfg), filiere=SERIES_GENERALES[code])
     return etab
 
 
@@ -622,6 +713,7 @@ def creer_etablissement_universite(db, ctx: Contexte, cfg: Config, nom: str, pub
     )
     add(db, etab)
     ctx.compter("etablissements")
+    _finaliser_etablissement(db, ctx, etab)
     pool = FILIERES_UNIVERSITE_PUBLIC if public else FILIERES_UNIVERSITE_PRIVE
     filieres_choisies = ctx.rng.sample(list(pool), k=min(4, len(pool)))
     filieres_master = ctx.rng.sample(filieres_choisies, k=max(1, len(filieres_choisies) // 2))
@@ -629,11 +721,11 @@ def creer_etablissement_universite(db, ctx: Contexte, cfg: Config, nom: str, pub
     for filiere in filieres_choisies:
         matieres = pool[filiere]
         for niveau_base in ["1ère année de Licence", "2ème année de Licence", "3ème année de Licence"]:
-            _creer_classe(db, ctx, etab, f"{niveau_base} - {filiere}", matieres, _capacite_pour(ctx, cfg))
+            _creer_classe(db, ctx, etab, niveau_base, matieres, _capacite_pour(ctx, cfg), filiere=filiere)
     for filiere in filieres_master:
         matieres = pool[filiere]
         for niveau_base in ["1ère année de Master", "2ème année de Master"]:
-            _creer_classe(db, ctx, etab, f"{niveau_base} - {filiere}", matieres, _capacite_pour(ctx, cfg))
+            _creer_classe(db, ctx, etab, niveau_base, matieres, _capacite_pour(ctx, cfg), filiere=filiere)
     return etab
 
 
@@ -682,6 +774,45 @@ def creer_tous_les_etablissements(db, ctx: Contexte, cfg: Config) -> list[Etabli
 CASIER_CONTENU_SEED = b"Casier judiciaire vierge - document simule pour environnement de seed/test."
 
 
+CHAMPS_FORMULAIRE_POSSIBLES: list[dict] = [
+    {"id": "motivation", "label": "Lettre de motivation (résumé)", "type": "texte_long", "requis": True, "options": None},
+    {"id": "disponibilite", "label": "Disponibilité", "type": "choix_unique", "requis": True, "options": ["Temps plein", "Mi-temps", "Vacations"]},
+    {"id": "annees_experience", "label": "Années d'expérience", "type": "texte_court", "requis": False, "options": None},
+    {"id": "specialites", "label": "Spécialités enseignées", "type": "choix_multiple", "requis": False, "options": ["Soutien scolaire", "Préparation aux examens", "Activités parascolaires"]},
+    {"id": "lettre_recommandation", "label": "Lettre de recommandation (optionnelle)", "type": "fichier", "requis": False, "options": None},
+]
+
+
+def _generer_schema_formulaire(ctx: Contexte) -> list[dict] | None:
+    """UC-47/62 (lot admin etablissement) : un poste sur trois environ recueille des
+    champs additionnels au dela des documents notes par l'IA - moteur partage avec les
+    actes academiques (meme forme ChampFormulaire, voir recrutement/schemas.py)."""
+    if ctx.rng.random() >= 0.3:
+        return None
+    return ctx.rng.sample(CHAMPS_FORMULAIRE_POSSIBLES, k=ctx.rng.randint(2, 3))
+
+
+def _generer_reponses_formulaire(ctx: Contexte, schema: list[dict] | None) -> dict | None:
+    if not schema:
+        return None
+    reponses: dict = {}
+    for champ in schema:
+        if champ["type"] == "texte_long":
+            reponses[champ["id"]] = "Je suis motivé(e) par ce poste et je pense correspondre au profil recherché."
+        elif champ["type"] == "texte_court":
+            reponses[champ["id"]] = str(ctx.rng.randint(1, 15))
+        elif champ["type"] == "choix_unique":
+            reponses[champ["id"]] = ctx.rng.choice(champ["options"])
+        elif champ["type"] == "choix_multiple":
+            reponses[champ["id"]] = ctx.rng.sample(champ["options"], k=ctx.rng.randint(1, len(champ["options"])))
+        elif champ["type"] == "fichier" and ctx.rng.random() < 0.5:
+            reponses[champ["id"]] = LULUFILES_ID_PLACEHOLDER
+    return reponses or None
+
+
+MATIERES_POSTE_GENERIQUES = ["Mathématiques", "Français", "Anglais", "Sciences", "Histoire-Géographie", None, None]
+
+
 def _creer_candidature(db, ctx: Contexte, poste: Poste, etablissement: Etablissement) -> Utilisateur:
     enseignant = creer_enseignant_utilisateur(db, ctx)
 
@@ -703,6 +834,7 @@ def _creer_candidature(db, ctx: Contexte, poste: Poste, etablissement: Etablisse
     candidature = Candidature(
         id=new_id(), poste_id=poste.id, enseignant_id=enseignant.id,
         statut=statut_candidature, score=score_moyen,
+        reponses_formulaire=_generer_reponses_formulaire(ctx, poste.schema_formulaire),
     )
     add(db, candidature)
     ctx.compter("candidatures")
@@ -771,9 +903,16 @@ def creer_recrutement_pour_etablissement(db, ctx: Contexte, cfg: Config, etablis
     n_postes = ctx.rng.randint(*cfg.postes_par_etab)
     titres_postes = ["Professeur Titulaire", "Professeur Vacataire", "Enseignant Contractuel", "Chargé de Cours"]
     for _ in range(n_postes):
+        titre = ctx.rng.choice(titres_postes)
+        remuneration_min = float(ctx.rng.choice([80000, 100000, 120000, 150000]))
         poste = Poste(
             id=new_id(), etablissement_id=etablissement.id,
-            titre=ctx.rng.choice(titres_postes),
+            titre=titre,
+            description=f"Recherche {titre.lower()} motivé(e) pour rejoindre notre équipe pédagogique.",
+            matiere=ctx.rng.choice(MATIERES_POSTE_GENERIQUES),
+            remuneration_min=remuneration_min,
+            remuneration_max=remuneration_min + ctx.rng.choice([20000, 40000, 60000]) if ctx.rng.random() < 0.6 else None,
+            schema_formulaire=_generer_schema_formulaire(ctx),
             statut=StatutPoste.OUVERT,
         )
         add(db, poste)
@@ -946,6 +1085,16 @@ def creer_pedagogie_pour_classe(
         add(db, cours)
         ctx.compter("cours")
 
+        if ctx.admin_ministeriel and ctx.rng.random() < 0.04:
+            cours.masque_par_id = ctx.admin_ministeriel.id
+            cours.masque_le = _utcnow() - timedelta(days=ctx.rng.randint(1, 30))
+            add(db, JournalAuditMinisteriel(
+                id=new_id(), acteur_id=ctx.admin_ministeriel.id, action="cours.masquer",
+                cible_type="cours", cible_id=cours.id,
+                motif="Contenu signale, masque en attendant verification (seed).",
+            ))
+            ctx.compter("journal_audit_ministeriel")
+
         if format_cours != FormatCours.TEXTE or ctx.rng.random() >= 0.7:
             continue
 
@@ -997,6 +1146,52 @@ def creer_pedagogie_pour_classe(
                 ))
                 ctx.compter("messages_el_professor", 2)
 
+    creer_el_professor_enseignant_pour_classe(db, ctx, classe, enseignant, eleves_avec_compte)
+
+
+SUJETS_EL_PROFESSOR_ENSEIGNANT = [
+    "Gestion de classe difficile", "Élève en difficulté scolaire", "Question pédagogique générale",
+]
+QUESTIONS_EL_PROFESSOR_ENSEIGNANT = [
+    "Comment accompagner au mieux cet élève qui décroche en ce moment ?",
+    "Quelles activités proposer pour dynamiser un cours difficile ?",
+    "Comment aborder une situation de conflit entre deux élèves ?",
+]
+
+
+def creer_el_professor_enseignant_pour_classe(
+    db, ctx: Contexte, classe: Classe, enseignant: Utilisateur, eleves_avec_compte: list[Eleve]
+) -> None:
+    """UC-27 (volet Professeur) : conseil educatif/moral/professionnel, distinct de
+    l'assistant El Professor cote eleve (SessionElProfessor, deja gere ci-dessus)."""
+    if ctx.rng.random() >= 0.3:
+        return
+    eleve = ctx.rng.choice(eleves_avec_compte) if eleves_avec_compte and ctx.rng.random() < 0.6 else None
+    session = SessionElProfessorEnseignant(
+        id=new_id(), enseignant_id=enseignant.id,
+        eleve_utilisateur_id=eleve.utilisateur_id if eleve else None,
+        sujet=ctx.rng.choice(SUJETS_EL_PROFESSOR_ENSEIGNANT),
+    )
+    add(db, session)
+    ctx.compter("sessions_el_professor_enseignant")
+    add(db, MessageElProfessorEnseignant(
+        id=new_id(), session_id=session.id, role=RoleMessageElProfessorEnseignant.ENSEIGNANT,
+        contenu=ctx.rng.choice(QUESTIONS_EL_PROFESSOR_ENSEIGNANT),
+    ))
+    add(db, MessageElProfessorEnseignant(
+        id=new_id(), session_id=session.id, role=RoleMessageElProfessorEnseignant.ASSISTANT,
+        contenu="Voici quelques pistes pedagogiques concretes a essayer en priorite, en gardant un dialogue ouvert.",
+    ))
+    ctx.compter("messages_el_professor_enseignant", 2)
+
+    if eleve and ctx.rng.random() < 0.08:
+        add(db, AlerteElProfessor(
+            id=new_id(), origine=OrigineAlerteElProfessor.ENSEIGNANT, session_id=session.id,
+            etablissement_id=classe.etablissement_id, eleve_utilisateur_id=eleve.utilisateur_id,
+            motif="Signal detecte dans l'echange (mots-cles de vigilance) - a verifier par l'etablissement.",
+        ))
+        ctx.compter("alertes_el_professor")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Évaluations (UC-08/UC-09) : devoirs, soumissions, référentiels, bulletins
@@ -1019,13 +1214,26 @@ def creer_evaluations_pour_classe(
         matiere = ctx.rng.choice(matieres)
         est_passe = ctx.rng.random() < 0.6
         date_limite = _utcnow() + timedelta(days=ctx.rng.randint(-45, -1) if est_passe else ctx.rng.randint(3, 30))
+        nature = rng_choice_weighted(ctx.rng, [NatureEvaluation.SOMMATIVE, NatureEvaluation.FORMATIVE], [0.8, 0.2])
         devoir = Devoir(
             id=new_id(), classe_id=classe.id, enseignant_id=enseignant.id,
             titre=f"Devoir de {matiere} n°{i + 1}", matiere=matiere, date_limite=date_limite,
-            bareme=ctx.rng.choice(list(BaremeDevoir)),
+            bareme=ctx.rng.choice(list(BaremeDevoir)), nature=nature,
+            sujet_lulufiles_file_id=LULUFILES_ID_PLACEHOLDER if ctx.rng.random() < 0.3 else None,
+            bareme_document_lulufiles_file_id=LULUFILES_ID_PLACEHOLDER if ctx.rng.random() < 0.2 else None,
         )
         add(db, devoir)
         ctx.compter("devoirs")
+
+        if ctx.admin_ministeriel and ctx.rng.random() < 0.04:
+            devoir.masque_par_id = ctx.admin_ministeriel.id
+            devoir.masque_le = _utcnow() - timedelta(days=ctx.rng.randint(1, 30))
+            add(db, JournalAuditMinisteriel(
+                id=new_id(), acteur_id=ctx.admin_ministeriel.id, action="devoir.masquer",
+                cible_type="devoir", cible_id=devoir.id,
+                motif="Contenu signale, masque en attendant verification (seed).",
+            ))
+            ctx.compter("journal_audit_ministeriel")
 
         points_par_question = [8.0, 6.0, 6.0]
         questions = []
@@ -1058,9 +1266,21 @@ def creer_evaluations_pour_classe(
             statut_soumission = rng_choice_weighted(
                 ctx.rng, [StatutSoumission.CORRIGEE, StatutSoumission.ECHEC_CORRECTION, StatutSoumission.EN_CORRECTION], [0.75, 0.15, 0.10]
             )
-            soumission = Soumission(id=new_id(), devoir_id=devoir.id, eleve_id=eleve.id, statut=statut_soumission, note=None)
+            # UC-26 : alternative "copie photographiee" (correction holistique par IA vision,
+            # une seule note globale, jamais de decoupage par question) en complement du
+            # formulaire par question - mutuellement exclusives sur une meme soumission.
+            par_copie_image = ctx.rng.random() < 0.15
+            soumission = Soumission(
+                id=new_id(), devoir_id=devoir.id, eleve_id=eleve.id, statut=statut_soumission, note=None,
+                copie_image_lulufiles_file_id=LULUFILES_ID_PLACEHOLDER if par_copie_image else None,
+            )
             add(db, soumission)
             ctx.compter("soumissions")
+
+            if par_copie_image:
+                if statut_soumission == StatutSoumission.CORRIGEE:
+                    soumission.note = round(ctx.rng.uniform(0, sum(q.points_max for q in questions)), 1)
+                continue
 
             total = 0.0
             for question in questions:
@@ -1094,6 +1314,44 @@ def creer_evaluations_pour_classe(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Vie scolaire (UC-23, volet Professeur) : absences, retards, appréciations, incidents
+# ═══════════════════════════════════════════════════════════════════════════
+
+DESCRIPTIONS_VIE_SCOLAIRE: dict[NatureEntreeVieScolaire, list[str]] = {
+    NatureEntreeVieScolaire.ABSENCE: ["Absent(e) sans justificatif fourni.", "Absence justifiee par certificat medical."],
+    NatureEntreeVieScolaire.RETARD: ["Arrive(e) avec 15 minutes de retard.", "Retard recurrent en debut de semaine."],
+    NatureEntreeVieScolaire.APPRECIATION: ["Participation active et pertinente en cours.", "Progres notable ce trimestre."],
+    NatureEntreeVieScolaire.INCIDENT: ["Comportement perturbateur signale par un surveillant.", "Conflit avec un camarade de classe."],
+    NatureEntreeVieScolaire.FELICITATION: ["Felicitations du conseil de classe pour l'ensemble du travail.", "Tenue exemplaire pendant tout le trimestre."],
+}
+
+
+def creer_vie_scolaire_pour_classe(
+    db, ctx: Contexte, classe: Classe, professeur_principal: Utilisateur, enseignant_matiere: Utilisateur | None,
+    eleves_avec_compte: list[Eleve],
+) -> None:
+    """UC-23 : `matiere=None` reserve au professeur principal (entree globale), un
+    enseignant de matiere ordinaire precise toujours la sienne - voir la portee de
+    lecture documentee sur EntreeVieScolaire (vie_scolaire/models.py)."""
+    if not eleves_avec_compte:
+        return
+    matieres = ctx.matieres_par_classe[classe.id]
+    candidats = ctx.rng.sample(eleves_avec_compte, k=min(len(eleves_avec_compte), max(1, round(len(eleves_avec_compte) * 0.4))))
+    for eleve in candidats:
+        for _ in range(ctx.rng.randint(1, 2)):
+            nature = ctx.rng.choice(list(NatureEntreeVieScolaire))
+            entree_globale = enseignant_matiere is None or ctx.rng.random() < 0.4
+            add(db, EntreeVieScolaire(
+                id=new_id(), eleve_id=eleve.id, classe_id=classe.id,
+                auteur_id=professeur_principal.id if entree_globale else enseignant_matiere.id,
+                nature=nature, matiere=None if entree_globale else ctx.rng.choice(matieres),
+                description=ctx.rng.choice(DESCRIPTIONS_VIE_SCOLAIRE[nature]),
+                date_survenue=(_utcnow() - timedelta(days=ctx.rng.randint(0, 90))).date(),
+            ))
+            ctx.compter("entrees_vie_scolaire")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Actes académiques (UC-10)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1116,6 +1374,7 @@ def creer_actes_pour_etablissement(db, ctx: Contexte, cfg: Config, etablissement
     for nom, prix, pieces in catalogue:
         type_acte = TypeActeAcademique(
             id=new_id(), etablissement_id=etablissement.id, nom=nom, prix=float(prix), pieces_requises=pieces,
+            schema_formulaire=_generer_schema_formulaire(ctx),
         )
         add(db, type_acte)
         ctx.compter("types_acte_academique")
@@ -1140,9 +1399,12 @@ def creer_actes_pour_etablissement(db, ctx: Contexte, cfg: Config, etablissement
             est_reclamation=est_reclamation,
             reference_evaluation=f"DEV-{ctx.rng.randint(1000, 9999)}" if est_reclamation else None,
             motif="Je conteste la note attribuee a ce devoir, ma reponse etait complete." if est_reclamation else None,
+            reponses_formulaire=_generer_reponses_formulaire(ctx, type_acte.schema_formulaire if type_acte else None),
             statut=statut, paiement_confirme=paiement_confirme,
             kkiapay_transaction_id=f"seed-tx-{new_id()}" if paiement_confirme else None,
             motif_rejet=ctx.rng.choice(MOTIFS_REJET_ACTE) if statut == StatutDemandeActe.REJETEE else None,
+            # UC-52/66 : un acte ACCEPTEE (et non une reclamation) est livre : document final produit.
+            document_final_lulufiles_id=LULUFILES_ID_PLACEHOLDER if statut == StatutDemandeActe.ACCEPTEE and not est_reclamation else None,
         ))
         ctx.compter("demandes_acte_academique")
 
@@ -1220,6 +1482,90 @@ def creer_dm_tuteur_enfant(db, ctx: Contexte, eleve: Eleve, tuteur_utilisateur_i
             created_at=_utcnow() - timedelta(days=ctx.rng.randint(0, 60), hours=ctx.rng.randint(0, 23)),
         ))
     ctx.compter("messages", n_messages)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# El Professor Tuteur / Famille (UC-32/37, volet Élève/Tuteur, innovation)
+# ═══════════════════════════════════════════════════════════════════════════
+
+SUJETS_EL_PROFESSOR_TUTEUR = ["Orientation scolaire", "Suivi des devoirs", "Question générale"]
+QUESTIONS_EL_PROFESSOR_TUTEUR = [
+    "Comment puis-je aider mon enfant a mieux reussir ce trimestre ?",
+    "Quelles activites extra-scolaires recommanderiez-vous ?",
+    "Comment aborder une baisse de motivation avec mon enfant ?",
+]
+SUJETS_EL_PROFESSOR_FAMILLE = ["Point famille", "Preparation orientation", None]
+
+
+def creer_el_professor_tuteur(db, ctx: Contexte, eleve: Eleve, etablissement_id: str) -> None:
+    """UC-32 : le tuteur consulte toujours a propos d'un enfant precis (contrairement au
+    volet enseignant, `eleve_utilisateur_id` n'est jamais optionnel ici)."""
+    if ctx.rng.random() >= 0.15:
+        return
+    session = SessionElProfessorTuteur(
+        id=new_id(), tuteur_id=eleve.tuteur_id, eleve_utilisateur_id=eleve.utilisateur_id,
+        sujet=ctx.rng.choice(SUJETS_EL_PROFESSOR_TUTEUR),
+    )
+    add(db, session)
+    ctx.compter("sessions_el_professor_tuteur")
+    add(db, MessageElProfessorTuteur(
+        id=new_id(), session_id=session.id, role=RoleMessageElProfessorTuteur.TUTEUR,
+        contenu=ctx.rng.choice(QUESTIONS_EL_PROFESSOR_TUTEUR),
+    ))
+    add(db, MessageElProfessorTuteur(
+        id=new_id(), session_id=session.id, role=RoleMessageElProfessorTuteur.ASSISTANT,
+        contenu="Voici quelques conseils concrets pour accompagner votre enfant au quotidien.",
+    ))
+    ctx.compter("messages_el_professor_tuteur", 2)
+
+    if ctx.rng.random() < 0.05:
+        add(db, AlerteElProfessor(
+            id=new_id(), origine=OrigineAlerteElProfessor.TUTEUR, session_id=session.id,
+            etablissement_id=etablissement_id, eleve_utilisateur_id=eleve.utilisateur_id,
+            motif="Signal detecte dans l'echange (mots-cles de vigilance) - a verifier par l'etablissement.",
+        ))
+        ctx.compter("alertes_el_professor")
+
+
+def creer_el_professor_famille(db, ctx: Contexte, eleve: Eleve, etablissement_id: str) -> None:
+    """UC-37 (innovation) : fil PARTAGE tuteur<->enfant, toujours cree par le tuteur qui
+    "invite" l'enfant - inutilisable (aucun message) tant que `rejointe_le` est null.
+    Un signal de danger dans ce fil cree une alerte origine=FAMILLE, jamais visible du
+    tuteur (qui peut en etre la source) - voir docstring AlerteElProfessor."""
+    if ctx.rng.random() >= 0.10:
+        return
+    rejointe = ctx.rng.random() < 0.6
+    session = SessionElProfessorFamille(
+        id=new_id(), tuteur_id=eleve.tuteur_id, eleve_utilisateur_id=eleve.utilisateur_id,
+        sujet=ctx.rng.choice(SUJETS_EL_PROFESSOR_FAMILLE),
+        rejointe_le=_utcnow() - timedelta(days=ctx.rng.randint(1, 10)) if rejointe else None,
+    )
+    add(db, session)
+    ctx.compter("sessions_el_professor_famille")
+    if not rejointe:
+        return
+
+    add(db, MessageElProfessorFamille(
+        id=new_id(), session_id=session.id, role=RoleMessageElProfessorFamille.TUTEUR,
+        contenu="On fait le point ensemble sur ce trimestre ?",
+    ))
+    add(db, MessageElProfessorFamille(
+        id=new_id(), session_id=session.id, role=RoleMessageElProfessorFamille.ELEVE,
+        contenu="Oui, j'ai des questions sur mes prochains devoirs.",
+    ))
+    add(db, MessageElProfessorFamille(
+        id=new_id(), session_id=session.id, role=RoleMessageElProfessorFamille.ASSISTANT,
+        contenu="Ravi de vous accompagner tous les deux : voici un point d'etape utile pour continuer la discussion.",
+    ))
+    ctx.compter("messages_el_professor_famille", 3)
+
+    if ctx.rng.random() < 0.04:
+        add(db, AlerteElProfessor(
+            id=new_id(), origine=OrigineAlerteElProfessor.FAMILLE, session_id=session.id,
+            etablissement_id=etablissement_id, eleve_utilisateur_id=eleve.utilisateur_id,
+            motif="Signal detecte dans le fil familial - visible uniquement de l'administration.",
+        ))
+        ctx.compter("alertes_el_professor")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
