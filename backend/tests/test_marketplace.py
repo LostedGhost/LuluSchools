@@ -161,6 +161,12 @@ def test_creer_annonce_sans_photo_refusee(marketplace_ctx, client):
     assert response.status_code == 422
 
 
+def test_creer_annonce_prix_invalide_refuse(marketplace_ctx, client):
+    ctx = marketplace_ctx
+    response = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"], prix="0")
+    assert response.status_code == 422
+
+
 def test_creer_annonce_refusee_pour_un_mineur_de_moins_de_16_ans(marketplace_ctx, client):
     ctx = marketplace_ctx
     response = _creer_annonce(client, ctx["mineur_headers"], ctx["etablissement"]["id"])
