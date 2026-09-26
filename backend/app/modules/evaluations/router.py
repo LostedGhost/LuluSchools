@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import get_db, get_session_factory
@@ -47,7 +48,7 @@ def creer_devoir(
     classe = db.get(Classe, classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
-    _verifier_enseignant_rattache(db, enseignant, classe.etablissement_id)
+    _verifier_enseignant_rattache(db, enseignant, classe.id)
 
     devoir = Devoir(
         classe_id=classe_id,
@@ -78,13 +79,33 @@ def creer_devoir(
 def obtenir_devoir(
     devoir_id: str,
     db: Session = Depends(get_db),
-    _utilisateur: Utilisateur = Depends(
-        require_roles(RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ELEVE, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+    utilisateur: Utilisateur = Depends(
+        require_roles(
+            RoleUtilisateur.ENSEIGNANT,
+            RoleUtilisateur.ELEVE,
+            RoleUtilisateur.ADMIN_ETABLISSEMENT,
+            RoleUtilisateur.ADMIN_MINISTERIEL,
+        )
     ),
 ) -> Devoir:
+    """Portee verifiee ici (auparavant absente : n'importe quel role autorise pouvait
+    lire n'importe quel devoir d'un autre etablissement/classe en devinant l'id) -
+    meme logique que lister_devoirs ci-dessous, par classe/etablissement."""
     devoir = db.get(Devoir, devoir_id)
     if devoir is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+    if utilisateur.role == RoleUtilisateur.ADMIN_MINISTERIEL:
+        return devoir
+
+    classe = db.get(Classe, devoir.classe_id)
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        _verifier_eleve_inscrit(db, utilisateur.id, devoir.classe_id)
+    elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
+        _verifier_enseignant_rattache(db, utilisateur, classe.id)
+    else:
+        lien = db.get(AdminEtablissement, utilisateur.id)
+        if lien is None or lien.etablissement_id != classe.etablissement_id:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
     return devoir
 
 
@@ -93,7 +114,12 @@ def lister_devoirs(
     classe_id: str,
     db: Session = Depends(get_db),
     utilisateur: Utilisateur = Depends(
-        require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+        require_roles(
+            RoleUtilisateur.ELEVE,
+            RoleUtilisateur.ENSEIGNANT,
+            RoleUtilisateur.ADMIN_ETABLISSEMENT,
+            RoleUtilisateur.ADMIN_MINISTERIEL,
+        )
     ),
 ) -> list[Devoir]:
     classe = db.get(Classe, classe_id)
@@ -102,8 +128,8 @@ def lister_devoirs(
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
-        _verifier_enseignant_rattache(db, utilisateur, classe.etablissement_id)
-    else:
+        _verifier_enseignant_rattache(db, utilisateur, classe.id)
+    elif utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
@@ -233,7 +259,12 @@ def obtenir_soumission(
     soumission_id: str,
     db: Session = Depends(get_db),
     utilisateur: Utilisateur = Depends(
-        require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+        require_roles(
+            RoleUtilisateur.ELEVE,
+            RoleUtilisateur.ENSEIGNANT,
+            RoleUtilisateur.ADMIN_ETABLISSEMENT,
+            RoleUtilisateur.ADMIN_MINISTERIEL,
+        )
     ),
 ) -> Soumission:
     """Permet a l'eleve de suivre l'avancement de la correction (statut=en_correction
@@ -250,7 +281,7 @@ def obtenir_soumission(
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         if devoir.enseignant_id != utilisateur.id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
-    else:
+    elif utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         classe = db.get(Classe, devoir.classe_id)
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
@@ -330,13 +361,25 @@ def lister_soumissions_a_revoir(
 @router.get("/referentiels-coefficients", response_model=list[ReferentielOut])
 def lister_referentiels(
     db: Session = Depends(get_db),
-    _utilisateur: Utilisateur = Depends(
+    utilisateur: Utilisateur = Depends(
         require_roles(RoleUtilisateur.ADMIN_MINISTERIEL, RoleUtilisateur.ADMIN_ETABLISSEMENT)
     ),
 ) -> list[ReferentielCoefficient]:
     """Sans cette liste, ni le ministere ni un A+ ne peuvent decouvrir les referentiels
-    existants ou les propositions en attente sans deja en connaitre les id (UC-09)."""
-    return db.query(ReferentielCoefficient).order_by(ReferentielCoefficient.created_at.desc()).all()
+    existants ou les propositions en attente sans deja en connaitre les id (UC-09).
+    Un A+ ne doit voir que les referentiels nationaux (etablissement_proposant_id NULL)
+    et ses PROPRES propositions, jamais celles d'un etablissement concurrent."""
+    requete = db.query(ReferentielCoefficient)
+    if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        lien = db.get(AdminEtablissement, utilisateur.id)
+        etablissement_id = lien.etablissement_id if lien is not None else None
+        requete = requete.filter(
+            or_(
+                ReferentielCoefficient.etablissement_proposant_id.is_(None),
+                ReferentielCoefficient.etablissement_proposant_id == etablissement_id,
+            )
+        )
+    return requete.order_by(ReferentielCoefficient.created_at.desc()).all()
 
 
 @router.post(
@@ -490,7 +533,11 @@ def obtenir_bulletin(
     db: Session = Depends(get_db),
     utilisateur: Utilisateur = Depends(
         require_roles(
-            RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT
+            RoleUtilisateur.ELEVE,
+            RoleUtilisateur.TUTEUR,
+            RoleUtilisateur.ENSEIGNANT,
+            RoleUtilisateur.ADMIN_ETABLISSEMENT,
+            RoleUtilisateur.ADMIN_MINISTERIEL,
         )
     ),
 ) -> Bulletin:
@@ -504,7 +551,7 @@ def obtenir_bulletin(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         classe = db.get(Classe, classe_id)
-        _verifier_enseignant_rattache(db, utilisateur, classe.etablissement_id)
+        _verifier_enseignant_rattache(db, utilisateur, classe.id)
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         classe = db.get(Classe, classe_id)
         lien = db.get(AdminEtablissement, utilisateur.id)
@@ -519,13 +566,17 @@ def valider_passage(
     bulletin_id: str,
     payload: ValiderPassageRequest,
     db: Session = Depends(get_db),
-    _enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
+    enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
 ) -> Bulletin:
     """UC-09 : le calcul automatique ne decide jamais seul d'une decision lourde
-    (passage/redoublement/diplome) - toujours une action humaine explicite."""
+    (passage/redoublement/diplome) - toujours une action humaine explicite. Portee
+    verifiee ici (auparavant absente : n'importe quel enseignant authentifie pouvait
+    valider le passage d'un eleve d'un etablissement totalement different)."""
     bulletin = db.get(Bulletin, bulletin_id)
     if bulletin is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Bulletin introuvable.")
+    classe = db.get(Classe, bulletin.classe_id)
+    _verifier_enseignant_rattache(db, enseignant, classe.id)
 
     bulletin.decision_passage = payload.decision
     bulletin.valide_par_conseil = True

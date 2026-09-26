@@ -66,3 +66,22 @@ def require_roles(*roles: RoleUtilisateur):
         return utilisateur
 
     return _dependency
+
+
+def verifier_portee_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
+    """A appeler apres un require_roles(...ADMIN_ETABLISSEMENT, ADMIN_MINISTERIEL) sur un
+    endpoint de gestion d'etablissement : centralise la regle A++ / A+ pour eviter que
+    chaque module reimplemente sa propre verification (constat d'audit : 4 copies
+    independantes bloquaient toutes A++ par erreur, cf. commit qui introduit cette
+    fonction). ADMIN_MINISTERIEL gere tous les etablissements sans restriction.
+    ADMIN_ETABLISSEMENT doit administrer precisement l'etablissement vise. Tout autre
+    role est refuse."""
+    from app.modules.etablissements.models import AdminEtablissement
+
+    if utilisateur.role == RoleUtilisateur.ADMIN_MINISTERIEL:
+        return
+    if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
+    lien = db.get(AdminEtablissement, utilisateur.id)
+    if lien is None or lien.etablissement_id != etablissement_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")

@@ -3,18 +3,27 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
+from app.core.deps import (
+    api_error,
+    get_current_active_user,
+    get_current_user,
+    require_roles,
+    verifier_portee_etablissement,
+)
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.security import generate_temporary_password, hash_password
 from app.modules.etablissements.models import (
     AdminEtablissement,
+    AffectationEnseignant,
     Classe,
     Etablissement,
     EtablissementPhoto,
     TypeEtablissement,
 )
 from app.modules.etablissements.schemas import (
+    AffectationEnseignantCreate,
+    AffectationEnseignantOut,
     AnnuairePubliqueOut,
     ClasseCreate,
     ClasseOut,
@@ -30,9 +39,10 @@ from app.modules.etablissements.schemas import (
 )
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.messagerie.models import Conversation, TypeConversation
-from app.modules.recrutement.models import Poste, StatutPoste
+from app.modules.recrutement.models import Contrat, Poste, StatutContrat, StatutPoste
 
 router = APIRouter(prefix="/etablissements", tags=["etablissements"])
+classes_router = APIRouter(tags=["etablissements"])
 
 
 def _generer_code_etablissement(db: Session, type_etablissement: str) -> str:
@@ -283,15 +293,7 @@ def mettre_a_jour_localisation(
 
 
 def _verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
-    if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
-    lien = db.get(AdminEtablissement, utilisateur.id)
-    if lien is None or lien.etablissement_id != etablissement_id:
-        raise api_error(
-            status.HTTP_403_FORBIDDEN,
-            "acces_refuse",
-            "Vous n'administrez pas cet etablissement.",
-        )
+    verifier_portee_etablissement(db, utilisateur, etablissement_id)
 
 
 @router.post(
@@ -411,3 +413,98 @@ def lister_classes(
     _utilisateur: Utilisateur = Depends(get_current_user),
 ) -> list[Classe]:
     return db.query(Classe).filter(Classe.etablissement_id == etablissement_id).all()
+
+
+@classes_router.post(
+    "/classes/{classe_id}/affectations",
+    response_model=AffectationEnseignantOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def affecter_enseignant(
+    classe_id: str,
+    payload: AffectationEnseignantCreate,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> AffectationEnseignant:
+    """Assigne un enseignant a une classe precise : c'est ce lien (et non plus seulement
+    le Contrat signe avec l'etablissement) qui determine desormais quelles classes un
+    enseignant peut gerer (cours/quiz/devoirs/sessions live) - voir AffectationEnseignant."""
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    verifier_portee_etablissement(db, admin, classe.etablissement_id)
+
+    enseignant = db.get(Utilisateur, payload.enseignant_utilisateur_id)
+    if enseignant is None or enseignant.role != RoleUtilisateur.ENSEIGNANT:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Enseignant introuvable.")
+    contrat = (
+        db.query(Contrat)
+        .filter(
+            Contrat.enseignant_id == enseignant.id,
+            Contrat.etablissement_id == classe.etablissement_id,
+            Contrat.statut == StatutContrat.SIGNE,
+        )
+        .first()
+    )
+    if contrat is None:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "contrat_requis",
+            "Cet enseignant n'a pas de contrat signe avec cet etablissement.",
+        )
+    existante = (
+        db.query(AffectationEnseignant)
+        .filter(AffectationEnseignant.enseignant_id == enseignant.id, AffectationEnseignant.classe_id == classe_id)
+        .first()
+    )
+    if existante is not None:
+        raise api_error(status.HTTP_409_CONFLICT, "deja_affecte", "Cet enseignant est deja affecte a cette classe.")
+
+    affectation = AffectationEnseignant(enseignant_id=enseignant.id, classe_id=classe_id)
+    db.add(affectation)
+    db.commit()
+    db.refresh(affectation)
+    return affectation
+
+
+@classes_router.get("/classes/{classe_id}/affectations", response_model=list[AffectationEnseignantOut])
+def lister_affectations_classe(
+    classe_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[AffectationEnseignant]:
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    verifier_portee_etablissement(db, admin, classe.etablissement_id)
+    return db.query(AffectationEnseignant).filter(AffectationEnseignant.classe_id == classe_id).all()
+
+
+@classes_router.delete("/affectations/{affectation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoquer_affectation(
+    affectation_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> None:
+    affectation = db.get(AffectationEnseignant, affectation_id)
+    if affectation is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Affectation introuvable.")
+    verifier_portee_etablissement(db, admin, affectation.classe.etablissement_id)
+    db.delete(affectation)
+    db.commit()
+
+
+@classes_router.get("/mes-classes-affectees", response_model=list[ClasseOut])
+def mes_classes_affectees(
+    db: Session = Depends(get_db),
+    enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
+) -> list[Classe]:
+    """Permet a un enseignant de decouvrir les classes qui lui sont affectees, sans
+    devoir deja connaitre leurs id (meme role que /etablissements/{id}/classes pour un
+    A+, mais filtre sur les affectations plutot que sur l'etablissement entier)."""
+    return (
+        db.query(Classe)
+        .join(AffectationEnseignant, AffectationEnseignant.classe_id == Classe.id)
+        .filter(AffectationEnseignant.enseignant_id == enseignant.id)
+        .all()
+    )

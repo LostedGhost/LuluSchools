@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import api_error, require_roles
+from app.core.deps import api_error, require_roles, verifier_portee_etablissement
 from app.modules.controle_acces.models import DesignationControleur, ServiceControle
 from app.modules.controle_acces.schemas import DesignationControleurCreate, DesignationControleurOut
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
@@ -12,11 +12,7 @@ router = APIRouter(tags=["controle-acces"])
 
 
 def verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
-    if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
-    lien = db.get(AdminEtablissement, utilisateur.id)
-    if lien is None or lien.etablissement_id != etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+    verifier_portee_etablissement(db, utilisateur, etablissement_id)
 
 
 def est_controleur_designe(
@@ -43,7 +39,7 @@ def designer_controleur(
     etablissement_id: str,
     payload: DesignationControleurCreate,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> DesignationControleur:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
@@ -70,7 +66,7 @@ def designer_controleur(
 def lister_controleurs(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> list[DesignationControleur]:
     verifier_admin_de_l_etablissement(db, admin, etablissement_id)
     return (
@@ -84,7 +80,7 @@ def lister_controleurs(
 def revoquer_controleur(
     designation_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> None:
     designation = db.get(DesignationControleur, designation_id)
     if designation is None:

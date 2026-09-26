@@ -134,6 +134,12 @@ def test_parcours_complet_des_phases_2_et_3(
         headers=enseignant_headers,
     )
     enseignant_id = client.get("/api/v1/me", headers=enseignant_headers).json()["id"]
+    affectation = client.post(
+        f"/api/v1/classes/{classe['id']}/affectations",
+        json={"enseignant_utilisateur_id": enseignant_id},
+        headers=admin_headers,
+    )
+    assert affectation.status_code == 201
 
     # ---------------------------------------------------------------
     # 1. UC-13 : messagerie - groupe de classe auto-cree, DM tuteur -> son enfant,

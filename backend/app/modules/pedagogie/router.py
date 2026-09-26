@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import ElProfessorError, FreeLLMClient, QuizGenerationError, get_llm_client
-from app.modules.etablissements.models import Classe
+from app.modules.etablissements.models import AffectationEnseignant, Classe
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.pedagogie.models import (
@@ -28,7 +28,6 @@ from app.modules.pedagogie.schemas import (
     TentativeQuizCreate,
     TentativeQuizOut,
 )
-from app.modules.recrutement.models import Contrat, StatutContrat
 
 MAX_TAILLE_COURS_OCTETS = 50 * 1024 * 1024
 MAX_TAILLE_COURS_VIDEO_OCTETS = 200 * 1024 * 1024  # UC-15 (Phase 3), delegue - la duree (15 min) n'est pas
@@ -37,21 +36,23 @@ MAX_TAILLE_COURS_VIDEO_OCTETS = 200 * 1024 * 1024  # UC-15 (Phase 3), delegue - 
 router = APIRouter(tags=["pedagogie"])
 
 
-def _verifier_enseignant_rattache(db: Session, enseignant: Utilisateur, etablissement_id: str) -> None:
+def _verifier_enseignant_rattache(db: Session, enseignant: Utilisateur, classe_id: str) -> None:
+    """Verifie que l'enseignant a bien une AFFECTATION sur cette classe precise (pas
+    seulement un contrat signe avec l'etablissement - voir AffectationEnseignant pour
+    le contexte du changement)."""
     if enseignant.role != RoleUtilisateur.ENSEIGNANT:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
-    contrat = (
-        db.query(Contrat)
+    affectation = (
+        db.query(AffectationEnseignant)
         .filter(
-            Contrat.enseignant_id == enseignant.id,
-            Contrat.etablissement_id == etablissement_id,
-            Contrat.statut == StatutContrat.SIGNE,
+            AffectationEnseignant.enseignant_id == enseignant.id,
+            AffectationEnseignant.classe_id == classe_id,
         )
         .first()
     )
-    if contrat is None:
+    if affectation is None:
         raise api_error(
-            status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas rattache a cet etablissement."
+            status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectee."
         )
 
 
@@ -88,7 +89,7 @@ def publier_cours(
     classe = db.get(Classe, classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
-    _verifier_enseignant_rattache(db, enseignant, classe.etablissement_id)
+    _verifier_enseignant_rattache(db, enseignant, classe.id)
 
     lulufiles_file_id = None
     if fichier is not None:
@@ -149,8 +150,7 @@ def obtenir_lien_fichier_cours(
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, cours.classe_id)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
-        classe = db.get(Classe, cours.classe_id)
-        _verifier_enseignant_rattache(db, utilisateur, classe.etablissement_id)
+        _verifier_enseignant_rattache(db, utilisateur, cours.classe_id)
     if not cours.lulufiles_file_id:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce cours n'a pas de fichier associe.")
 

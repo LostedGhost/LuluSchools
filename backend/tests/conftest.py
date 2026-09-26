@@ -11,7 +11,7 @@ from app.core.database import Base, get_db, get_session_factory
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
 from app.core.llm import CorrectionError, DocumentScoringError, ElProfessorError, QuizGenerationError, get_llm_client
-from app.core.security import create_access_token, hash_password
+from app.core.security import create_access_token, decode_token, hash_password
 from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 
@@ -295,6 +295,12 @@ def classe_avec_enseignant_et_eleve(client, fake_email_client, fake_llm_client, 
         f"/api/v1/contrats/{contrat['id']}/signer",
         files={"signature_image": ("signature.png", io.BytesIO(b"trace-du-canvas-en-png"), "image/png")},
         headers=enseignant_headers,
+    )
+    enseignant_utilisateur_id = decode_token(enseignant_headers["Authorization"].split(" ")[1])["sub"]
+    client.post(
+        f"/api/v1/classes/{classe['id']}/affectations",
+        json={"enseignant_utilisateur_id": enseignant_utilisateur_id},
+        headers=admin_headers,
     )
 
     tuteur_payload = {

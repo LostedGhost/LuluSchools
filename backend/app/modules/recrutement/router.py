@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.crypto import chiffrer_bytes
 from app.core.database import get_db, get_session_factory
-from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
+from app.core.deps import (
+    api_error,
+    get_current_active_user,
+    get_current_user,
+    require_roles,
+    verifier_portee_etablissement,
+)
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import DocumentScoringError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
@@ -63,11 +69,7 @@ def _ajouter_jours_ouvres(date_depart: datetime, jours_ouvres: int) -> datetime:
 
 
 def _verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
-    if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
-    lien = db.get(AdminEtablissement, utilisateur.id)
-    if lien is None or lien.etablissement_id != etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+    verifier_portee_etablissement(db, utilisateur, etablissement_id)
 
 
 @router.post(
@@ -137,7 +139,7 @@ def mes_contrats(
 def contestations_en_attente(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> list[Contestation]:
     _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
     return (
@@ -154,7 +156,7 @@ def contestations_en_attente(
 def lister_candidatures_du_poste(
     poste_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> list[Candidature]:
     """Sans cette liste, l'A+ n'a aucun moyen de retrouver les candidatures d'un poste
     pour decider d'un contrat (UC-04, UC-05) sans deja en connaitre les id."""
@@ -311,7 +313,7 @@ def _reevaluer_candidature(db: Session, candidature: Candidature, criteres_par_t
 
 @router.get("/candidatures/en-attente-revision", response_model=list[CandidatureOut])
 def lister_candidatures_en_attente_revision(
-    db: Session = Depends(get_db), admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT))
+    db: Session = Depends(get_db), admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL))
 ) -> list[Candidature]:
     """Ecran de revision manuelle (recrutement) : candidatures ayant au moins un
     document que FreeLLM n'a pas pu noter, scopees aux etablissements administres."""
@@ -333,7 +335,7 @@ def noter_document_manuellement(
     document_id: str,
     payload: NotationManuelleRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Candidature:
     document = db.get(DocumentCandidature, document_id)
     if document is None:
@@ -442,7 +444,7 @@ def decider_contestation(
     contestation_id: str,
     payload: ContestationDecisionRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Contestation:
     contestation = db.get(Contestation, contestation_id)
     if contestation is None:
@@ -475,7 +477,7 @@ def creer_contrat(
     candidature_id: str,
     payload: ContratCreate,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Contrat:
     candidature = db.get(Candidature, candidature_id)
     if candidature is None:
@@ -584,7 +586,7 @@ def proposer_reconduction(
     contrat_id: str,
     payload: ReconductionCreate,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> PropositionReconduction:
     """UC-05b. L'enseignant doit re-signer integralement (pas de reconduction tacite) :
     cree un nouveau Contrat en attente de signature via POST /contrats/{id}/signer."""

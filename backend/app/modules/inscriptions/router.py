@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import api_error, require_roles
+from app.core.deps import api_error, require_roles, verifier_portee_etablissement
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.security import generate_temporary_password, hash_password
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement, TypeEtablissement
@@ -143,16 +143,14 @@ def valider_inscription(
     inscription_id: str,
     db: Session = Depends(get_db),
     email_client: BrevoEmailClient = Depends(get_email_client),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Inscription:
     inscription = db.get(Inscription, inscription_id)
     if inscription is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Inscription introuvable.")
 
     classe = db.get(Classe, inscription.classe_id)
-    lien_admin = db.get(AdminEtablissement, admin.id)
-    if lien_admin is None or lien_admin.etablissement_id != classe.etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+    verifier_portee_etablissement(db, admin, classe.etablissement_id)
 
     if inscription.statut == StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL:
         raise api_error(
@@ -228,16 +226,14 @@ def rejeter_inscription(
     inscription_id: str,
     payload: RejetInscriptionRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Inscription:
     inscription = db.get(Inscription, inscription_id)
     if inscription is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Inscription introuvable.")
 
     classe = db.get(Classe, inscription.classe_id)
-    lien_admin = db.get(AdminEtablissement, admin.id)
-    if lien_admin is None or lien_admin.etablissement_id != classe.etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+    verifier_portee_etablissement(db, admin, classe.etablissement_id)
 
     inscription.statut = StatutInscription.REJETEE
     inscription.motif_rejet = payload.motif
@@ -251,7 +247,12 @@ def obtenir_inscription(
     inscription_id: str,
     db: Session = Depends(get_db),
     utilisateur: Utilisateur = Depends(
-        require_roles(RoleUtilisateur.TUTEUR, RoleUtilisateur.ELEVE, RoleUtilisateur.ADMIN_ETABLISSEMENT)
+        require_roles(
+            RoleUtilisateur.TUTEUR,
+            RoleUtilisateur.ELEVE,
+            RoleUtilisateur.ADMIN_ETABLISSEMENT,
+            RoleUtilisateur.ADMIN_MINISTERIEL,
+        )
     ),
 ) -> Inscription:
     inscription = db.get(Inscription, inscription_id)
@@ -265,11 +266,9 @@ def obtenir_inscription(
     elif utilisateur.role == RoleUtilisateur.ELEVE:
         if eleve.utilisateur_id != utilisateur.id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette inscription ne vous appartient pas.")
-    else:
+    elif utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         classe = db.get(Classe, inscription.classe_id)
-        lien_admin = db.get(AdminEtablissement, utilisateur.id)
-        if lien_admin is None or lien_admin.etablissement_id != classe.etablissement_id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+        verifier_portee_etablissement(db, utilisateur, classe.etablissement_id)
 
     return inscription
 
@@ -280,13 +279,11 @@ def obtenir_inscription(
 def inscriptions_a_valider(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> list[dict]:
     """Ecran A+ : sans cette liste, un admin d'etablissement n'a aucun moyen de savoir
     quelles inscriptions attendent sa validation (UC-02) sans deja connaitre leurs id."""
-    lien = db.get(AdminEtablissement, admin.id)
-    if lien is None or lien.etablissement_id != etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+    verifier_portee_etablissement(db, admin, etablissement_id)
 
     inscriptions = (
         db.query(Inscription)

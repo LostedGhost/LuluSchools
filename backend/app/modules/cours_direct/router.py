@@ -17,25 +17,9 @@ from app.modules.cours_direct.schemas import (
 from app.modules.etablissements.models import Classe
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
-from app.modules.recrutement.models import Contrat, StatutContrat
+from app.modules.pedagogie.router import _verifier_enseignant_rattache
 
 router = APIRouter(tags=["cours-direct"])
-
-
-def _verifier_enseignant_rattache(db: Session, enseignant: Utilisateur, etablissement_id: str) -> None:
-    contrat = (
-        db.query(Contrat)
-        .filter(
-            Contrat.enseignant_id == enseignant.id,
-            Contrat.etablissement_id == etablissement_id,
-            Contrat.statut == StatutContrat.SIGNE,
-        )
-        .first()
-    )
-    if contrat is None:
-        raise api_error(
-            status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas rattache a cet etablissement."
-        )
 
 
 def _verifier_eleve_inscrit(db: Session, eleve_utilisateur_id: str, classe_id: str) -> Eleve:
@@ -73,7 +57,7 @@ def planifier_session_live(
     classe = db.get(Classe, classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
-    _verifier_enseignant_rattache(db, enseignant, classe.etablissement_id)
+    _verifier_enseignant_rattache(db, enseignant, classe.id)
 
     session = SessionLive(classe_id=classe_id, enseignant_id=enseignant.id, date_heure=payload.date_heure)
     db.add(session)
@@ -85,7 +69,11 @@ def planifier_session_live(
 @router.get("/classes/{classe_id}/sessions-live", response_model=list[SessionLiveOut])
 def lister_sessions_live(
     classe_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(
-        RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR, RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT
+        RoleUtilisateur.ELEVE,
+        RoleUtilisateur.TUTEUR,
+        RoleUtilisateur.ENSEIGNANT,
+        RoleUtilisateur.ADMIN_ETABLISSEMENT,
+        RoleUtilisateur.ADMIN_MINISTERIEL,
     ))
 ) -> list[SessionLive]:
     classe = db.get(Classe, classe_id)
@@ -94,7 +82,7 @@ def lister_sessions_live(
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
-        _verifier_enseignant_rattache(db, utilisateur, classe.etablissement_id)
+        _verifier_enseignant_rattache(db, utilisateur, classe.id)
     return db.query(SessionLive).filter(SessionLive.classe_id == classe_id).all()
 
 

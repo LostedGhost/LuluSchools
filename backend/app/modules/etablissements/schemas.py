@@ -59,6 +59,20 @@ class ClasseOut(BaseModel):
     politique_depassement: PolitiqueDepassement
 
 
+class AffectationEnseignantCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enseignant_utilisateur_id: str
+
+
+class AffectationEnseignantOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    enseignant_id: str
+    classe_id: str
+
+
 class EtablissementVitrineOut(BaseModel):
     """Version publique et minimale d'un etablissement, pour la vitrine marketing de la landing page
     (aucun champ interne : ni code_etablissement, ni email d'admin)."""

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -71,6 +71,25 @@ class Classe(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     etablissement: Mapped[Etablissement] = relationship(back_populates="classes")
+
+
+class AffectationEnseignant(Base):
+    """Lie un enseignant a une classe PRECISE dont il a la charge (constat d'audit RBAC :
+    auparavant, le seul lien disponible etait Contrat.enseignant_id, a l'echelle de
+    l'etablissement entier - n'importe quel enseignant sous contrat signe pouvait donc
+    gerer les cours/devoirs de N'IMPORTE QUELLE classe de son etablissement, pas
+    seulement les siennes). Geree par un A+/A++ (voir POST /classes/{classe_id}/affectations),
+    et devenue le vrai filtre pour create/gerer cours, quiz, devoirs, sessions live."""
+
+    __tablename__ = "affectations_enseignant"
+    __table_args__ = (UniqueConstraint("enseignant_id", "classe_id", name="uq_affectation_enseignant_classe"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    enseignant_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
+    classe_id: Mapped[str] = mapped_column(ForeignKey("classes.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    classe: Mapped["Classe"] = relationship()
 
 
 class EtablissementPhoto(Base):

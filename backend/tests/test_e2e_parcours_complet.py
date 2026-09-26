@@ -227,6 +227,14 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
     )
     assert signature_reconduction.status_code == 200
 
+    enseignant_utilisateur_id = client.get("/api/v1/me", headers=enseignant_headers).json()["id"]
+    affectation = client.post(
+        f"/api/v1/classes/{classe['id']}/affectations",
+        json={"enseignant_utilisateur_id": enseignant_utilisateur_id},
+        headers=admin_headers,
+    )
+    assert affectation.status_code == 201
+
     # ---------------------------------------------------------------
     # 7. UC-06/UC-07 : cours + quiz genere par l'IA
     # ---------------------------------------------------------------

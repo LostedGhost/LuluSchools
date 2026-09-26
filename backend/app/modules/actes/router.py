@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import api_error, require_roles
+from app.core.deps import api_error, require_roles, verifier_portee_etablissement
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
 from app.modules.actes.schemas import (
     AmorcerPaiementRequest,
@@ -20,11 +20,7 @@ router = APIRouter(tags=["actes"])
 
 
 def _verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
-    if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
-    lien = db.get(AdminEtablissement, utilisateur.id)
-    if lien is None or lien.etablissement_id != etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+    verifier_portee_etablissement(db, utilisateur, etablissement_id)
 
 
 def _etablissement_actuel_de_l_eleve(db: Session, eleve: Eleve) -> str:
@@ -51,7 +47,7 @@ def creer_type_acte(
     etablissement_id: str,
     payload: TypeActeCreate,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> TypeActeAcademique:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
@@ -83,7 +79,7 @@ def lister_types_actes(
 def demandes_actes_de_l_etablissement(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> list[DemandeActeAcademique]:
     """Ecran A+ : sans cette liste, l'admin n'a aucun moyen de decouvrir les demandes
     d'actes/reclamations en attente de traitement pour son etablissement (UC-10)."""
@@ -201,7 +197,7 @@ def amorcer_paiement(
 @router.get("/demandes-actes/{demande_id}", response_model=DemandeActeOut)
 def obtenir_demande_acte(
     demande_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(
-        RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR, RoleUtilisateur.ADMIN_ETABLISSEMENT
+        RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR, RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL
     ))
 ) -> DemandeActeAcademique:
     demande = db.get(DemandeActeAcademique, demande_id)
@@ -225,7 +221,7 @@ def traiter_demande_acte(
     demande_id: str,
     payload: TraiterDemandeRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> DemandeActeAcademique:
     demande = db.get(DemandeActeAcademique, demande_id)
     if demande is None:

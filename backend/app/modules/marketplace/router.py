@@ -277,7 +277,7 @@ def retirer_annonce_moderation(
     annonce_id: str,
     payload: RetirerAnnonceRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> AnnonceMarketplace:
     annonce = db.get(AnnonceMarketplace, annonce_id)
     if annonce is None:
@@ -329,7 +329,7 @@ def signaler_annonce(
 def signalements_en_attente(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> list[SignalementAnnonceMarketplace]:
     verifier_admin_de_l_etablissement(db, admin, etablissement_id)
     annonce_ids = [
@@ -352,7 +352,7 @@ def traiter_signalement_annonce(
     signalement_id: str,
     payload: TraiterSignalementAnnonceRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> SignalementAnnonceMarketplace:
     signalement = db.get(SignalementAnnonceMarketplace, signalement_id)
     if signalement is None:
@@ -532,7 +532,7 @@ def decider_contestation(
     contestation_id: str,
     payload: DecisionContestationMarketplaceRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> ContestationMarketplace:
     contestation = db.get(ContestationMarketplace, contestation_id)
     if contestation is None:
@@ -565,7 +565,7 @@ def reverser_vendeur(
     transaction_id: str,
     payload: ReverserVendeurRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> TransactionMarketplace:
     transaction = db.get(TransactionMarketplace, transaction_id)
     if transaction is None:

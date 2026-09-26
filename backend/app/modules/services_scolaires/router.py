@@ -84,7 +84,7 @@ def creer_ligne_transport(
     etablissement_id: str,
     payload: LigneTransportCreate,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> LigneTransport:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
@@ -229,7 +229,7 @@ def obtenir_ticket_transport(
         is not None
     )
     est_controleur = est_controleur_designe(db, utilisateur.id, ligne.etablissement_id, ServiceControle.TRANSPORT)
-    est_admin = utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT
+    est_admin = utilisateur.role in (RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
     if not (est_proprietaire or est_tuteur or est_controleur or est_admin):
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce ticket ne vous appartient pas.")
     if est_admin and not est_proprietaire and not est_tuteur:
@@ -265,7 +265,7 @@ def creer_type_repas_cantine(
     etablissement_id: str,
     payload: TypeRepasCantineCreate,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> TypeRepasCantine:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
@@ -414,7 +414,7 @@ def obtenir_ticket_cantine(
         is not None
     )
     est_controleur = est_controleur_designe(db, utilisateur.id, type_repas.etablissement_id, ServiceControle.CANTINE)
-    est_admin = utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT
+    est_admin = utilisateur.role in (RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
     if not (est_proprietaire or est_tuteur or est_controleur or est_admin):
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce ticket ne vous appartient pas.")
     if est_admin and not est_proprietaire and not est_tuteur:

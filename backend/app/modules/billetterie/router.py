@@ -32,6 +32,8 @@ def _aware_utc(moment: datetime) -> datetime:
 
 
 def _est_organisateur(db: Session, utilisateur: Utilisateur, evenement: Evenement) -> bool:
+    if utilisateur.role == RoleUtilisateur.ADMIN_MINISTERIEL:
+        return True
     if utilisateur.id == evenement.parrain_utilisateur_id:
         return True
     if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
@@ -54,7 +56,7 @@ def creer_evenement(
     etablissement_id: str,
     payload: EvenementCreate,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Evenement:
     if db.get(Etablissement, etablissement_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
@@ -80,7 +82,7 @@ def designer_parrain(
     evenement_id: str,
     payload: DesignerParrainRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Evenement:
     evenement = db.get(Evenement, evenement_id)
     if evenement is None:

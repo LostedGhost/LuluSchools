@@ -336,7 +336,7 @@ def signaler_message(
 def signalements_en_attente(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> list[SignalementMessage]:
     verifier_admin_de_l_etablissement(db, admin, etablissement_id)
     pendants = db.query(SignalementMessage).filter(SignalementMessage.traite.is_(False)).all()
@@ -354,7 +354,7 @@ def traiter_signalement(
     signalement_id: str,
     payload: TraiterSignalementRequest,
     db: Session = Depends(get_db),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> SignalementMessage:
     signalement = db.get(SignalementMessage, signalement_id)
     if signalement is None:
@@ -363,9 +363,12 @@ def traiter_signalement(
     conversation = db.get(Conversation, message.conversation_id)
     etablissements = _etablissements_concernes(db, conversation)
 
-    lien_admin = db.get(AdminEtablissement, admin.id)
-    if lien_admin is None or lien_admin.etablissement_id not in etablissements:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce signalement ne concerne pas votre etablissement.")
+    if admin.role != RoleUtilisateur.ADMIN_MINISTERIEL:
+        lien_admin = db.get(AdminEtablissement, admin.id)
+        if lien_admin is None or lien_admin.etablissement_id not in etablissements:
+            raise api_error(
+                status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce signalement ne concerne pas votre etablissement."
+            )
 
     signalement.traite = True
     signalement.decision = payload.decision

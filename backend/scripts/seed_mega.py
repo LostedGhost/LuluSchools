@@ -50,6 +50,7 @@ from app.modules.cours_direct.models import (
 )
 from app.modules.etablissements.models import (
     AdminEtablissement,
+    AffectationEnseignant,
     Classe,
     Etablissement,
     PolitiqueDepassement,
@@ -1767,6 +1768,8 @@ def executer_seed(cfg: Config, seed: int) -> Contexte:
                 eleves_de_la_classe = creer_inscriptions_pour_classe(db, ctx, cfg, classe, etablissement)
                 eleves_avec_compte = [e for e in eleves_de_la_classe if e.utilisateur_id]
                 enseignant = ctx.rng.choice(enseignants_disponibles)
+                add(db, AffectationEnseignant(enseignant_id=enseignant.id, classe_id=classe.id))
+                ctx.compter("affectations_enseignant")
 
                 creer_consentements_camera(db, ctx, eleves_avec_compte)
                 creer_pedagogie_pour_classe(db, ctx, cfg, classe, enseignant, eleves_avec_compte)

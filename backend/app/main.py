@@ -10,6 +10,7 @@ from app.modules.actes.router import router as actes_router
 from app.modules.billetterie.router import router as billetterie_router
 from app.modules.controle_acces.router import router as controle_acces_router
 from app.modules.cours_direct.router import router as cours_direct_router
+from app.modules.etablissements.router import classes_router as etablissements_classes_router
 from app.modules.etablissements.router import router as etablissements_router
 from app.modules.evaluations.router import router as evaluations_router
 from app.modules.pedagogie.router import router as pedagogie_router
@@ -67,6 +68,7 @@ app.include_router(enseignant_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(me_router, prefix="/api/v1")
 app.include_router(etablissements_router, prefix="/api/v1")
+app.include_router(etablissements_classes_router, prefix="/api/v1")
 app.include_router(inscriptions_router, prefix="/api/v1")
 app.include_router(inscriptions_mon_espace_router, prefix="/api/v1")
 app.include_router(recrutement_router, prefix="/api/v1")
