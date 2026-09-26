@@ -5,12 +5,14 @@ import {
   candidaturesEnAttenteRevision,
   creerContrat,
   creerPoste,
+  listerContratsEtablissement,
   listerPostes,
   noterDocumentManuellement,
   obtenirLienDocumentCandidature,
+  proposerReconduction,
 } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
-import type { CandidatureOut, CritereDocument, PosteOut } from "../../types/api";
+import type { CandidatureOut, ContratAvecEnseignantOut, CritereDocument, PosteOut } from "../../types/api";
 import {
   Badge,
   Btn,
@@ -21,10 +23,18 @@ import {
   PageTitle,
   SectionHead,
   SkeletonCard,
+  SuccessBanner,
   TextInput,
 } from "../../components/ui";
-import { Briefcase, ExternalLink, FileWarning, Plus, Trash2, Users } from "lucide-react";
+import { Briefcase, ExternalLink, FileSignature, FileWarning, Plus, RefreshCw, Trash2, Users } from "lucide-react";
 import { estRempli, erreurDateFuture } from "../../utils/validation";
+
+const RECONDUCTION_FENETRE_JOURS = 30;
+
+function dansLaFenetreDeReconduction(dateFin: string): boolean {
+  const jours = Math.ceil((new Date(dateFin).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  return jours <= RECONDUCTION_FENETRE_JOURS;
+}
 
 const TONE_CANDIDATURE: Record<CandidatureOut["statut"], "success" | "error" | "pending"> = {
   retenue: "success",
@@ -36,6 +46,7 @@ export function RecrutementPage() {
   const etablissement = useAdminEtab();
   const [postes, setPostes] = useState<PosteOut[]>([]);
   const [enRevision, setEnRevision] = useState<CandidatureOut[]>([]);
+  const [contrats, setContrats] = useState<ContratAvecEnseignantOut[]>([]);
   const [chargement, setChargement] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [titre, setTitre] = useState("");
@@ -53,13 +64,19 @@ export function RecrutementPage() {
   const [lienEnCoursId, setLienEnCoursId] = useState<string | null>(null);
   const [titreErreur, setTitreErreur] = useState<string | null>(null);
   const [criteresErreurs, setCriteresErreurs] = useState<Record<number, string>>({});
+  const [reconductionOuvertePour, setReconductionOuvertePour] = useState<string | null>(null);
+  const [syllabusReconduction, setSyllabusReconduction] = useState("");
+  const [dateFinReconduction, setDateFinReconduction] = useState("");
+  const [enCoursReconduction, setEnCoursReconduction] = useState(false);
+  const [succesReconduction, setSuccesReconduction] = useState<string | null>(null);
 
   const charger = () => {
     setChargement(true);
-    Promise.all([listerPostes(etablissement.id), candidaturesEnAttenteRevision()])
-      .then(([resPostes, resRevision]) => {
+    Promise.all([listerPostes(etablissement.id), candidaturesEnAttenteRevision(), listerContratsEtablissement(etablissement.id)])
+      .then(([resPostes, resRevision, resContrats]) => {
         setPostes(resPostes.data);
         setEnRevision(resRevision.data);
+        setContrats(resContrats.data);
       })
       .catch((err) => setErreur(messageErreur(err)))
       .finally(() => setChargement(false));
@@ -182,6 +199,38 @@ export function RecrutementPage() {
       if (posteSelectionne) voirCandidatures(posteSelectionne);
     } catch (err) {
       setErreur(messageErreur(err, "Impossible de créer le contrat."));
+    }
+  };
+
+  const ouvrirReconduction = (contratId: string) => {
+    setReconductionOuvertePour((prev) => (prev === contratId ? null : contratId));
+    setSyllabusReconduction("");
+    setDateFinReconduction("");
+    setErreur(null);
+    setSuccesReconduction(null);
+  };
+
+  const proposerLaReconduction = async (contratId: string) => {
+    if (!syllabusReconduction.trim() || !dateFinReconduction) {
+      setErreur("Veuillez renseigner le syllabus et la nouvelle date de fin avant de proposer la reconduction.");
+      return;
+    }
+    const erreurDate = erreurDateFuture(dateFinReconduction);
+    if (erreurDate) {
+      setErreur(`Date de fin invalide : ${erreurDate}`);
+      return;
+    }
+    setErreur(null);
+    setEnCoursReconduction(true);
+    try {
+      await proposerReconduction(contratId, syllabusReconduction, dateFinReconduction);
+      setSuccesReconduction("Reconduction proposée : l'enseignant peut désormais la signer depuis son espace contrats.");
+      setReconductionOuvertePour(null);
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de proposer cette reconduction."));
+    } finally {
+      setEnCoursReconduction(false);
     }
   };
 
@@ -323,6 +372,67 @@ export function RecrutementPage() {
                   )}
                 </Card>
               ))}
+            </div>
+          )}
+
+          <SectionHead
+            title="Contrats de l'établissement"
+            desc="Un contrat signé peut être reconduit dans les 30 jours précédant son échéance."
+          />
+          {succesReconduction && <SuccessBanner>{succesReconduction}</SuccessBanner>}
+          {contrats.length === 0 ? (
+            <EmptyState icon={<FileSignature size={24} />} title="Aucun contrat pour l'instant" />
+          ) : (
+            <div className="space-y-3 mb-8">
+              {contrats.map((c) => {
+                const reconductible = c.statut === "signe" && dansLaFenetreDeReconduction(c.date_fin);
+                return (
+                  <Card key={c.id}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                        <FileSignature size={18} style={{ color: "var(--primary-deep)" }} aria-hidden="true" />
+                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+                          {c.enseignant_prenom} {c.enseignant_nom}
+                        </span>
+                        <span style={{ color: "var(--ink-faint)", fontSize: "var(--text-sm)" }}>
+                          Échéance : {new Date(c.date_fin).toLocaleDateString("fr-FR")}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                        <Badge tone={c.statut === "signe" ? "success" : "pending"}>
+                          {c.statut === "signe" ? "Signé" : "En attente de signature"}
+                        </Badge>
+                        {reconductible && (
+                          <Btn
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<RefreshCw size={14} />}
+                            onClick={() => ouvrirReconduction(c.id)}
+                          >
+                            {reconductionOuvertePour === c.id ? "Annuler" : "Proposer une reconduction"}
+                          </Btn>
+                        )}
+                      </div>
+                    </div>
+                    {reconductionOuvertePour === c.id && (
+                      <div
+                        className="anim-slide-up"
+                        style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "var(--space-2)", marginTop: "var(--space-4)", paddingTop: "var(--space-4)", borderTop: "1px dashed var(--border)" }}
+                      >
+                        <Field label="Nouveau syllabus">
+                          <TextInput value={syllabusReconduction} onChange={(e) => setSyllabusReconduction(e.target.value)} />
+                        </Field>
+                        <Field label="Nouvelle date de fin">
+                          <TextInput type="date" value={dateFinReconduction} onChange={(e) => setDateFinReconduction(e.target.value)} />
+                        </Field>
+                        <Btn variant="primary" size="sm" loading={enCoursReconduction} onClick={() => proposerLaReconduction(c.id)}>
+                          Envoyer la proposition
+                        </Btn>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
             </div>
           )}
 

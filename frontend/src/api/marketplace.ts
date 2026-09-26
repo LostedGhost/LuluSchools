@@ -4,6 +4,7 @@ import type {
   AnnonceMarketplaceOut,
   AnnoncesMarketplacePage,
   CategorieAnnonce,
+  ContestationMarketplaceAEtrancherOut,
   ContestationMarketplaceOut,
   EtatArticle,
   SignalementAnnonceOut,
@@ -112,6 +113,12 @@ export function traiterSignalementAnnonce(signalementId: string, decision: strin
 
 export function retirerAnnonceModeration(annonceId: string, motif: string) {
   return api.post<AnnonceMarketplaceOut>(`/marketplace/annonces/${annonceId}/retirer`, { motif });
+}
+
+export function contestationsMarketplaceEnAttente(etablissementId: string) {
+  return api.get<ContestationMarketplaceAEtrancherOut[]>(
+    `/etablissements/${etablissementId}/marketplace/contestations-en-attente`,
+  );
 }
 
 export function deciderContestationMarketplace(

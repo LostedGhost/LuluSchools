@@ -32,6 +32,8 @@ import {
   Bus,
   CalendarDays,
   Flag,
+  ShoppingBag,
+  ScanLine,
 } from "lucide-react";
 
 interface EtabMetrics {
@@ -220,6 +222,32 @@ export function AdminEtabDashboard() {
       deepVar: "var(--magic-deep)",
       count: null,
       badgeLabel: "Modérer",
+      urgent: false,
+    },
+    {
+      to: "/admin-etablissement/marketplace",
+      label: "Marketplace Étudiante",
+      desc: "Retirez une annonce, traitez un signalement, ou tranchez une contestation et reversez le vendeur.",
+      icon: ShoppingBag,
+      tone: "reward" as const,
+      accentVar: "var(--reward)",
+      tintVar: "var(--reward-tint)",
+      deepVar: "var(--reward-deep)",
+      count: null,
+      badgeLabel: "Modérer",
+      urgent: false,
+    },
+    {
+      to: "/valider-acces",
+      label: "Contrôle d'Accès",
+      desc: "Validez l'accès d'un élève à un service (transport, cantine, événement) en tant que contrôleur désigné.",
+      icon: ScanLine,
+      tone: "primary" as const,
+      accentVar: "var(--primary)",
+      tintVar: "var(--primary-tint)",
+      deepVar: "var(--primary-deep)",
+      count: null,
+      badgeLabel: "Valider",
       urgent: false,
     },
     {

@@ -312,6 +312,26 @@ def test_reconduction_dans_la_fenetre_cree_un_nouveau_contrat_a_signer(
     assert signature.json()["statut"] == "signe"
 
 
+def test_lister_contrats_etablissement_expose_le_nom_de_l_enseignant(
+    client, fake_llm_client, enseignant_headers, etablissement_avec_classe
+):
+    contrat = _creer_contrat_signe(
+        client, fake_llm_client, enseignant_headers, etablissement_avec_classe, date.today() + timedelta(days=20)
+    )
+
+    response = client.get(
+        f"/api/v1/etablissements/{etablissement_avec_classe['etablissement']['id']}/contrats",
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    assert response.status_code == 200
+    contrats = response.json()
+    assert len(contrats) == 1
+    assert contrats[0]["id"] == contrat["id"]
+    assert contrats[0]["statut"] == "signe"
+    assert contrats[0]["enseignant_nom"]
+    assert contrats[0]["enseignant_prenom"]
+
+
 def test_lister_postes_mes_candidatures_et_mes_contrats(
     client, fake_llm_client, enseignant_headers, etablissement_avec_classe
 ):

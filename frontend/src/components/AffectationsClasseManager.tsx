@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { affecterEnseignant, listerAffectationsClasse, revoquerAffectation } from "../api/etablissements";
+import {
+  affecterEnseignant,
+  designerProfesseurPrincipal,
+  listerAffectationsClasse,
+  revoquerAffectation,
+} from "../api/etablissements";
 import { rechercherEnseignantsSignes } from "../api/recrutement";
 import { messageErreur } from "../api/client";
 import type { AffectationEnseignantOut, EnseignantSigneOut } from "../types/api";
-import { Btn, EmptyState, ErrorBanner, Field, SuccessBanner, TextInput } from "./ui";
-import { GraduationCap, Trash2, X } from "lucide-react";
+import { Badge, Btn, EmptyState, ErrorBanner, Field, SuccessBanner, TextInput } from "./ui";
+import { GraduationCap, Star, Trash2, X } from "lucide-react";
 
 /**
  * Gère les enseignants affectés à UNE classe précise (voir AffectationEnseignant côté
@@ -20,6 +25,7 @@ export function AffectationsClasseManager({ classeId, etablissementId }: { class
   const [succes, setSucces] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [revocationEnCoursId, setRevocationEnCoursId] = useState<string | null>(null);
+  const [ppEnCoursId, setPpEnCoursId] = useState<string | null>(null);
 
   const [nomsParId, setNomsParId] = useState<Record<string, EnseignantSigneOut>>({});
   const [recherche, setRecherche] = useState("");
@@ -105,6 +111,21 @@ export function AffectationsClasseManager({ classeId, etablissementId }: { class
       );
     } finally {
       setEnCours(false);
+    }
+  };
+
+  const designerPP = async (affectation: AffectationEnseignantOut) => {
+    setPpEnCoursId(affectation.id);
+    setErreur(null);
+    setSucces(null);
+    try {
+      await designerProfesseurPrincipal(classeId, affectation.enseignant_id);
+      setSucces("Professeur principal désigné.");
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de désigner ce professeur principal."));
+    } finally {
+      setPpEnCoursId(null);
     }
   };
 
@@ -233,18 +254,34 @@ export function AffectationsClasseManager({ classeId, etablissementId }: { class
                   background: "var(--surface-2)",
                 }}
               >
-                <span style={enseignant ? undefined : { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>
-                  {enseignant ? `${enseignant.prenom} ${enseignant.nom}` : a.enseignant_id}
+                <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={enseignant ? undefined : { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>
+                    {enseignant ? `${enseignant.prenom} ${enseignant.nom}` : a.enseignant_id}
+                  </span>
+                  {a.est_professeur_principal && <Badge tone="success">Professeur principal</Badge>}
                 </span>
-                <Btn
-                  variant="ghost"
-                  size="sm"
-                  loading={revocationEnCoursId === a.id}
-                  onClick={() => revoquer(a.id)}
-                  leftIcon={<Trash2 size={14} />}
-                >
-                  Révoquer
-                </Btn>
+                <span style={{ display: "flex", gap: "8px" }}>
+                  {!a.est_professeur_principal && (
+                    <Btn
+                      variant="outline"
+                      size="sm"
+                      loading={ppEnCoursId === a.id}
+                      onClick={() => designerPP(a)}
+                      leftIcon={<Star size={14} />}
+                    >
+                      Désigner PP
+                    </Btn>
+                  )}
+                  <Btn
+                    variant="ghost"
+                    size="sm"
+                    loading={revocationEnCoursId === a.id}
+                    onClick={() => revoquer(a.id)}
+                    leftIcon={<Trash2 size={14} />}
+                  >
+                    Révoquer
+                  </Btn>
+                </span>
               </div>
             );
           })}

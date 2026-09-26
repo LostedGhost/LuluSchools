@@ -300,6 +300,48 @@ def test_annuler_transaction_avant_paiement(marketplace_ctx, client):
     assert annonce_a_jour["statut"] == "disponible"
 
 
+def test_contestations_en_attente_liste_pour_l_admin(marketplace_ctx, client, kkiapay_secret):
+    ctx = marketplace_ctx
+    annonce = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"]).json()
+    transaction = client.post(
+        f"/api/v1/marketplace/annonces/{annonce['id']}/reserver", headers=ctx["acheteur_headers"]
+    ).json()
+    client.post(
+        f"/api/v1/marketplace/transactions/{transaction['id']}/paiement/amorcer",
+        json={"transaction_id": f"tx-{transaction['id']}"},
+        headers=ctx["acheteur_headers"],
+    )
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    client.post(
+        f"/api/v1/marketplace/transactions/{transaction['id']}/declarer-remise", headers=ctx["vendeur_headers"]
+    )
+    contestation = client.post(
+        f"/api/v1/marketplace/transactions/{transaction['id']}/contester",
+        json={"motif": "Article non conforme a la description"},
+        headers=ctx["acheteur_headers"],
+    ).json()
+
+    liste = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/marketplace/contestations-en-attente",
+        headers=ctx["admin_headers"],
+    )
+    assert liste.status_code == 200
+    assert len(liste.json()) == 1
+    assert liste.json()[0]["id"] == contestation["id"]
+    assert liste.json()[0]["annonce_titre"] == annonce["titre"]
+
+    client.post(
+        f"/api/v1/marketplace/contestations/{contestation['id']}/decision",
+        json={"decision": "acceptee"},
+        headers=ctx["admin_headers"],
+    )
+    liste_apres = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/marketplace/contestations-en-attente",
+        headers=ctx["admin_headers"],
+    ).json()
+    assert liste_apres == []
+
+
 def test_contestation_acceptee_rembourse_et_reannonce_disponible(marketplace_ctx, client, kkiapay_secret):
     ctx = marketplace_ctx
     annonce = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"]).json()

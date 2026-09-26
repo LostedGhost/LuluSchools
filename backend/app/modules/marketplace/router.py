@@ -30,6 +30,7 @@ from app.modules.marketplace.schemas import (
     AnnonceMarketplaceDetailOut,
     AnnonceMarketplaceOut,
     AnnoncesMarketplacePage,
+    ContestationMarketplaceAEtrancherOut,
     ContestationMarketplaceOut,
     ContesterTransactionRequest,
     DecisionContestationMarketplaceRequest,
@@ -544,6 +545,57 @@ def contester_transaction(
     db.commit()
     db.refresh(contestation)
     return contestation
+
+
+@router.get(
+    "/etablissements/{etablissement_id}/marketplace/contestations-en-attente",
+    response_model=list[ContestationMarketplaceAEtrancherOut],
+)
+def contestations_en_attente(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[dict]:
+    """UC-20/21 : sans cette liste, l'admin n'a aucun moyen de decouvrir quelles
+    contestations de transaction attendent un arbitrage (meme constat que
+    signalements_en_attente juste au-dessus, pour les contestations plutot que les
+    signalements d'annonce)."""
+    verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    annonce_ids = [
+        a.id for a in db.query(AnnonceMarketplace).filter(AnnonceMarketplace.etablissement_id == etablissement_id).all()
+    ]
+    if not annonce_ids:
+        return []
+    transaction_ids = [
+        t.id for t in db.query(TransactionMarketplace).filter(TransactionMarketplace.annonce_id.in_(annonce_ids)).all()
+    ]
+    if not transaction_ids:
+        return []
+    contestations = (
+        db.query(ContestationMarketplace)
+        .filter(
+            ContestationMarketplace.transaction_id.in_(transaction_ids),
+            ContestationMarketplace.statut == StatutContestationMarketplace.EN_ATTENTE,
+        )
+        .all()
+    )
+    resultats = []
+    for contestation in contestations:
+        transaction = db.get(TransactionMarketplace, contestation.transaction_id)
+        annonce = db.get(AnnonceMarketplace, transaction.annonce_id) if transaction is not None else None
+        resultats.append(
+            {
+                "id": contestation.id,
+                "transaction_id": contestation.transaction_id,
+                "motif": contestation.motif,
+                "statut": contestation.statut,
+                "decision_motif": contestation.decision_motif,
+                "created_at": contestation.created_at,
+                "annonce_titre": annonce.titre if annonce is not None else "Annonce introuvable",
+                "prix_paye": transaction.prix_paye if transaction is not None else 0.0,
+            }
+        )
+    return resultats
 
 
 @router.post("/marketplace/contestations/{contestation_id}/decision", response_model=ContestationMarketplaceOut)

@@ -280,6 +280,20 @@ export interface ContratOut {
   signature_image_lulufiles_id: string | null;
 }
 
+export interface ContratAvecEnseignantOut extends ContratOut {
+  enseignant_nom: string;
+  enseignant_prenom: string;
+}
+
+export type StatutProposition = "en_attente" | "acceptee" | "refusee";
+
+export interface PropositionReconductionOut {
+  id: string;
+  contrat_precedent_id: string;
+  nouveau_contrat_id: string | null;
+  statut: StatutProposition;
+}
+
 export interface TypeActeOut {
   id: string;
   etablissement_id: string;
@@ -516,6 +530,12 @@ export interface ContestationMicroJobOut {
   decision_motif: string | null;
 }
 
+export interface ContestationMicroJobAEtrancherOut extends ContestationMicroJobOut {
+  created_at: string;
+  offre_titre: string;
+  offre_prix: number;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Phase 4 — UC-20/21/22 : marketplace étudiante
    ═══════════════════════════════════════════════════════════════ */
@@ -594,6 +614,12 @@ export interface ContestationMarketplaceOut {
   motif: string;
   statut: StatutContestationMarketplace;
   decision_motif: string | null;
+}
+
+export interface ContestationMarketplaceAEtrancherOut extends ContestationMarketplaceOut {
+  created_at: string;
+  annonce_titre: string;
+  prix_paye: number;
 }
 
 /* ═══════════════════════════════════════════════════════════════

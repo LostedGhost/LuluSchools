@@ -1,11 +1,25 @@
-import { useState } from "react";
-import { deciderContestationMicroJob, reverserPrestataire } from "../../api/micro_jobs";
+import { useEffect, useState } from "react";
+import { contestationsMicroJobEnAttente, deciderContestationMicroJob, reverserPrestataire } from "../../api/micro_jobs";
 import { messageErreur } from "../../api/client";
-import { Btn, Card, ErrorBanner, Field, PageTitle, SectionHead, SuccessBanner, TextArea, TextInput } from "../../components/ui";
-import { CheckCircle2, Landmark, XCircle } from "lucide-react";
+import type { ContestationMicroJobAEtrancherOut } from "../../types/api";
+import { Btn, Card, EmptyState, ErrorBanner, Field, PageTitle, SectionHead, SuccessBanner, TextArea, TextInput } from "../../components/ui";
+import { CheckCircle2, Landmark, MessageSquareWarning, XCircle } from "lucide-react";
 import { estRempli } from "../../utils/validation";
 
 export function MicroJobsArbitragePage() {
+  const [enAttente, setEnAttente] = useState<ContestationMicroJobAEtrancherOut[]>([]);
+  const [chargementEnAttente, setChargementEnAttente] = useState(true);
+
+  const chargerEnAttente = () => {
+    setChargementEnAttente(true);
+    contestationsMicroJobEnAttente()
+      .then((res) => setEnAttente(res.data))
+      .catch(() => undefined)
+      .finally(() => setChargementEnAttente(false));
+  };
+
+  useEffect(chargerEnAttente, []);
+
   const [contestationId, setContestationId] = useState("");
   const [motifDecision, setMotifDecision] = useState("");
   const [enCoursDecision, setEnCoursDecision] = useState<"acceptee" | "rejetee" | null>(null);
@@ -39,6 +53,7 @@ export function MicroJobsArbitragePage() {
       );
       setContestationId("");
       setMotifDecision("");
+      chargerEnAttente();
     } catch (err) {
       setErreurDecision(messageErreur(err, "Impossible de trancher cette contestation. Vérifiez l'identifiant."));
     } finally {
@@ -69,6 +84,46 @@ export function MicroJobsArbitragePage() {
   return (
     <div className="page-content">
       <PageTitle eyebrow="Admin Ministériel">Arbitrage des micro-jobs</PageTitle>
+
+      <Card style={{ marginBottom: "24px" }}>
+        <SectionHead
+          title="Contestations en attente"
+          desc="Cliquez sur une contestation pour préremplir son identifiant ci-dessous."
+        />
+        {chargementEnAttente ? null : enAttente.length === 0 ? (
+          <EmptyState icon={<MessageSquareWarning size={20} />} title="Aucune contestation en attente" />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
+            {enAttente.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setContestationId(c.id)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-sm)",
+                  border: contestationId === c.id ? "1px solid var(--primary)" : "1px solid var(--border)",
+                  background: contestationId === c.id ? "var(--primary-tint)" : "var(--surface-2)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
+                <span>
+                  <strong>{c.offre_titre}</strong> ({c.offre_prix} FCFA) — {c.motif}
+                </span>
+                <span style={{ color: "var(--ink-faint)", fontSize: "var(--text-xs)", flexShrink: 0 }}>
+                  {new Date(c.created_at).toLocaleDateString("fr-FR")}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <div className="grid-2">
         <Card>

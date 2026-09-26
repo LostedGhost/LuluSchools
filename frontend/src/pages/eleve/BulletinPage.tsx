@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { obtenirBulletin } from "../../api/evaluations";
 import { messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { BulletinOut } from "../../types/api";
 import { Card, ErrorBanner, EmptyState, Btn } from "../../components/ui";
 import { ScoreBurst } from "../../components/gamification";
-import { BarChart3 } from "lucide-react";
+import { Award, BarChart3, ChevronRight } from "lucide-react";
 
 const PERIODES = ["trimestre1", "trimestre2", "trimestre3"];
 
@@ -83,26 +84,17 @@ export function BulletinPage() {
             )}
           </Card>
 
-          {/* Subject breakdown fallback if available in the API response */}
-          {(bulletin as any).lignes && Array.isArray((bulletin as any).lignes) && (
-            <div style={{ gridColumn: "1 / -1", marginTop: "16px" }}>
-              <p className="text-title" style={{ marginBottom: "16px" }}>Détails par matière</p>
-              <div style={{ display: "grid", gap: "8px" }}>
-                {((bulletin as any).lignes).map((ligne: any, i: number) => {
-                  const isGood = ligne.note >= 14;
-                  const isOk = ligne.note >= 10 && ligne.note < 14;
-                  const color = isGood ? "var(--success-tint)" : isOk ? "var(--warning-tint)" : "var(--error-tint)";
-                  return (
-                    <Card key={i} variant="flat" style={{ backgroundColor: color, display: "flex", justifyContent: "space-between" }}>
-                      <span className="font-bold">{ligne.matiere}</span>
-                      <span>{ligne.note} / 20</span>
-                      <span style={{ fontStyle: "italic" }}>{ligne.appreciation}</span>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <Link to="/eleve/passeport" style={{ textDecoration: "none" }}>
+              <Card hover style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <Award size={20} style={{ color: "var(--reward-deep)", flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: "var(--text-sm)", color: "var(--ink)" }}>
+                  Pour le détail de vos moyennes par matière, consultez votre passeport de compétences.
+                </span>
+                <ChevronRight size={16} style={{ color: "var(--ink-faint)" }} />
+              </Card>
+            </Link>
+          </div>
         </div>
       )}
     </div>

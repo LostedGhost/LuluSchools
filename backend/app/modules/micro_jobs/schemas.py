@@ -62,6 +62,18 @@ class ContestationMicroJobOut(BaseModel):
     decision_motif: str | None
 
 
+class ContestationMicroJobAEtrancherOut(ContestationMicroJobOut):
+    """UC-18 : vue enrichie utilisee uniquement par la liste d'arbitrage
+    (GET /contestations-micro-job-en-attente) - contrairement a `ContestationMicroJobOut`
+    (reponse de `contester_mission`/`decider_contestation`, jamais modifiee), celle-ci
+    denormalise le contexte de l'offre pour que l'admin ministeriel n'ait plus besoin de
+    connaitre l'identifiant d'une contestation a l'avance pour agir dessus."""
+
+    created_at: datetime
+    offre_titre: str
+    offre_prix: float
+
+
 class ReverserPrestataireRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

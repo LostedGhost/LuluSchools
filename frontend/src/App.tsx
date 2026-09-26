@@ -16,6 +16,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { DashboardRedirect } from "./pages/DashboardRedirect";
+import { NotFoundPage } from "./pages/NotFoundPage";
 
 import { TuteurDashboard } from "./pages/tuteur/TuteurDashboard";
 import { NouvelleInscriptionPage } from "./pages/tuteur/NouvelleInscriptionPage";
@@ -32,6 +33,7 @@ import { PasseportEnfantPage } from "./pages/tuteur/PasseportEnfantPage";
 
 import { EleveDashboard } from "./pages/eleve/EleveDashboard";
 import { CoursListPage } from "./pages/eleve/CoursListPage";
+import { CoursDetailPage } from "./pages/eleve/CoursDetailPage";
 import { QuizPage } from "./pages/eleve/QuizPage";
 import { DevoirsListPage } from "./pages/eleve/DevoirsListPage";
 import { DevoirDetailPage } from "./pages/eleve/DevoirDetailPage";
@@ -253,6 +255,16 @@ function App() {
                 <RequireAuth roles={["eleve"]}>
                   <EleveProfileProvider>
                     <CoursListPage />
+                  </EleveProfileProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/eleve/cours/:coursId"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <EleveProfileProvider>
+                    <CoursDetailPage />
                   </EleveProfileProvider>
                 </RequireAuth>
               }
@@ -645,6 +657,8 @@ function App() {
                 </RequireAuth>
               }
             />
+
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </AppLayout>
       </AuthProvider>
