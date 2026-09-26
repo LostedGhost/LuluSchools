@@ -7,6 +7,7 @@ import type {
   MessageSessionLiveOut,
   ParticipationLiveOut,
   PermissionEcritureOut,
+  ResumeSessionLiveOut,
   SessionLiveDemarreeOut,
   SessionLiveOut,
   TraitTableauOut,
@@ -31,6 +32,10 @@ export function terminerSessionLive(sessionId: string) {
 
 export function donnerConsentementCameraLive(eleveUtilisateurId: string) {
   return api.post<ConsentementCameraLiveOut>(`/eleves/${eleveUtilisateurId}/consentement-camera-live`);
+}
+
+export function obtenirResumeSessionLive(sessionId: string) {
+  return api.get<ResumeSessionLiveOut>(`/sessions-live/${sessionId}/resume`);
 }
 
 export function rejoindreSessionLive(sessionId: string) {

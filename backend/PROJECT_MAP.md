@@ -283,7 +283,61 @@ Chaîne vérifiée **upgrade ET downgrade contre un vrai Postgres** (instance je
 - L'enregistrement vidéo consultable comme un cours (rejeu complet post-séance) n'est pas fait : le choix "maillage sans SFU" ne permet structurellement pas un enregistrement serveur des flux — seul le tableau (traits + capture PNG) est rejouable/consultable après coup.
 - L'intégration automatique d'une capture de tableau dans le cahier de textes ("Mes cours") reste un P2 : les captures sont consultables via `GET /sessions-live/{id}/captures`, pas encore rattachées à un `Cours`.
 
+## Phase 6 — Volet Élève/Tuteur (UC-29 à UC-38)
+
+Implémenté à partir d'un cahier des charges dédié (parité fonctionnelle avec les autres profils + innovations), même méthode que la Phase 5 : rien ne redécrit ce qui existait déjà (inscriptions, devoirs, marketplace, micro-jobs, actes...).
+
+### Corrections de portée (UC-29)
+- `cours_direct/router.py::lister_sessions_live` acceptait `TUTEUR` dans `require_roles` **sans jamais vérifier sa portée réelle** (contrairement à ELEVE/ENSEIGNANT juste en dessous) — un tuteur authentifié pouvait lister les sessions de N'IMPORTE QUELLE classe. Corrigé par `_verifier_tuteur_a_un_enfant_dans_la_classe()`.
+- `billetterie/router.py` : achat/paiement/remboursement de billet strictement réservés à `billet.utilisateur_id == utilisateur.id`, empêchant un tuteur d'acheter/gérer un billet pour son enfant. Ajout de `BilletAchatRequest(eleve_utilisateur_id)` + `_resoudre_beneficiaire_billet()`/`_verifier_proprietaire_ou_tuteur_billet()` (rétrocompatible : payload optionnel).
+
+### Parité fonctionnelle (UC-30/31/34)
+- `inscriptions/router.py` — `professeur_principal_nom/prenom` exposé sur `InscriptionAvecEleveOut`/`EleveMeOut` (le tuteur/élève ne pouvait identifier aucun contact référent).
+- `evaluations/router.py` — `TUTEUR` ajouté à `obtenir_devoir`/`lister_devoirs`/`obtenir_soumission` (vérification `eleve.tuteur_id`), nouvel endpoint `GET /devoirs/{id}/soumission-de/{eleve_utilisateur_id}` (suivi direct sans jongler avec les IDs de soumission).
+- `marketplace/router.py` — `GET /mes-enfants/{id}/marketplace/annonces` et `.../transactions` (TUTEUR, lecture seule, jamais de publication/achat pour le compte de l'enfant — cohérent avec le seuil d'âge ≥16 ans déjà en vigueur).
+
+### app/modules/pedagogie/ (UC-32/37, enrichi)
+- `SessionElProfessorTuteur`/`MessageElProfessorTuteur` : même mécanique que côté enseignant (fils multiples, pas d'upsert unique), mais `eleve_utilisateur_id` **toujours requis** (un tuteur consulte toujours à propos d'un enfant précis). `AlerteElProfessor` gagne `origine` (ENSEIGNANT/TUTEUR/FAMILLE) + `eleve_utilisateur_id` dénormalisé pour une requête directe côté tuteur (`session_id` cesse d'être une vraie FK — même pattern que `DesignationControleur.evenement_id`).
+- **El Professor Famille (UC-37, innovation)** — `SessionElProfessorFamille`/`MessageElProfessorFamille` : fil **partagé** entre un tuteur et son enfant, toujours créé par le tuteur (qui "invite" l'enfant), inutilisable (aucun message des deux côtés) tant que l'enfant n'a pas explicitement appelé `POST .../rejoindre` — jamais un fil individuel qui bascule seul en mode famille. Garde-fou renforcé : un signal de danger détecté dans un fil familial crée une alerte `origine=FAMILLE`, **exclue** de `GET /mes-enfants/{id}/alertes-el-professor` (le tuteur peut être la source du danger) — visible uniquement de l'administration.
+- `FreeLLMClient.conseiller_tuteur()`/`conseiller_famille()` (persona dédiée, la seconde s'adresse explicitement au bon interlocuteur via un paramètre `qui_parle`).
+
+### app/modules/cours_direct/ (UC-33, enrichi)
+- `ResumeSessionLive` : résumé texte généré par FreeLLM (`resumer_session_live()`) à la clôture d'une session (`terminer_session_live`), à partir du chat **et** du contenu textuel du tableau (blocs TEXTE uniquement — un trait libre n'a pas de représentation textuelle). Jamais un flux vidéo/audio (qui n'existe pas côté serveur, voir Phase 5/`realtime.py`). `GET /sessions-live/{id}/resume` (TUTEUR, vérifie qu'un de ses enfants a bien participé via `ParticipationLive`) — le tuteur ne rejoint jamais la session en direct.
+
+### app/modules/coffre_fort/ (UC-35, nouveau module — innovation)
+- `PlafondFamilial` (config opt-in par enfant : plafond hebdomadaire et/ou seuil de validation, **aucun par défaut** — l'autonomie actuelle de l'élève n'est jamais réduite sans action explicite du tuteur), `ValidationParentale` (s'intercale entre la création d'une dépense et l'amorçage de son paiement quand le seuil est dépassé — jamais un blocage silencieux, ni une altération du statut existant de l'offre/transaction/demande elle-même), `AlerteDepassementPlafond` (notification passive, jamais bloquante, quand le plafond hebdomadaire est dépassé).
+- `service.py::evaluer_depense()` appelé juste avant l'amorçage du paiement dans **trois modules** (`micro_jobs`, `marketplace`, `actes`) — dupliqué plutôt qu'importé en boucle, cohérent avec le style du projet. `construire_releve_financier()` : relevé consolidé lecture seule (gains micro-jobs + ventes marketplace − achats − dépenses micro-jobs − frais d'actes), disponible même sans configuration.
+
+### app/modules/radar_familial/ (UC-36, nouveau module — innovation)
+- Aucune table : digest hebdomadaire généré **à la demande** (pas de push), à partir de faits déjà établis ailleurs (vie scolaire, devoirs corrigés, sessions live suivies, activité financière si le Coffre-fort est actif) assemblés en lignes de citation datées par `construire_sources_radar_familial()`, puis reformulés en résumé narratif par `FreeLLMClient.generer_digest_famille()` — qui ne reçoit **que** cette liste et ne peut donc pas halluciner un fait absent. Sans le moindre fait sur la période, aucun appel LLM n'est fait.
+
+### app/modules/passeport_competences/ (UC-38, nouveau module — innovation)
+- Aucune nouvelle saisie : agrège des données déjà produites ailleurs (`TentativeQuiz` réussies dédupliquées par quiz, `Cours` des classes où l'élève a été validé, moyennes par matière recalculées simplement à partir des soumissions corrigées — volontairement plus simple que le bulletin officiel pondéré). Badges dérivés directement de ces agrégats (jamais un critère arbitraire non traçable) — contrairement aux médailles actuellement **hardcodées côté frontend** (`gamification.tsx`/`EleveDashboard.tsx`, données de démo, pas de calcul réel).
+- `pdf.py` : export PDF via **PyMuPDF** (déjà en place pour le rendu du tableau collaboratif, aucune nouvelle dépendance — `reportlab` listé dans `requirements.txt` mais jamais utilisé nulle part dans le projet). Upload LuluFiles standard.
+- `GET/POST /eleves/me/passeport(/export-pdf)` et `.../mes-enfants/{id}/passeport(/export-pdf)` (TUTEUR).
+
+### Migrations (0011 à 0014)
+Chaîne vérifiée **upgrade ET downgrade contre un vrai Postgres**. Deux bugs réels trouvés et corrigés :
+- `0012_coffre_fort_familial.py` : deux `create_table` distincts réutilisant le **même nom** d'enum Postgres (`moduledepensecoffrefort`) — le premier le crée automatiquement (checkfirst=False dans ce chemin d'alembic, symétrique du bug déjà documenté en Phase 5 pour `add_column`), le second tentait de le recréer et échouait (`DuplicateObject`). Corrigé en passant `postgresql.ENUM(..., create_type=False)` pour la seconde table.
+- `0014_el_professor_famille.py` : le downgrade tentait un `ALTER COLUMN ... TYPE` sur `alertes_el_professor.origine` (retrait de la valeur d'enum `FAMILLE`, qui exige de recréer le type) alors qu'un `DEFAULT` était encore actif sur la colonne — Postgres refuse (`DatatypeMismatch`). Corrigé en retirant le `DEFAULT` avant l'`ALTER TYPE` et en le rétablissant après.
+
+**213 tests passants** (+1 pré-existant dépendant de l'environnement, `KKIAPAY_SECRET` absent — voir Phase 5), aucune régression.
+
+**Non fait dans ce lot (limites assumées)** :
+- `scripts/seed_mega.py` n'a pas été étendu pour peupler les nouvelles tables (Coffre-fort, El Professor Famille, résumés de session live).
+- Le Radar familial (UC-36) n'a pas de mécanisme de notification poussée (email/push) — consultation à la demande uniquement, cohérent avec ADR-002 (FreeLLM sans SLA, pas d'envoi automatique à heure fixe pour des milliers d'élèves).
+- Le Coffre-fort (UC-35) ne couvre que le déclenchement du blocage/de l'alerte à l'amorçage du paiement ; aucune UI n'existe encore pour que le tuteur configure ses plafonds (à faire côté frontend).
+
 ## Dernière synchronisation
+2026-09-26 (Phase 6, backend) — Backend complet pour le volet Élève/Tuteur (UC-29 à
+UC-38, voir section dédiée ci-dessus) : corrections de portée RBAC, parité fonctionnelle
+avec les autres profils, et cinq innovations (El Professor Famille, Coffre-fort
+familial, résumé asynchrone de session live, Radar familial, Passeport de compétences).
+Trois nouveaux modules (`coffre_fort`, `radar_familial`, `passeport_competences`),
+migrations `0011` à `0014` vérifiées upgrade/downgrade contre un vrai Postgres (deux
+bugs réels trouvés et corrigés au passage, voir section Migrations). **213 tests
+passants**, aucune régression. Frontend de ce lot pas encore commencé.
+
 2026-09-26 (encore plus tard, refonte RBAC) — Audit complet des 5 rôles sur les 14 modules
 backend (demandé explicitement, pas préventif) a révélé 3 trous : (1) A++ bloqué (403) sur
 ~30 endpoints dans 9 modules à cause de 4 copies indépendantes d'un helper

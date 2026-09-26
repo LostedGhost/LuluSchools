@@ -26,6 +26,10 @@ export function obtenirSoumission(soumissionId: string) {
   return api.get<SoumissionOut>(`/soumissions/${soumissionId}`);
 }
 
+export function obtenirSoumissionDeMonEnfant(devoirId: string, eleveUtilisateurId: string) {
+  return api.get<SoumissionOut>(`/devoirs/${devoirId}/soumission-de/${eleveUtilisateurId}`);
+}
+
 export function obtenirBulletin(eleveUtilisateurId: string, classeId: string, periode: string) {
   return api.get<BulletinOut>(`/eleves/${eleveUtilisateurId}/bulletins`, {
     params: { classe_id: classeId, periode },

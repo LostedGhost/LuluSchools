@@ -743,3 +743,159 @@ export type EvenementTempsReelSessionLive =
   | { type: "permission_revoquee"; eleve_utilisateur_id: string }
   | { type: "message"; message: MessageSessionLiveOut }
   | { type: "webrtc_signal"; from: string; payload: unknown };
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-32/37 : El Professor Tuteur et El Professor Famille
+   ═══════════════════════════════════════════════════════════════ */
+
+export type RoleMessageElProfessorTuteur = "tuteur" | "assistant";
+
+export interface MessageElProfessorTuteurOut {
+  id: string;
+  session_id: string;
+  role: RoleMessageElProfessorTuteur;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SessionElProfessorTuteurOut {
+  id: string;
+  tuteur_id: string;
+  eleve_utilisateur_id: string;
+  sujet: string | null;
+  messages: MessageElProfessorTuteurOut[];
+}
+
+export type RoleMessageElProfessorFamille = "tuteur" | "eleve" | "assistant";
+
+export interface MessageElProfessorFamilleOut {
+  id: string;
+  session_id: string;
+  role: RoleMessageElProfessorFamille;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SessionElProfessorFamilleOut {
+  id: string;
+  tuteur_id: string;
+  eleve_utilisateur_id: string;
+  sujet: string | null;
+  rejointe_le: string | null;
+  messages: MessageElProfessorFamilleOut[];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-33 : résumé asynchrone de session live (tuteur)
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface ResumeSessionLiveOut {
+  id: string;
+  session_id: string;
+  contenu: string;
+  created_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-35 : coffre-fort familial
+   ═══════════════════════════════════════════════════════════════ */
+
+export type ModuleDepenseCoffreFort = "micro_job" | "marketplace" | "acte";
+export type StatutValidationParentale = "en_attente" | "approuvee" | "refusee";
+
+export interface PlafondFamilialOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  plafond_hebdomadaire: number | null;
+  seuil_validation: number | null;
+  updated_at: string;
+}
+
+export interface ValidationParentaleOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  module: ModuleDepenseCoffreFort;
+  reference_id: string;
+  montant: number;
+  statut: StatutValidationParentale;
+  motif_refus: string | null;
+  decidee_at: string | null;
+  created_at: string;
+}
+
+export interface AlerteDepassementPlafondOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  module: ModuleDepenseCoffreFort;
+  montant_semaine: number;
+  plafond: number;
+  created_at: string;
+}
+
+export interface ReleveFinancierOut {
+  eleve_utilisateur_id: string;
+  periode_debut: string | null;
+  periode_fin: string | null;
+  gains_micro_jobs: number;
+  ventes_marketplace: number;
+  achats_marketplace: number;
+  depenses_micro_jobs: number;
+  frais_actes: number;
+  solde_net: number;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-36 : radar familial (digest hebdomadaire)
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface RadarFamilialOut {
+  eleve_utilisateur_id: string;
+  periode_debut: string;
+  periode_fin: string;
+  resume: string;
+  sources: string[];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-38 : passeport de compétences
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface QuizReussiOut {
+  quiz_id: string;
+  cours_titre: string;
+  cours_chapitre: string;
+  score: number;
+  date: string;
+}
+
+export interface CoursSuiviOut {
+  id: string;
+  titre: string;
+  chapitre: string;
+  format: string;
+}
+
+export interface MoyenneMatiereOut {
+  matiere: string;
+  moyenne: number;
+}
+
+export interface BadgeOut {
+  id: string;
+  label: string;
+}
+
+export interface PasseportOut {
+  eleve_utilisateur_id: string;
+  eleve_nom: string;
+  eleve_prenom: string;
+  quiz_reussis: QuizReussiOut[];
+  cours_suivis: CoursSuiviOut[];
+  moyennes_par_matiere: MoyenneMatiereOut[];
+  badges: BadgeOut[];
+}
+
+export interface PasseportExportOut {
+  lulufiles_file_id: string;
+  lien: string;
+}

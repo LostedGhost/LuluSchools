@@ -20,6 +20,15 @@ import { DashboardRedirect } from "./pages/DashboardRedirect";
 import { TuteurDashboard } from "./pages/tuteur/TuteurDashboard";
 import { NouvelleInscriptionPage } from "./pages/tuteur/NouvelleInscriptionPage";
 import { ServicesScolairesPage as TuteurServicesScolairesPage } from "./pages/tuteur/ServicesScolairesPage";
+import { VieScolaireEnfantPage } from "./pages/tuteur/VieScolaireEnfantPage";
+import { DevoirsEnfantPage } from "./pages/tuteur/DevoirsEnfantPage";
+import { MarketplaceEnfantPage } from "./pages/tuteur/MarketplaceEnfantPage";
+import { SessionsLiveEnfantPage } from "./pages/tuteur/SessionsLiveEnfantPage";
+import { ElProfessorTuteurPage } from "./pages/tuteur/ElProfessorTuteurPage";
+import { ElProfessorFamillePage as TuteurElProfessorFamillePage } from "./pages/tuteur/ElProfessorFamillePage";
+import { CoffreFortPage } from "./pages/tuteur/CoffreFortPage";
+import { RadarFamilialPage } from "./pages/tuteur/RadarFamilialPage";
+import { PasseportEnfantPage } from "./pages/tuteur/PasseportEnfantPage";
 
 import { EleveDashboard } from "./pages/eleve/EleveDashboard";
 import { CoursListPage } from "./pages/eleve/CoursListPage";
@@ -30,6 +39,8 @@ import { BulletinPage } from "./pages/eleve/BulletinPage";
 import { ActesPage } from "./pages/eleve/ActesPage";
 import { CoursDirectPage } from "./pages/eleve/CoursDirectPage";
 import { ServicesScolairesPage as EleveServicesScolairesPage } from "./pages/eleve/ServicesScolairesPage";
+import { ElProfessorFamillePage as EleveElProfessorFamillePage } from "./pages/eleve/ElProfessorFamillePage";
+import { PasseportPage } from "./pages/eleve/PasseportPage";
 
 import { EnseignantDashboard } from "./pages/enseignant/EnseignantDashboard";
 import { PostesListPage } from "./pages/enseignant/PostesListPage";
@@ -152,6 +163,78 @@ function App() {
                 </RequireAuth>
               }
             />
+            <Route
+              path="/tuteur/vie-scolaire"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <VieScolaireEnfantPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/devoirs"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <DevoirsEnfantPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/marketplace"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <MarketplaceEnfantPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/cours-direct"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <SessionsLiveEnfantPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/el-professor"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <ElProfessorTuteurPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/el-professor-famille"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <TuteurElProfessorFamillePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/coffre-fort"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <CoffreFortPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/radar-familial"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <RadarFamilialPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/passeport"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <PasseportEnfantPage />
+                </RequireAuth>
+              }
+            />
 
             {/* Eleve */}
             <Route
@@ -247,6 +330,22 @@ function App() {
                   <EleveProfileProvider>
                     <MarketplacePage />
                   </EleveProfileProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/eleve/el-professor-famille"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <EleveElProfessorFamillePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/eleve/passeport"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <PasseportPage />
                 </RequireAuth>
               }
             />

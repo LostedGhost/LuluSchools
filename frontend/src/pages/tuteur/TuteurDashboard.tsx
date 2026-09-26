@@ -16,7 +16,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import type { ReactNode } from "react";
-import { UserPlus, ChevronRight, AlertCircle, Clock, CheckCircle2, XCircle, GraduationCap, ClipboardList, TriangleAlert, MessageCircle, Video, Bus, Ticket, Handshake } from "lucide-react";
+import { UserPlus, ChevronRight, AlertCircle, Clock, CheckCircle2, XCircle, GraduationCap, ClipboardList, TriangleAlert, MessageCircle, Video, Bus, Ticket, Handshake, BookOpen, ShoppingBag, Radio, Bot, Wallet, Radar, Award } from "lucide-react";
 
 type BadgeToneLocal = "neutral" | "success" | "error" | "pending";
 
@@ -138,6 +138,15 @@ export function TuteurDashboard() {
           { to: "/billetterie", icon: <Ticket size={20} />, tone: "reward" as const, label: "Billetterie" },
           { to: "/micro-jobs", icon: <Handshake size={20} />, tone: "primary" as const, label: "Micro-jobs" },
           { to: "/messagerie", icon: <MessageCircle size={20} />, tone: "info" as const, label: "Messagerie" },
+          { to: "/tuteur/vie-scolaire", icon: <BookOpen size={20} />, tone: "info" as const, label: "Vie scolaire" },
+          { to: "/tuteur/devoirs", icon: <ClipboardList size={20} />, tone: "primary" as const, label: "Devoirs" },
+          { to: "/tuteur/marketplace", icon: <ShoppingBag size={20} />, tone: "reward" as const, label: "Marketplace" },
+          { to: "/tuteur/cours-direct", icon: <Radio size={20} />, tone: "primary" as const, label: "Cours en direct" },
+          { to: "/tuteur/el-professor", icon: <Bot size={20} />, tone: "magic" as const, label: "El Professor" },
+          { to: "/tuteur/el-professor-famille", icon: <Bot size={20} />, tone: "magic" as const, label: "El Professor Famille" },
+          { to: "/tuteur/coffre-fort", icon: <Wallet size={20} />, tone: "action" as const, label: "Coffre-fort familial" },
+          { to: "/tuteur/radar-familial", icon: <Radar size={20} />, tone: "info" as const, label: "Radar familial" },
+          { to: "/tuteur/passeport", icon: <Award size={20} />, tone: "reward" as const, label: "Passeport de compétences" },
         ].map((item) => (
           <Link key={item.to} to={item.to} style={{ textDecoration: "none" }}>
             <div className="card card-hover" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px 16px" }}>

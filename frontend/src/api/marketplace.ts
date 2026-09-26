@@ -62,6 +62,14 @@ export function mesAnnonces() {
   return api.get<AnnonceMarketplaceOut[]>("/mes-annonces-marketplace");
 }
 
+export function annoncesDeMonEnfant(eleveUtilisateurId: string) {
+  return api.get<AnnonceMarketplaceOut[]>(`/mes-enfants/${eleveUtilisateurId}/marketplace/annonces`);
+}
+
+export function transactionsDeMonEnfant(eleveUtilisateurId: string) {
+  return api.get<TransactionMarketplaceOut[]>(`/mes-enfants/${eleveUtilisateurId}/marketplace/transactions`);
+}
+
 export function reserverAnnonce(annonceId: string) {
   return api.post<TransactionMarketplaceOut>(`/marketplace/annonces/${annonceId}/reserver`);
 }
