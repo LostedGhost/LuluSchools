@@ -31,6 +31,19 @@ Le backend Phase 1 (UC-01 à UC-10) est complet et testé (75 tests). L'utilisat
 - [ ] **7. Intégration (Phases 2 et 3)** — non démarré.
 - [ ] **8. Déploiement (Phases 2 et 3)** — non démarré.
 
+## Phase 4 — Marketplace étudiante (nouveau lot, pipeline redémarré à l'étape 1)
+
+Fonctionnalité nouvelle demandée par l'utilisateur (2026-09-26), absente du périmètre initial Phase 1/2/3. Traitée comme une phase indépendante, réutilisant les mécanismes déjà validés (séquestre Kkiapay, stockage LuluFiles) sans nouvelle intégration technique.
+
+- [x] **1. Cas d'utilisation (Phase 4)** — **validé le 2026-09-26** dans `docs/cas-utilisation-phase-4-marketplace.md` (UC-20 à UC-22 : publier/consulter une annonce, réserver et acheter avec séquestre, litige de réception). Trois points structurants tranchés explicitement par l'utilisateur avant rédaction (séquestre Kkiapay, marketplace réservée aux élèves de l'établissement, réservée aux ≥16 ans) ; le reste des règles métier délégué (voir [[feedback-legal-autonomy]]). Un point de vigilance non bloquant reste signalé (capacité civile d'un mineur ≥16 ans à conclure un contrat de vente, hors périmètre de la loi n° 2017-20).
+- [x] **2. Diagrammes UML (Phase 4)** — diagramme de cas d'utilisation (UC32-UC38) + un diagramme de classes (domaine compact) — voir `docs/diagrammes-uml-phase-4-marketplace.md`. Aucun point technique reporté à l'étape 3 : séquestre et stockage réutilisent ADR-003/ADR-008/ADR-009 sans nouvelle intégration.
+- [ ] **3. Choix technique et contrat d'API (Phase 4)** — non démarré.
+- [ ] **4. Backend (Phase 4)** — non démarré.
+- [ ] **5. Validation complète du backend (Phase 4)** — non démarré.
+- [ ] **6. Frontend (Phase 4)** — non démarré.
+- [ ] **7. Intégration (Phase 4)** — non démarré.
+- [ ] **8. Déploiement (Phase 4)** — non démarré.
+
 ## Notes / écarts assumés
 
 - **Plan LuluFiles gratuit ("Lancement")** : 5 Go de transfert/mois et 2 Mo/s de bande passante partagés par tout le compte. Choix assumé par l'utilisateur pour la Phase 1 pilote ; passage à un plan payant prévu au besoin, à réévaluer avant la Phase 2/3 (voir `docs/adr/ADR-003-stockage-fichiers-lulufiles.md`) — redevient un point bloquant concret dès UC-15 (vidéo pédagogique), voir `docs/cas-utilisation-phase-2-3.md`.

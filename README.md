@@ -28,6 +28,8 @@ Détail complet et justification des choix : [docs/choix-technique-phase1.md](do
 | [docs/cas-utilisation-phase-2-3.md](docs/cas-utilisation-phase-2-3.md) | Cas d'utilisation Phase 2/3 (UC-11 à UC-19) |
 | [docs/diagrammes-uml-phase2-3.md](docs/diagrammes-uml-phase2-3.md) | Diagrammes UML Phase 2/3 |
 | [docs/contrat-api-phase2-3.md](docs/contrat-api-phase2-3.md) | Contrat d'API Phase 2/3 |
+| [docs/cas-utilisation-phase-4-marketplace.md](docs/cas-utilisation-phase-4-marketplace.md) | Cas d'utilisation Phase 4 — marketplace étudiante (UC-20 à UC-22) |
+| [docs/diagrammes-uml-phase-4-marketplace.md](docs/diagrammes-uml-phase-4-marketplace.md) | Diagrammes UML Phase 4 — marketplace étudiante |
 | [docs/adr/](docs/adr/) | Décisions d'architecture (ADR) |
 | [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.md) | Étapes de déploiement (Render + Vercel) |
 

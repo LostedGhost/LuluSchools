@@ -1,6 +1,6 @@
 # LuluSchools — Cas d'utilisation, Phase 4 (Marketplace étudiante)
 
-Rédigé selon la méthode `lucio-dev` (pipeline spec-first), même format que `docs/cas-utilisation-phase-1.md` et `docs/cas-utilisation-phase-2-3.md`. **Brouillon — pas encore validé.** Trois points structurants ont été tranchés explicitement par l'utilisateur (2026-09-26, via AskUserQuestion) avant même ce premier jet ; le reste des règles métier ci-dessous applique la délégation déjà accordée sur ce projet ([[feedback-legal-autonomy]]) et est marqué **[Délégué]**, à relire et corriger avant validation finale.
+Rédigé selon la méthode `lucio-dev` (pipeline spec-first), même format que `docs/cas-utilisation-phase-1.md` et `docs/cas-utilisation-phase-2-3.md`. **Validé le 2026-09-26.** Trois points structurants ont été tranchés explicitement par l'utilisateur (2026-09-26, via AskUserQuestion) avant même ce premier jet ; le reste des règles métier ci-dessous applique la délégation déjà accordée sur ce projet ([[feedback-legal-autonomy]]) et est marqué **[Délégué]**.
 
 Cadrage : nouvelle fonctionnalité, absente du périmètre initial Phase 1/2/3 (voir `SUIVI-PROJET.md`) — traitée comme une Phase 4 indépendante, sans dépendance technique sur les Phases 2/3 hormis la réutilisation du modèle de séquestre Kkiapay déjà validé (UC-18, ADR-008) et du stockage de photos via LuluFiles (ADR-003/ADR-009).
 
@@ -58,4 +58,4 @@ Cadrage : nouvelle fonctionnalité, absente du périmètre initial Phase 1/2/3 (
 
 **Point de vigilance signalé, non bloquant pour la suite du pipeline** : la capacité civile d'un mineur de 16-17 ans à conclure seul un contrat de vente (Code civil béninois, hors périmètre de la loi n° 2017-20) n'a pas de réponse déjà verrouillée sur ce projet — le seuil ≥16 ans retenu s'aligne sur celui déjà utilisé pour l'auto-validation d'inscription (Art. 446), mais mériterait une confirmation juridique complémentaire avant un déploiement à grande échelle, dans le même esprit que les points 🔓 déjà identifiés sur UC-18 (âge minimum micro-job) et UC-19 (autorisation de vol de drone).
 
-**Prochaine étape** : validation explicite de ce document par l'utilisateur (champs, catégories, délais) avant de passer à l'étape 2 du pipeline (diagrammes UML dérivés de ces UC).
+**Prochaine étape** : étape 2 du pipeline (diagrammes UML dérivés de ces UC) — voir `docs/diagrammes-uml-phase-4-marketplace.md`.
