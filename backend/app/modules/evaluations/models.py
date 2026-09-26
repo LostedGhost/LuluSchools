@@ -44,6 +44,9 @@ class Devoir(Base):
     date_limite: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     bareme: Mapped[BaremeDevoir] = mapped_column(Enum(BaremeDevoir))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # UC-37/53 (lot admin ministeriel) : meme pattern de masquage non destructif que Cours.
+    masque_par_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True)
+    masque_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     questions: Mapped[list["QuestionDevoir"]] = relationship(back_populates="devoir")
 

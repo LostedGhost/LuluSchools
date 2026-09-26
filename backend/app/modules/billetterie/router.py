@@ -1,12 +1,16 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
 from app.modules.billetterie.models import BilletEvenement, Evenement, StatutBillet, StatutEvenement
 from app.modules.billetterie.schemas import (
+    AdminEvenementOut,
+    AdminEvenementPageOut,
     BilletEvenementOut,
     DesignerParrainRequest,
     EvenementCreate,
@@ -138,6 +142,11 @@ def annuler_evenement(
     )
     for billet in billets_a_rembourser:
         billet.statut = StatutBillet.REMBOURSE
+    # UC-38/54 (lot admin ministeriel) : seule une annulation declenchee par l'A++ entre
+    # dans le journal d'audit ministeriel - une annulation par l'A+/parrain proprietaire
+    # reste une decision d'etablissement ordinaire, hors perimetre de ce mandat (voir
+    # journaliser_action_ministerielle, qui ignore silencieusement tout autre role).
+    journaliser_action_ministerielle(db, utilisateur, "evenement.annuler_urgence", "evenement", evenement.id, None)
     db.commit()
     db.refresh(evenement)
     return evenement
@@ -253,3 +262,48 @@ def mes_billets(
         .order_by(BilletEvenement.created_at.desc())
         .all()
     )
+
+
+@router.get("/admin/evenements", response_model=AdminEvenementPageOut)
+def lister_evenements_supervision(
+    etablissement_id: str | None = None,
+    statut: StatutEvenement | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> AdminEvenementPageOut:
+    """UC-38/54 : supervision transverse - seul GET /etablissements/{id}/evenements
+    existait (par etablissement). Pagination serveur obligatoire (meme regle que
+    l'annuaire etablissements, ADR-009)."""
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+
+    requete = db.query(Evenement)
+    if etablissement_id:
+        requete = requete.filter(Evenement.etablissement_id == etablissement_id)
+    if statut is not None:
+        requete = requete.filter(Evenement.statut == statut)
+
+    total = requete.with_entities(func.count(Evenement.id)).scalar() or 0
+    page = requete.order_by(Evenement.date_heure.desc()).offset(offset).limit(limit).all()
+
+    etablissement_ids = {e.etablissement_id for e in page}
+    etablissements = {
+        e.id: e.nom for e in db.query(Etablissement).filter(Etablissement.id.in_(etablissement_ids)).all()
+    } if etablissement_ids else {}
+
+    items = [
+        AdminEvenementOut(
+            id=e.id,
+            etablissement_id=e.etablissement_id,
+            etablissement_nom=etablissements.get(e.etablissement_id, ""),
+            titre=e.titre,
+            lieu=e.lieu,
+            date_heure=e.date_heure,
+            capacite_max=e.capacite_max,
+            statut=e.statut,
+        )
+        for e in page
+    ]
+    return AdminEvenementPageOut(items=items, total=total, limit=limit, offset=offset)

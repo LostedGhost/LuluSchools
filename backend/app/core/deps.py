@@ -47,7 +47,15 @@ def get_current_active_user(utilisateur: Utilisateur = Depends(get_current_user)
     """Comme get_current_user, mais bloque un compte dont le mot de passe temporaire
     (eleve/admin etablissement provisionnes) n'a pas encore ete change - sauf pour
     /me et /auth/change-password, qui utilisent get_current_user directement pour
-    rester accessibles pendant ce changement obligatoire."""
+    rester accessibles pendant ce changement obligatoire. Bloque aussi un compte suspendu
+    par l'A++ (UC-35/50, lot admin ministeriel) - meme /me reste bloque dans ce cas (pas
+    d'exception : un compte suspendu n'a plus aucune raison de rafraichir son profil)."""
+    if not utilisateur.actif:
+        raise api_error(
+            status.HTTP_403_FORBIDDEN,
+            "compte_suspendu",
+            "Ce compte a ete suspendu par le Ministere de l'Education.",
+        )
     if utilisateur.mot_de_passe_temporaire:
         raise api_error(
             status.HTTP_403_FORBIDDEN,

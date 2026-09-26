@@ -35,6 +35,10 @@ class Cours(Base):
     contenu_texte: Mapped[str | None] = mapped_column(Text, nullable=True)
     lulufiles_file_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # UC-37/53 (lot admin ministeriel) : masquage non destructif d'un contenu signale, meme
+    # pattern que Message.masque_par en messagerie (Phase 2/3) - jamais une suppression.
+    masque_par_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True)
+    masque_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Quiz(Base):

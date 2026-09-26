@@ -1,6 +1,7 @@
 import re
+from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 _PASSWORD_PATTERN = re.compile(r"^(?=.*[A-Z])(?=.*\d).{8,}$")
 
@@ -90,6 +91,44 @@ class MeOut(BaseModel):
     role: str
     email_verifie: bool
     mot_de_passe_temporaire: bool
+
+
+class AdminUtilisateurOut(BaseModel):
+    """UC-34/49 (lot admin ministeriel) : vue nationale, champs strictement necessaires -
+    jamais mot_de_passe_hash ni casier judiciaire (voir cahier des charges, risque R2)."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    nom: str
+    prenom: str
+    login_id: str
+    email: EmailStr | None
+    role: str
+    actif: bool
+    mot_de_passe_temporaire: bool
+    created_at: datetime
+
+
+class AdminUtilisateurPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[AdminUtilisateurOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class SuspendreCompteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    motif: str = Field(min_length=1)
+
+
+class ReactiverCompteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    motif: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):

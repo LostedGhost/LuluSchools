@@ -1,13 +1,14 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db, get_session_factory
 from app.core.deps import api_error, require_roles
 from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
-from app.modules.etablissements.models import AdminEtablissement, Classe
+from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
 from app.modules.evaluations.models import (
     Bulletin,
     Devoir,
@@ -19,16 +20,21 @@ from app.modules.evaluations.models import (
     StatutSoumission,
 )
 from app.modules.evaluations.schemas import (
+    AdminDevoirOut,
+    AdminDevoirPageOut,
     BulletinOut,
     CorrectionRequest,
     DevoirCreate,
     DevoirOut,
+    MasquerContenuRequest,
     QuestionDevoirAvecBaremeOut,
     ReferentielCreate,
     ReferentielOut,
     ReferentielPropositionCreate,
+    ReferentielUpdate,
     SoumissionCreate,
     SoumissionOut,
+    ValiderLotRequest,
     ValiderPassageRequest,
 )
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -125,15 +131,19 @@ def lister_devoirs(
     classe = db.get(Classe, classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    requete = db.query(Devoir).filter(Devoir.classe_id == classe_id)
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
+        # UC-37/53 (lot admin ministeriel) : meme regle que lister_cours (pedagogie) - un
+        # devoir masque par le Ministere reste visible a l'enseignant/A+/A++, pas a l'eleve.
+        requete = requete.filter(Devoir.masque_par_id.is_(None))
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     elif utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
-    return db.query(Devoir).filter(Devoir.classe_id == classe_id).all()
+    return requete.all()
 
 
 @router.get("/devoirs/{devoir_id}/ma-soumission", response_model=SoumissionOut)
@@ -455,6 +465,70 @@ def valider_referentiel(
     return proposition
 
 
+@router.patch("/referentiels-coefficients/{referentiel_id}", response_model=ReferentielOut)
+def modifier_referentiel(
+    referentiel_id: str,
+    payload: ReferentielUpdate,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ReferentielCoefficient:
+    """UC-28/44 : edition directe d'un referentiel VALIDE par l'A++, sans repasser par le
+    cycle proposition/validation (reserve a l'A+, voir proposer_mise_a_jour_referentiel) -
+    l'A++ est deja l'autorite finale, un aller-retour avec lui-meme n'aurait aucun sens."""
+    referentiel = db.get(ReferentielCoefficient, referentiel_id)
+    if referentiel is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Referentiel introuvable.")
+    if referentiel.statut != StatutReferentiel.VALIDE:
+        raise api_error(
+            status.HTTP_409_CONFLICT, "statut_invalide", "Seul un referentiel en vigueur peut etre modifie directement."
+        )
+
+    referentiel.coefficient = payload.coefficient
+    journaliser_action_ministerielle(
+        db, admin, "referentiel.modifier", "referentiel", referentiel.id, f"nouveau coefficient={payload.coefficient}"
+    )
+    db.commit()
+    db.refresh(referentiel)
+    return referentiel
+
+
+@router.post("/referentiels-coefficients/valider-lot", response_model=list[ReferentielOut])
+def valider_referentiels_en_lot(
+    payload: ValiderLotRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[ReferentielCoefficient]:
+    """UC-29/45 : valider plusieurs propositions en attente en un seul geste plutot qu'une
+    a la fois - reutilise exactement la logique de valider_referentiel ci-dessus."""
+    propositions = db.query(ReferentielCoefficient).filter(ReferentielCoefficient.id.in_(payload.ids)).all()
+    trouves = {p.id for p in propositions}
+    manquants = set(payload.ids) - trouves
+    if manquants:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "introuvable", f"Referentiel(s) introuvable(s) : {', '.join(sorted(manquants))}."
+        )
+    non_en_attente = [p.id for p in propositions if p.statut != StatutReferentiel.PROPOSITION_EN_ATTENTE]
+    if non_en_attente:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "statut_invalide",
+            f"Referentiel(s) pas en attente de validation : {', '.join(sorted(non_en_attente))}.",
+        )
+
+    for proposition in propositions:
+        proposition.statut = StatutReferentiel.VALIDE
+        if proposition.propose_pour_id:
+            ancien = db.get(ReferentielCoefficient, proposition.propose_pour_id)
+            if ancien is not None:
+                ancien.statut = StatutReferentiel.REMPLACE
+        journaliser_action_ministerielle(db, admin, "referentiel.valider_lot", "referentiel", proposition.id, None)
+
+    db.commit()
+    for proposition in propositions:
+        db.refresh(proposition)
+    return propositions
+
+
 def _coefficient_pour(db: Session, niveau: str, matiere: str) -> float:
     referentiel = (
         db.query(ReferentielCoefficient)
@@ -583,3 +657,112 @@ def valider_passage(
     db.commit()
     db.refresh(bulletin)
     return bulletin
+
+
+def _devoir_vers_admin_out(
+    devoir: Devoir, etablissement_id: str, etablissement_nom: str, enseignant: Utilisateur
+) -> AdminDevoirOut:
+    return AdminDevoirOut(
+        id=devoir.id,
+        titre=devoir.titre,
+        matiere=devoir.matiere,
+        classe_id=devoir.classe_id,
+        etablissement_id=etablissement_id,
+        etablissement_nom=etablissement_nom,
+        enseignant_id=devoir.enseignant_id,
+        enseignant_nom=enseignant.nom,
+        enseignant_prenom=enseignant.prenom,
+        masque=devoir.masque_par_id is not None,
+        created_at=devoir.created_at,
+    )
+
+
+@router.get("/admin/devoirs", response_model=AdminDevoirPageOut)
+def lister_devoirs_supervision(
+    etablissement_id: str | None = None,
+    enseignant_id: str | None = None,
+    masque: bool | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> AdminDevoirPageOut:
+    """UC-37/53 : meme raisonnement que GET /admin/cours (pedagogie) - supervision
+    transverse, pagination serveur obligatoire."""
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+
+    requete = db.query(Devoir).join(Classe, Devoir.classe_id == Classe.id)
+    if etablissement_id:
+        requete = requete.filter(Classe.etablissement_id == etablissement_id)
+    if enseignant_id:
+        requete = requete.filter(Devoir.enseignant_id == enseignant_id)
+    if masque is not None:
+        requete = requete.filter(Devoir.masque_par_id.isnot(None) if masque else Devoir.masque_par_id.is_(None))
+
+    total = requete.with_entities(func.count(Devoir.id)).scalar() or 0
+    page = requete.order_by(Devoir.created_at.desc()).offset(offset).limit(limit).all()
+
+    classe_par_id = {
+        c.id: c for c in db.query(Classe).filter(Classe.id.in_({devoir.classe_id for devoir in page}))
+    } if page else {}
+    etablissement_ids = {c.etablissement_id for c in classe_par_id.values()}
+    etablissements = {
+        e.id: e.nom for e in db.query(Etablissement).filter(Etablissement.id.in_(etablissement_ids)).all()
+    } if etablissement_ids else {}
+    enseignant_ids = {devoir.enseignant_id for devoir in page}
+    enseignants = {
+        u.id: u for u in db.query(Utilisateur).filter(Utilisateur.id.in_(enseignant_ids)).all()
+    } if enseignant_ids else {}
+
+    items = [
+        _devoir_vers_admin_out(
+            devoir,
+            classe_par_id[devoir.classe_id].etablissement_id,
+            etablissements.get(classe_par_id[devoir.classe_id].etablissement_id, ""),
+            enseignants[devoir.enseignant_id],
+        )
+        for devoir in page
+    ]
+    return AdminDevoirPageOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post("/devoirs/{devoir_id}/masquer", response_model=DevoirOut)
+def masquer_devoir(
+    devoir_id: str,
+    payload: MasquerContenuRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Devoir:
+    devoir = db.get(Devoir, devoir_id)
+    if devoir is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+    if devoir.masque_par_id is not None:
+        raise api_error(status.HTTP_409_CONFLICT, "deja_masque", "Ce devoir est deja masque.")
+
+    devoir.masque_par_id = admin.id
+    devoir.masque_le = datetime.now(timezone.utc)
+    journaliser_action_ministerielle(db, admin, "devoir.masquer", "devoir", devoir.id, payload.motif)
+    db.commit()
+    db.refresh(devoir)
+    return devoir
+
+
+@router.post("/devoirs/{devoir_id}/demasquer", response_model=DevoirOut)
+def demasquer_devoir(
+    devoir_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Devoir:
+    devoir = db.get(Devoir, devoir_id)
+    if devoir is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+    if devoir.masque_par_id is None:
+        raise api_error(status.HTTP_409_CONFLICT, "pas_masque", "Ce devoir n'est pas masque.")
+
+    devoir.masque_par_id = None
+    devoir.masque_le = None
+    journaliser_action_ministerielle(db, admin, "devoir.demasquer", "devoir", devoir.id, None)
+    db.commit()
+    db.refresh(devoir)
+    return devoir

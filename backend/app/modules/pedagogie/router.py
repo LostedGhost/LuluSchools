@@ -1,11 +1,15 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import ElProfessorError, FreeLLMClient, QuizGenerationError, get_llm_client
-from app.modules.etablissements.models import AffectationEnseignant, Classe
+from app.modules.etablissements.models import AffectationEnseignant, Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.pedagogie.models import (
@@ -19,8 +23,11 @@ from app.modules.pedagogie.models import (
     TentativeQuiz,
 )
 from app.modules.pedagogie.schemas import (
+    AdminCoursOut,
+    AdminCoursPageOut,
     CoursOut,
     LienFichierOut,
+    MasquerContenuRequest,
     QuestionElProfessorCreate,
     QuizCreate,
     QuizOut,
@@ -129,9 +136,13 @@ def publier_cours(
 def lister_cours(
     classe_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_user)
 ) -> list[Cours]:
+    requete = db.query(Cours).filter(Cours.classe_id == classe_id)
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
-    return db.query(Cours).filter(Cours.classe_id == classe_id).all()
+        # UC-37/53 (lot admin ministeriel) : un cours masque par le Ministere reste visible
+        # a l'enseignant/A+/A++ (pour savoir ce qui a ete masque), jamais a l'eleve.
+        requete = requete.filter(Cours.masque_par_id.is_(None))
+    return requete.all()
 
 
 @router.get("/cours/{cours_id}/lien-fichier", response_model=LienFichierOut)
@@ -373,3 +384,118 @@ def poser_question_el_professor(
     db.commit()
     db.refresh(session)
     return session
+
+
+def _cours_vers_admin_out(
+    cours: Cours, etablissement_id: str, etablissement_nom: str, enseignant: Utilisateur
+) -> AdminCoursOut:
+    return AdminCoursOut(
+        id=cours.id,
+        titre=cours.titre,
+        chapitre=cours.chapitre,
+        format=cours.format,
+        classe_id=cours.classe_id,
+        etablissement_id=etablissement_id,
+        etablissement_nom=etablissement_nom,
+        enseignant_id=cours.enseignant_id,
+        enseignant_nom=enseignant.nom,
+        enseignant_prenom=enseignant.prenom,
+        masque=cours.masque_par_id is not None,
+        created_at=cours.created_at,
+    )
+
+
+@router.get("/admin/cours", response_model=AdminCoursPageOut)
+def lister_cours_supervision(
+    etablissement_id: str | None = None,
+    enseignant_id: str | None = None,
+    masque: bool | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> AdminCoursPageOut:
+    """UC-37/53 : supervision transverse - aucun endpoint existant ne permettait de voir
+    les cours de plusieurs etablissements a la fois (seul GET /classes/{id}/cours existe,
+    par classe). Pagination serveur obligatoire (meme regle que l'annuaire etablissements,
+    ADR-009) : le volume grandit avec le nombre d'etablissements/classes/enseignants."""
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+
+    requete = db.query(Cours).join(Classe, Cours.classe_id == Classe.id)
+    if etablissement_id:
+        requete = requete.filter(Classe.etablissement_id == etablissement_id)
+    if enseignant_id:
+        requete = requete.filter(Cours.enseignant_id == enseignant_id)
+    if masque is not None:
+        requete = requete.filter(Cours.masque_par_id.isnot(None) if masque else Cours.masque_par_id.is_(None))
+
+    total = requete.with_entities(func.count(Cours.id)).scalar() or 0
+    page = requete.order_by(Cours.created_at.desc()).offset(offset).limit(limit).all()
+
+    classe_par_id = {
+        c.id: c for c in db.query(Classe).filter(Classe.id.in_({cours.classe_id for cours in page}))
+    } if page else {}
+    etablissement_ids = {c.etablissement_id for c in classe_par_id.values()}
+    etablissements = {
+        e.id: e.nom for e in db.query(Etablissement).filter(Etablissement.id.in_(etablissement_ids)).all()
+    } if etablissement_ids else {}
+    enseignant_ids = {c.enseignant_id for c in page}
+    enseignants = {
+        u.id: u for u in db.query(Utilisateur).filter(Utilisateur.id.in_(enseignant_ids)).all()
+    } if enseignant_ids else {}
+
+    items = [
+        _cours_vers_admin_out(
+            cours,
+            classe_par_id[cours.classe_id].etablissement_id,
+            etablissements.get(classe_par_id[cours.classe_id].etablissement_id, ""),
+            enseignants[cours.enseignant_id],
+        )
+        for cours in page
+    ]
+    return AdminCoursPageOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post("/cours/{cours_id}/masquer", response_model=CoursOut)
+def masquer_cours(
+    cours_id: str,
+    payload: MasquerContenuRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Cours:
+    """UC-37/53 : masquage non destructif (meme pattern que Message.masque_par en
+    messagerie, Phase 2/3) - le cours reste en base et visible a l'enseignant/A+/A++,
+    seul l'eleve ne le voit plus (voir lister_cours)."""
+    cours = db.get(Cours, cours_id)
+    if cours is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
+    if cours.masque_par_id is not None:
+        raise api_error(status.HTTP_409_CONFLICT, "deja_masque", "Ce cours est deja masque.")
+
+    cours.masque_par_id = admin.id
+    cours.masque_le = datetime.now(timezone.utc)
+    journaliser_action_ministerielle(db, admin, "cours.masquer", "cours", cours.id, payload.motif)
+    db.commit()
+    db.refresh(cours)
+    return cours
+
+
+@router.post("/cours/{cours_id}/demasquer", response_model=CoursOut)
+def demasquer_cours(
+    cours_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Cours:
+    cours = db.get(Cours, cours_id)
+    if cours is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
+    if cours.masque_par_id is None:
+        raise api_error(status.HTTP_409_CONFLICT, "pas_masque", "Ce cours n'est pas masque.")
+
+    cours.masque_par_id = None
+    cours.masque_le = None
+    journaliser_action_ministerielle(db, admin, "cours.demasquer", "cours", cours.id, None)
+    db.commit()
+    db.refresh(cours)
+    return cours

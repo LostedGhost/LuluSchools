@@ -32,6 +32,8 @@ class EtablissementOut(BaseModel):
     code_etablissement: str
     latitude: float | None
     longitude: float | None
+    description: str | None
+    actif: bool
 
 
 class LocalisationUpdate(BaseModel):
@@ -39,6 +41,20 @@ class LocalisationUpdate(BaseModel):
 
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
+
+
+class DescriptionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None
+
+
+class ActionGroupeeEtablissementRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(min_length=1)
+    action: str = Field(pattern="^(suspendre|reactiver)$")
+    motif: str = Field(min_length=1)
 
 
 class ClasseCreate(BaseModel):

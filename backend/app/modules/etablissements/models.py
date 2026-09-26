@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -46,6 +46,13 @@ class Etablissement(Base):
     # objectif produit : une geolocalisation pour TOUS les etablissements, a terme.
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Texte libre affiche sur la fiche etablissement (UC-23, lot admin ministeriel) - meme
+    # esprit que EtablissementPhoto, jamais obligatoire (aucun etablissement existant n'en a).
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Homologation active/suspendue (UC-26/UC-42) - distinct de `statut` (public/prive, une
+    # caracteristique administrative, pas un etat du cycle de vie). Defaut true : aucun
+    # etablissement existant n'est suspendu par cette migration.
+    actif: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     classes: Mapped[list["Classe"]] = relationship(back_populates="etablissement")

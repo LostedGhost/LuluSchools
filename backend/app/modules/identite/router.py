@@ -2,10 +2,12 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import JWTError
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_roles
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.security import (
     create_access_token,
@@ -19,6 +21,8 @@ from app.core.security import (
 )
 from app.modules.identite.models import Enseignant, OtpVerification, RoleUtilisateur, Tuteur, Utilisateur
 from app.modules.identite.schemas import (
+    AdminUtilisateurOut,
+    AdminUtilisateurPageOut,
     ChangePasswordRequest,
     EnseignantCreate,
     EnseignantOut,
@@ -26,7 +30,9 @@ from app.modules.identite.schemas import (
     MeOut,
     OtpVerifyRequest,
     OtpVerifyResponse,
+    ReactiverCompteRequest,
     RefreshRequest,
+    SuspendreCompteRequest,
     TokenPair,
     TuteurCreate,
     TuteurOut,
@@ -284,3 +290,85 @@ def changer_mot_de_passe(
 @me_router.get("/me", response_model=MeOut)
 def mon_profil(utilisateur: Utilisateur = Depends(get_current_user)) -> Utilisateur:
     return utilisateur
+
+
+admin_router = APIRouter(prefix="/admin", tags=["identite"])
+
+
+@admin_router.get("/utilisateurs", response_model=AdminUtilisateurPageOut)
+def lister_utilisateurs_supervision(
+    role: RoleUtilisateur | None = None,
+    actif: bool | None = None,
+    q: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> AdminUtilisateurPageOut:
+    """UC-34/49 : liste nationale des utilisateurs - aucun endpoint existant ne permettait
+    de retrouver un compte sans deja connaitre son id (le seul filtre transversal existant
+    avant ce lot etait la recherche par nom pour l'affectation enseignant<->classe, cf.
+    PROJECT_MAP). `q` filtre sur nom/prenom/login_id (email ou matricule). Pagination
+    serveur obligatoire (meme regle que l'annuaire etablissements, ADR-009)."""
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+
+    requete = db.query(Utilisateur)
+    if role is not None:
+        requete = requete.filter(Utilisateur.role == role)
+    if actif is not None:
+        requete = requete.filter(Utilisateur.actif == actif)
+    if q:
+        motif = f"%{q}%"
+        requete = requete.filter(
+            or_(Utilisateur.nom.ilike(motif), Utilisateur.prenom.ilike(motif), Utilisateur.login_id.ilike(motif))
+        )
+
+    total = requete.with_entities(func.count(Utilisateur.id)).scalar() or 0
+    items = requete.order_by(Utilisateur.created_at.desc()).offset(offset).limit(limit).all()
+    return AdminUtilisateurPageOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@admin_router.post("/utilisateurs/{utilisateur_id}/suspendre", response_model=AdminUtilisateurOut)
+def suspendre_compte(
+    utilisateur_id: str,
+    payload: SuspendreCompteRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Utilisateur:
+    """UC-35/50 : motif obligatoire (voir SuspendreCompteRequest), journalise (UC-36/51).
+    Ne peut pas se suspendre soi-meme (evite qu'un A++ se bloque par erreur de manipulation
+    sans aucun autre A++ pour le reactiver - decision deleguee, cahier des charges)."""
+    cible = db.get(Utilisateur, utilisateur_id)
+    if cible is None:
+        raise _api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur introuvable.")
+    if cible.id == admin.id:
+        raise _api_error(status.HTTP_409_CONFLICT, "action_impossible", "Vous ne pouvez pas suspendre votre propre compte.")
+    if not cible.actif:
+        raise _api_error(status.HTTP_409_CONFLICT, "deja_suspendu", "Ce compte est deja suspendu.")
+
+    cible.actif = False
+    journaliser_action_ministerielle(db, admin, "utilisateur.suspendre", "utilisateur", cible.id, payload.motif)
+    db.commit()
+    db.refresh(cible)
+    return cible
+
+
+@admin_router.post("/utilisateurs/{utilisateur_id}/reactiver", response_model=AdminUtilisateurOut)
+def reactiver_compte(
+    utilisateur_id: str,
+    payload: ReactiverCompteRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Utilisateur:
+    cible = db.get(Utilisateur, utilisateur_id)
+    if cible is None:
+        raise _api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur introuvable.")
+    if cible.actif:
+        raise _api_error(status.HTTP_409_CONFLICT, "pas_suspendu", "Ce compte n'est pas suspendu.")
+
+    cible.actif = True
+    journaliser_action_ministerielle(db, admin, "utilisateur.reactiver", "utilisateur", cible.id, payload.motif)
+    db.commit()
+    db.refresh(cible)
+    return cible

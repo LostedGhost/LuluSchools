@@ -31,6 +31,8 @@ Détail complet et justification des choix : [docs/choix-technique-phase1.md](do
 | [docs/cas-utilisation-phase-4-marketplace.md](docs/cas-utilisation-phase-4-marketplace.md) | Cas d'utilisation Phase 4 — marketplace étudiante (UC-20 à UC-22) |
 | [docs/diagrammes-uml-phase-4-marketplace.md](docs/diagrammes-uml-phase-4-marketplace.md) | Diagrammes UML Phase 4 — marketplace étudiante |
 | [docs/contrat-api-phase-4-marketplace.md](docs/contrat-api-phase-4-marketplace.md) | Contrat d'API Phase 4 — marketplace étudiante |
+| [docs/cahier-des-charges-refonte-admin-ministeriel.md](docs/cahier-des-charges-refonte-admin-ministeriel.md) | Cas d'utilisation Phase 5 — refonte du portail admin ministériel (UC-23 à UC-38) |
+| [docs/diagrammes-uml-phase-5-admin-ministeriel.md](docs/diagrammes-uml-phase-5-admin-ministeriel.md) | Diagrammes UML Phase 5 (contrat d'API fusionné dans le même document) |
 | [docs/adr/](docs/adr/) | Décisions d'architecture (ADR) |
 | [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.md) | Étapes de déploiement (Render + Vercel) |
 

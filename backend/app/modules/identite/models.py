@@ -39,6 +39,10 @@ class Utilisateur(Base):
     mot_de_passe_temporaire: Mapped[bool] = mapped_column(Boolean, default=False)
     role: Mapped[RoleUtilisateur] = mapped_column(Enum(RoleUtilisateur))
     email_verifie: Mapped[bool] = mapped_column(Boolean, default=False)
+    # UC-35/50 (lot admin ministeriel) : un compte suspendu par l'A++ est bloque au meme
+    # endroit que le mot de passe temporaire (get_current_active_user) - defaut true, aucun
+    # compte existant n'est suspendu par cette migration.
+    actif: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 

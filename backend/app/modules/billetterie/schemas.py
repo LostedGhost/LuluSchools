@@ -46,3 +46,28 @@ class BilletEvenementOut(BaseModel):
     statut: StatutBillet
     prix_paye: float
     paiement_confirme: bool
+
+
+class AdminEvenementOut(BaseModel):
+    """UC-38/54 (lot admin ministeriel) : vue agregee tous etablissements, avec le nom de
+    l'etablissement denormalise (meme raisonnement que AdminCoursOut/AdminDevoirOut)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    etablissement_id: str
+    etablissement_nom: str
+    titre: str
+    lieu: str
+    date_heure: datetime
+    capacite_max: int
+    statut: StatutEvenement
+
+
+class AdminEvenementPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[AdminEvenementOut]
+    total: int
+    limit: int
+    offset: int

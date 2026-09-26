@@ -66,3 +66,41 @@ class ReverserPrestataireRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reference_paiement: str
+
+
+class ContestationMicroJobDetailOut(BaseModel):
+    """UC-31/32/46/47 (lot admin ministeriel) : version enrichie de ContestationMicroJobOut
+    pour la file d'arbitrage - contexte complet (mission, offre, parties) avant decision,
+    plutot que la saisie d'un id a l'aveugle (meme constat que la file d'arbitrage
+    gig-economy etudiee dans le cahier des charges)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    mission_id: str
+    motif: str
+    statut: StatutContestationMicroJob
+    decision_motif: str | None
+    created_at: datetime
+    offre_titre: str
+    prix: float
+    client_nom: str
+    client_prenom: str
+    prestataire_nom: str
+    prestataire_prenom: str
+
+
+class MissionAReverserOut(BaseModel):
+    """UC-33/48 : file des missions validees en attente de reversement, avec le contact du
+    prestataire deja connu (telephone) plutot qu'une reference a ressaisir manuellement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    offre_titre: str
+    prix_paye: float
+    prestataire_id: str
+    prestataire_nom: str
+    prestataire_prenom: str
+    prestataire_telephone: str | None
+    date_declaration_fin: datetime | None

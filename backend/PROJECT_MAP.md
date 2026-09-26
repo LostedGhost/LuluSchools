@@ -19,6 +19,9 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 **Phase 4** (voir `../docs/cas-utilisation-phase-4-marketplace.md`)
 - `app/modules/marketplace/` — annonces, photos, signalements, transactions et séquestre, contestations (UC-20/21/22)
 
+**Phase 5** (voir `../docs/cahier-des-charges-refonte-admin-ministeriel.md` et `../docs/diagrammes-uml-phase-5-admin-ministeriel.md`)
+- `app/modules/audit/` — `JournalAuditMinisteriel` (cible polymorphe) + `GET /admin/journal-audit` (UC-36/51/52) ; écrit exclusivement via `app/core/audit.py::journaliser_action_ministerielle` (point d'entrée unique, jamais construit à la main dans un router)
+
 **Phase 2/3** (voir `../docs/cas-utilisation-phase-2-3.md`)
 - `app/modules/controle_acces/` — désignation du Contrôleur/Ticketeur, partagée par tickets/billetterie
 - `app/modules/services_scolaires/` — tickets transport (UC-11) et cantine (UC-12)
@@ -40,7 +43,8 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `config.py` — `Settings` (pydantic-settings) ; lit `.env` à la **racine du dépôt**, chemin calculé depuis `__file__` (pas depuis le cwd — un premier bug l'avait fait chercher `backend/.env`, corrigé).
 - `database.py` — engine SQLAlchemy, `SessionLocal`, `Base` (métadonnées partagées par tous les modules), dépendance `get_db`.
 - `security.py` — hash Argon2 des mots de passe, génération/hash des OTP (HMAC-SHA256 salé, jamais stockés en clair), génération de mot de passe temporaire, création/décodage JWT (access + refresh, HS256).
-- `deps.py` — `get_current_user` (décode le JWT, charge l'utilisateur), `require_roles(*roles)` (RBAC par dépendance FastAPI), `api_error()` (fabrique une `HTTPException` au format `{"error": {...}}` du contrat).
+- `deps.py` — `get_current_user` (décode le JWT, charge l'utilisateur), `require_roles(*roles)` (RBAC par dépendance FastAPI), `api_error()` (fabrique une `HTTPException` au format `{"error": {...}}` du contrat). `get_current_active_user` bloque désormais aussi un compte `actif=false` (UC-35/50, Phase 5), en plus du mot de passe temporaire déjà géré.
+- `audit.py` — `journaliser_action_ministerielle()` (Phase 5, UC-36/51) : point d'entrée unique pour écrire dans `modules/audit/models.py::JournalAuditMinisteriel` (n'écrit que si l'acteur est `ADMIN_MINISTERIEL`, silencieux sinon), appelé avant le `commit()` de l'action elle-même pour rester dans la même transaction.
 - `email.py` — `BrevoEmailClient.send_otp_email` / `.send_temporary_credentials_email`, appels HTTP directs à l'API Brevo. Injecté via `Depends(get_email_client)` pour rester substituable en test. Envoie `htmlContent` (document HTML complet avec branding, pas un fragment `<p>` nu — un fragment sans `<!DOCTYPE html>/<html>/<body>` cassait le rendu chez certains clients mail) et `textContent` (secours texte seul). **Piège réel rencontré** : `BREVO_SENDER_EMAIL` doit être une adresse *vérifiée* dans le compte Brevo (Expéditeurs & IP) — avec le placeholder par défaut (`no-reply@luluschools.example`, domaine `.example` non routable), Brevo accepte la requête API (201/202, pas d'erreur visible côté appli) mais ne délivre jamais le mail.
 - `files.py` — `LuluFilesClient.upload` / `.get_signed_link` (ADR-003), injecté via `Depends(get_files_client)`.
 - `llm.py` — `FreeLLMClient.noter_document` : envoie une image en vision via l'API compatible OpenAI de FreeLLM, parse un score 0-100 depuis la réponse texte (ADR-002). Injecté via `Depends(get_llm_client)`.
@@ -238,6 +242,37 @@ volontairement court-circuité, son absence est l'état normal en régime établ
 PDF/vidéo (`LULUFILES_ID_PLACEHOLDER`), jamais un vrai envoi.
 
 ## Dernière synchronisation
+2026-09-26 (Phase 5, backend) — Backend complet du lot admin ministériel (UC-23 à UC-38,
+voir `../docs/cahier-des-charges-refonte-admin-ministeriel.md` et
+`../docs/diagrammes-uml-phase-5-admin-ministeriel.md`), migration `0006_supervision_min`
+(appliquée et vérifiée upgrade+downgrade contre un vrai Postgres local, disponible pour la
+première fois dans cet environnement de dev — voir aussi le bugfix `alembic_version`
+ci-dessous). Changements : `Etablissement.description`/`.actif` (+ `PATCH
+/etablissements/{id}/description`, `POST /etablissements/action-groupee`, suspension
+filtrée hors des vitrines publiques) ; `ReferentielCoefficient` éditable directement par
+l'A++ (`PATCH /referentiels-coefficients/{id}`) et validation groupée (`POST
+.../valider-lot`) ; micro-jobs : `GET /contestations-micro-job` et `GET
+/missions-micro-job/a-reverser` (files d'arbitrage enrichies — mission/offre/parties —
+remplaçant la saisie manuelle d'un id) ; `Utilisateur.actif` (+ `GET /admin/utilisateurs`,
+suspension/réactivation, blocage dans `get_current_active_user`, auto-suspension
+interdite) ; `Cours`/`Devoir` masquables non destructivement (`masque_par_id`/`masque_le`,
+`GET /admin/cours`/`/admin/devoirs`, exclus de la vue élève) ; `GET /admin/evenements` +
+annulation d'urgence par l'A++ (RBAC déjà ouvert via `_est_organisateur`, aucun changement
+nécessaire là) ; nouveau module `app/modules/audit/` journalisant toute action sensible de
+l'A++. **10 nouveaux tests** (`tests/test_admin_ministeriel.py`), **163 tests passants au
+total**, aucune régression. Prochaine étape : frontend (DataTable générique réutilisable +
+écrans établissements/référentiels/arbitrage/utilisateurs/contenus/événements).
+
+2026-09-26 (Phase 5, bugfix migration) — En appliquant les migrations `0002`-`0005` contre
+un Postgres réel pour la première fois (jamais fait jusqu'ici, voir les notes "pas encore
+vérifié contre un vrai Postgres" laissées par les phases précédentes), découverte d'un vrai
+bug bloquant : `alembic_version.version_num` est un `VARCHAR(32)` par défaut, or
+l'identifiant de la révision `0003_etablissements_geolocalisation` fait 36 caractères —
+`alembic upgrade head` échouait silencieusement à cette transition. Corrigé en élargissant
+la colonne à 255 dans la migration `0002` (avant le premier id trop long), pas dans `0001`
+qui est déjà appliqué en production. Migrations `0002` à `0006` désormais toutes vérifiées
+upgrade **et** downgrade contre un Postgres réel.
+
 2026-09-26 (encore plus tard, refonte RBAC) — Audit complet des 5 rôles sur les 14 modules
 backend (demandé explicitement, pas préventif) a révélé 3 trous : (1) A++ bloqué (403) sur
 ~30 endpoints dans 9 modules à cause de 4 copies indépendantes d'un helper

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import (
     api_error,
@@ -22,11 +23,13 @@ from app.modules.etablissements.models import (
     TypeEtablissement,
 )
 from app.modules.etablissements.schemas import (
+    ActionGroupeeEtablissementRequest,
     AffectationEnseignantCreate,
     AffectationEnseignantOut,
     AnnuairePubliqueOut,
     ClasseCreate,
     ClasseOut,
+    DescriptionUpdate,
     EtablissementCreate,
     EtablissementOut,
     EtablissementPhotoOut,
@@ -146,14 +149,16 @@ def vitrine_publique(db: Session = Depends(get_db)) -> VitrinePubliqueOut:
     (3 etablissements en avant, quelques postes ouverts, totaux globaux). La plateforme a
     vocation nationale : la liste complete vit dans l'annuaire dedie (GET .../annuaire-public),
     jamais sur la premiere page. Ne renvoie que des champs non sensibles."""
-    total_etablissements = db.query(func.count(Etablissement.id)).scalar() or 0
+    total_etablissements = db.query(func.count(Etablissement.id)).filter(Etablissement.actif.is_(True)).scalar() or 0
     total_classes = db.query(func.count(Classe.id)).scalar() or 0
     postes_ouverts_tous = db.query(Poste).filter(Poste.statut == StatutPoste.OUVERT).all()
 
     # En avant : les etablissements qui ont le plus d'opportunites ouvertes en ce moment.
+    # Un etablissement suspendu (UC-26/42) n'apparait plus sur les vitrines publiques.
     nb_postes_par_etab = _compter_par_etablissement(postes_ouverts_tous)
     etablissements_en_avant = (
         db.query(Etablissement)
+        .filter(Etablissement.actif.is_(True))
         .order_by(Etablissement.created_at.desc())
         .limit(24)
         .all()
@@ -216,7 +221,8 @@ def annuaire_public(
     limit = max(1, min(limit, 60))
     offset = max(0, offset)
 
-    requete = db.query(Etablissement)
+    # Un etablissement suspendu (UC-26/42) n'apparait plus dans l'annuaire public.
+    requete = db.query(Etablissement).filter(Etablissement.actif.is_(True))
     if type is not None:
         requete = requete.filter(Etablissement.type == type)
     if q:
@@ -294,6 +300,60 @@ def mettre_a_jour_localisation(
 
 def _verifier_admin_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
     verifier_portee_etablissement(db, utilisateur, etablissement_id)
+
+
+@router.patch("/{etablissement_id}/description", response_model=EtablissementOut)
+def modifier_description_etablissement(
+    etablissement_id: str,
+    payload: DescriptionUpdate,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
+    ),
+) -> Etablissement:
+    """UC-23/40 : texte libre affiche sur la fiche etablissement du portail ministeriel
+    (comme les photos, l'A++ peut le faire pour n'importe quel etablissement, pas
+    seulement l'A+ proprietaire - modération nationale deleguee, cahier des charges)."""
+    etablissement = db.get(Etablissement, etablissement_id)
+    if etablissement is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+
+    etablissement.description = payload.description
+    db.commit()
+    db.refresh(etablissement)
+    return etablissement
+
+
+@router.post("/action-groupee", response_model=list[EtablissementOut])
+def appliquer_action_groupee_etablissements(
+    payload: ActionGroupeeEtablissementRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[Etablissement]:
+    """UC-26/42 : suspendre/reactiver l'homologation de plusieurs etablissements en un
+    seul geste. Reserve A++ (contrairement a la description/aux photos, ce pouvoir n'est
+    pas delegue a l'A+ - il s'agit d'une decision d'homologation nationale, pas d'une
+    mise a jour de fiche). Un etablissement suspendu disparait de l'annuaire/vitrine
+    publics (voir annuaire_public/vitrine_publique) mais reste visible et gerable ici."""
+    etablissements = db.query(Etablissement).filter(Etablissement.id.in_(payload.ids)).all()
+    trouves = {e.id for e in etablissements}
+    manquants = set(payload.ids) - trouves
+    if manquants:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "introuvable", f"Etablissement(s) introuvable(s) : {', '.join(sorted(manquants))}."
+        )
+
+    nouvel_actif = payload.action == "reactiver"
+    for etablissement in etablissements:
+        etablissement.actif = nouvel_actif
+        journaliser_action_ministerielle(
+            db, admin, f"etablissement.{payload.action}", "etablissement", etablissement.id, payload.motif
+        )
+    db.commit()
+    for etablissement in etablissements:
+        db.refresh(etablissement)
+    return etablissements
 
 
 @router.post(

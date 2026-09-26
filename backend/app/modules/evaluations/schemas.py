@@ -144,3 +144,54 @@ class ValiderPassageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: str
+
+
+class ReferentielUpdate(BaseModel):
+    """UC-28/44 (lot admin ministeriel) : edition directe par l'A++ d'un referentiel deja
+    VALIDE, distincte du cycle proposition/validation reserve a l'A+."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    coefficient: float = Field(gt=0)
+
+
+class ValiderLotRequest(BaseModel):
+    """UC-29/45 : validation groupee de plusieurs propositions en attente en un seul geste."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(min_length=1)
+
+
+class MasquerContenuRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    motif: str = Field(min_length=1)
+
+
+class AdminDevoirOut(BaseModel):
+    """UC-37/53 : meme raisonnement que AdminCoursOut (pedagogie) - vue agregee tous
+    etablissements avec noms denormalises."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    titre: str
+    matiere: str
+    classe_id: str
+    etablissement_id: str
+    etablissement_nom: str
+    enseignant_id: str
+    enseignant_nom: str
+    enseignant_prenom: str
+    masque: bool
+    created_at: datetime
+
+
+class AdminDevoirPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[AdminDevoirOut]
+    total: int
+    limit: int
+    offset: int

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -16,9 +17,11 @@ from app.modules.micro_jobs.models import (
     StatutOffreMicroJob,
 )
 from app.modules.micro_jobs.schemas import (
+    ContestationMicroJobDetailOut,
     ContestationMicroJobOut,
     ContesterMissionRequest,
     DecisionContestationRequest,
+    MissionAReverserOut,
     MissionMicroJobOut,
     OffreMicroJobCreate,
     OffreMicroJobOut,
@@ -240,6 +243,64 @@ def contester_mission(
     return contestation
 
 
+@router.get("/contestations-micro-job", response_model=list[ContestationMicroJobDetailOut])
+def lister_contestations_micro_job(
+    statut: StatutContestationMicroJob = StatutContestationMicroJob.EN_ATTENTE,
+    db: Session = Depends(get_db),
+    _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[ContestationMicroJobDetailOut]:
+    """UC-31/46 : file d'arbitrage - remplace la saisie manuelle d'un identifiant de
+    contestation par une liste avec tout le contexte necessaire a la decision (montant,
+    parties, motif), meme principe que la file d'arbitrage gig-economy etudiee dans le
+    cahier des charges. Volume naturellement borne (une contestation par mission
+    contestee) : pas de pagination serveur pour ce premier jet, a revoir si le volume
+    grandit significativement."""
+    contestations = (
+        db.query(ContestationMicroJob)
+        .filter(ContestationMicroJob.statut == statut)
+        .order_by(ContestationMicroJob.created_at.asc())
+        .all()
+    )
+    if not contestations:
+        return []
+
+    missions = {
+        m.id: m
+        for m in db.query(MissionMicroJob)
+        .filter(MissionMicroJob.id.in_({c.mission_id for c in contestations}))
+        .all()
+    }
+    offres = {
+        o.id: o for o in db.query(OffreMicroJob).filter(OffreMicroJob.id.in_({m.offre_id for m in missions.values()}))
+    }
+    utilisateur_ids = {m.prestataire_id for m in missions.values()} | {o.client_id for o in offres.values()}
+    utilisateurs = {u.id: u for u in db.query(Utilisateur).filter(Utilisateur.id.in_(utilisateur_ids)).all()}
+
+    resultat = []
+    for contestation in contestations:
+        mission = missions[contestation.mission_id]
+        offre = offres[mission.offre_id]
+        client = utilisateurs[offre.client_id]
+        prestataire = utilisateurs[mission.prestataire_id]
+        resultat.append(
+            ContestationMicroJobDetailOut(
+                id=contestation.id,
+                mission_id=contestation.mission_id,
+                motif=contestation.motif,
+                statut=contestation.statut,
+                decision_motif=contestation.decision_motif,
+                created_at=contestation.created_at,
+                offre_titre=offre.titre,
+                prix=mission.prix_paye,
+                client_nom=client.nom,
+                client_prenom=client.prenom,
+                prestataire_nom=prestataire.nom,
+                prestataire_prenom=prestataire.prenom,
+            )
+        )
+    return resultat
+
+
 @router.post("/contestations-micro-job/{contestation_id}/decision", response_model=ContestationMicroJobOut)
 def decider_contestation(
     contestation_id: str,
@@ -266,9 +327,51 @@ def decider_contestation(
         if payload.decision == StatutContestationMicroJob.ACCEPTEE
         else StatutMissionMicroJob.VALIDEE
     )
+    journaliser_action_ministerielle(
+        db, admin, f"micro_job.contestation.{payload.decision.value}", "contestation_micro_job", contestation.id,
+        payload.decision_motif,
+    )
     db.commit()
     db.refresh(contestation)
     return contestation
+
+
+@router.get("/missions-micro-job/a-reverser", response_model=list[MissionAReverserOut])
+def lister_missions_a_reverser(
+    db: Session = Depends(get_db), _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL))
+) -> list[MissionAReverserOut]:
+    """UC-33/48 : file des missions validees pas encore reversees, avec le contact
+    mobile money deja connu du prestataire (Utilisateur.telephone) - remplace la saisie
+    manuelle d'un identifiant de mission."""
+    missions = (
+        db.query(MissionMicroJob)
+        .filter(
+            MissionMicroJob.statut == StatutMissionMicroJob.VALIDEE,
+            MissionMicroJob.reference_paiement_prestataire.is_(None),
+        )
+        .order_by(MissionMicroJob.date_declaration_fin.asc())
+        .all()
+    )
+    if not missions:
+        return []
+
+    offres = {o.id: o for o in db.query(OffreMicroJob).filter(OffreMicroJob.id.in_({m.offre_id for m in missions}))}
+    prestataires = {
+        u.id: u for u in db.query(Utilisateur).filter(Utilisateur.id.in_({m.prestataire_id for m in missions})).all()
+    }
+    return [
+        MissionAReverserOut(
+            id=m.id,
+            offre_titre=offres[m.offre_id].titre,
+            prix_paye=m.prix_paye,
+            prestataire_id=m.prestataire_id,
+            prestataire_nom=prestataires[m.prestataire_id].nom,
+            prestataire_prenom=prestataires[m.prestataire_id].prenom,
+            prestataire_telephone=prestataires[m.prestataire_id].telephone,
+            date_declaration_fin=m.date_declaration_fin,
+        )
+        for m in missions
+    ]
 
 
 @router.post("/missions-micro-job/{mission_id}/reverser-prestataire", response_model=MissionMicroJobOut)
@@ -276,7 +379,7 @@ def reverser_prestataire(
     mission_id: str,
     payload: ReverserPrestataireRequest,
     db: Session = Depends(get_db),
-    _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> MissionMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
     if mission is None:
@@ -287,6 +390,9 @@ def reverser_prestataire(
 
     mission.reference_paiement_prestataire = payload.reference_paiement
     mission.statut = StatutMissionMicroJob.PAYEE
+    journaliser_action_ministerielle(
+        db, admin, "micro_job.reverser", "mission_micro_job", mission.id, f"reference={payload.reference_paiement}"
+    )
     db.commit()
     db.refresh(mission)
     return mission

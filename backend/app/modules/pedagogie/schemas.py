@@ -96,3 +96,39 @@ class QuestionElProfessorCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str
+
+
+class MasquerContenuRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    motif: str = Field(min_length=1)
+
+
+class AdminCoursOut(BaseModel):
+    """UC-37/53 (lot admin ministeriel) : vue agregee tous etablissements, avec les noms
+    denormalises (meme raisonnement que CandidatureOut.enseignant_nom en Phase 1 - un
+    cours anonyme par ses seuls id serait inutilisable pour une supervision nationale)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    titre: str
+    chapitre: str
+    format: FormatCours
+    classe_id: str
+    etablissement_id: str
+    etablissement_nom: str
+    enseignant_id: str
+    enseignant_nom: str
+    enseignant_prenom: str
+    masque: bool
+    created_at: datetime
+
+
+class AdminCoursPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[AdminCoursOut]
+    total: int
+    limit: int
+    offset: int
