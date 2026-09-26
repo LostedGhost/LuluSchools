@@ -98,6 +98,7 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/eleve/cours-direct", label: "Cours en direct", icon: <Radio size={iconSize} /> },
       { to: "/eleve/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
       { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
+      { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
       { to: "/messagerie", label: "Messagerie", icon: <MessageCircle size={iconSize} /> },
     ];
   }

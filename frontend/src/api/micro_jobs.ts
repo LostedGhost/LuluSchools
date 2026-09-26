@@ -13,14 +13,18 @@ export function creerOffre(titre: string, description: string, prix: number) {
   return api.post<OffreMicroJobOut>("/micro-jobs/offres", { titre, description, prix });
 }
 
-export function accepterOffre(offreId: string) {
-  return api.post<MissionMicroJobOut>(`/micro-jobs/offres/${offreId}/accepter`);
-}
-
-export function amorcerPaiementMission(missionId: string, transactionId: string) {
-  return api.post<MissionMicroJobOut>(`/missions-micro-job/${missionId}/paiement/amorcer`, {
+export function amorcerPaiementOffre(offreId: string, transactionId: string) {
+  return api.post<OffreMicroJobOut>(`/micro-jobs/offres/${offreId}/paiement/amorcer`, {
     transaction_id: transactionId,
   });
+}
+
+export function annulerOffre(offreId: string) {
+  return api.post<OffreMicroJobOut>(`/micro-jobs/offres/${offreId}/annuler`);
+}
+
+export function accepterOffre(offreId: string) {
+  return api.post<MissionMicroJobOut>(`/micro-jobs/offres/${offreId}/accepter`);
 }
 
 export function declarerFinMission(missionId: string) {

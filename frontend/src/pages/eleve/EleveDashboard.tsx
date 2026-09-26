@@ -9,7 +9,7 @@ import {
   LevelBadge,
   type MedalDef,
 } from "../../components/gamification";
-import { BookOpen, ClipboardList, Trophy, FileText, ClipboardCheck, Target, PenLine, Flag, Radio, Bus, Ticket, MessageCircle } from "lucide-react";
+import { BookOpen, ClipboardList, Trophy, FileText, ClipboardCheck, Target, PenLine, Flag, Radio, Bus, Ticket, MessageCircle, Handshake } from "lucide-react";
 
 /* Données de gamification simulées (à remplacer par des vraies API quand disponibles) */
 const DEMO_STREAK = 12;
@@ -179,6 +179,13 @@ export function EleveDashboard() {
               tone: "reward" as const,
               title: "Billetterie",
               desc: "Événements de mon établissement",
+            },
+            {
+              to: "/micro-jobs",
+              icon: <Handshake size={24} />,
+              tone: "action" as const,
+              title: "Micro-jobs",
+              desc: "Publier une demande de service et la payer",
             },
             {
               to: "/messagerie",

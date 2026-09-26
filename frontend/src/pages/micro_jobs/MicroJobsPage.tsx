@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import {
   accepterOffre,
-  amorcerPaiementMission,
+  amorcerPaiementOffre,
+  annulerOffre,
   contesterMission,
   creerOffre,
   declarerFinMission,
@@ -50,6 +51,7 @@ const STATUT_MISSION_LABEL: Record<MissionMicroJobOut["statut"], string> = {
 
 export function MicroJobsPage() {
   const { utilisateur } = useAuth();
+  const estEleve = utilisateur?.role === "eleve";
   const [offres, setOffres] = useState<OffreMicroJobOut[]>([]);
   const [missions, setMissions] = useState<MissionMicroJobOut[]>([]);
   const [offreParMission, setOffreParMission] = useState<Record<string, OffreMicroJobOut>>({});
@@ -64,6 +66,7 @@ export function MicroJobsPage() {
   const [description, setDescription] = useState("");
   const [prix, setPrix] = useState("");
   const [enCoursCreation, setEnCoursCreation] = useState(false);
+  const [offreEnAttentePaiement, setOffreEnAttentePaiement] = useState<OffreMicroJobOut | null>(null);
 
   const charger = () => {
     setChargement(true);
@@ -93,17 +96,44 @@ export function MicroJobsPage() {
     setErreur(null);
     setEnCoursCreation(true);
     try {
-      await creerOffre(titre.trim(), description.trim(), Number(prix));
+      const res = await creerOffre(titre.trim(), description.trim(), Number(prix));
       setTitre("");
       setDescription("");
       setPrix("");
       setShowForm(false);
-      setSucces("Offre publiée sur la place de marché.");
-      charger();
+      setOffreEnAttentePaiement(res.data);
     } catch (err) {
       setErreur(messageErreur(err, "Impossible de publier cette offre."));
     } finally {
       setEnCoursCreation(false);
+    }
+  };
+
+  const payerOffre = async (offreId: string, transactionId: string) => {
+    setActionEnCoursId(offreId);
+    setErreur(null);
+    try {
+      await amorcerPaiementOffre(offreId, transactionId);
+      setSucces("Paiement transmis. Votre offre sera visible sur la place de marché dès sa confirmation.");
+      setOffreEnAttentePaiement(null);
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'enregistrer ce paiement."));
+    } finally {
+      setActionEnCoursId(null);
+    }
+  };
+
+  const annulerOffreNonPayee = async (offreId: string) => {
+    setActionEnCoursId(offreId);
+    setErreur(null);
+    try {
+      await annulerOffre(offreId);
+      setOffreEnAttentePaiement(null);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'annuler cette offre."));
+    } finally {
+      setActionEnCoursId(null);
     }
   };
 
@@ -112,24 +142,10 @@ export function MicroJobsPage() {
     setErreur(null);
     try {
       await accepterOffre(offreId);
-      setSucces("Offre acceptée. Procédez au paiement dans « Mes missions ».");
+      setSucces("Offre acceptée. Le paiement était déjà sécurisé par le client, vous pouvez commencer.");
       charger();
     } catch (err) {
       setErreur(messageErreur(err, "Impossible d'accepter cette offre."));
-    } finally {
-      setActionEnCoursId(null);
-    }
-  };
-
-  const payer = async (missionId: string, transactionId: string) => {
-    setActionEnCoursId(missionId);
-    setErreur(null);
-    try {
-      await amorcerPaiementMission(missionId, transactionId);
-      setSucces("Paiement transmis, en cours de confirmation.");
-      charger();
-    } catch (err) {
-      setErreur(messageErreur(err));
     } finally {
       setActionEnCoursId(null);
     }
@@ -188,9 +204,13 @@ export function MicroJobsPage() {
   return (
     <div className="page-content">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <SectionHead eyebrow="Place de marché" title="Micro-jobs entre membres de la communauté" />
+        <SectionHead
+          eyebrow="Place de marché"
+          title="Micro-jobs entre membres de la communauté"
+          desc="Publiez une demande et payez-la immédiatement : elle apparaît sur la place de marché dès le paiement confirmé, prête à être acceptée."
+        />
         <Btn variant="primary" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Fermer" : "+ Proposer un service"}
+          {showForm ? "Fermer" : "+ Publier une demande"}
         </Btn>
       </div>
 
@@ -199,27 +219,47 @@ export function MicroJobsPage() {
         <SuccessBanner>{succes}</SuccessBanner>
       </div>
 
+      {offreEnAttentePaiement && (
+        <Card className="anim-pop-in" style={{ marginBottom: "24px", border: "1px solid color-mix(in srgb, var(--action-deep) 30%, transparent)", background: "var(--action-tint)" }}>
+          <p style={{ margin: "0 0 4px", fontWeight: 700, color: "var(--action-deep)" }}>Paiement requis pour publier « {offreEnAttentePaiement.titre} »</p>
+          <p style={{ margin: "0 0 12px", fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>
+            Le montant est sécurisé (séquestre) jusqu'à ce qu'un prestataire termine et que vous validiez le travail. Tant que ce n'est pas payé, votre offre n'est visible de personne.
+          </p>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <KkiapayButton
+              montant={offreEnAttentePaiement.prix}
+              reference={offreEnAttentePaiement.id}
+              onSucces={(txId) => payerOffre(offreEnAttentePaiement.id, txId)}
+              disabled={actionEnCoursId === offreEnAttentePaiement.id}
+            />
+            <Btn variant="ghost" size="sm" loading={actionEnCoursId === offreEnAttentePaiement.id} onClick={() => annulerOffreNonPayee(offreEnAttentePaiement.id)}>
+              Annuler cette offre
+            </Btn>
+          </div>
+        </Card>
+      )}
+
       {showForm && (
         <Card className="anim-slide-up" style={{ marginBottom: "24px" }}>
           <form onSubmit={publierOffre} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <Field label="Titre du service" required>
+            <Field label="Titre de la demande" required>
               <TextInput value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex. Cours particulier de maths, niveau 3ème" />
             </Field>
             <Field label="Description" required>
               <TextArea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
             </Field>
-            <Field label="Prix (FCFA)" required>
+            <Field label="Prix (FCFA)" required helper="À payer immédiatement après publication pour rendre l'offre visible.">
               <TextInput type="number" min="0" value={prix} onChange={(e) => setPrix(e.target.value)} />
             </Field>
-            <Btn type="submit" variant="primary" loading={enCoursCreation}>Publier l'offre</Btn>
+            <Btn type="submit" variant="primary" loading={enCoursCreation}>Publier et payer</Btn>
           </form>
         </Card>
       )}
 
       <div style={{ marginBottom: "32px" }}>
-        <SectionHead title="Offres disponibles" />
+        <SectionHead title="Offres disponibles" desc="Paiement déjà confirmé — acceptez-en une pour être rémunéré une fois le travail validé." />
         {offres.length === 0 ? (
-          <EmptyState icon={<Briefcase size={24} />} title="Aucune offre disponible" desc="Soyez le premier à proposer un service." />
+          <EmptyState icon={<Briefcase size={24} />} title="Aucune offre disponible" desc="Soyez le premier à publier une demande." />
         ) : (
           <div className="space-y-3">
             {offres.map((o) => (
@@ -231,7 +271,11 @@ export function MicroJobsPage() {
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <p style={{ margin: "0 0 8px", fontWeight: 700, color: "var(--primary-deep)" }}>{o.prix.toLocaleString("fr-FR")} FCFA</p>
-                    {o.prestataire_id !== utilisateur?.id && (
+                    {o.client_id === utilisateur?.id ? (
+                      <Badge tone="info">Votre demande</Badge>
+                    ) : estEleve ? (
+                      <Badge tone="neutral">Réservé aux adultes</Badge>
+                    ) : (
                       <Btn variant="primary" size="sm" loading={actionEnCoursId === o.id} onClick={() => accepter(o.id)} leftIcon={<Handshake size={14} />}>
                         Accepter
                       </Btn>
@@ -252,8 +296,8 @@ export function MicroJobsPage() {
           <div className="space-y-3">
             {missions.map((m) => {
               const offre = offreParMission[m.offre_id];
-              const estClient = m.client_id === utilisateur?.id;
-              const estPrestataire = offre?.prestataire_id === utilisateur?.id;
+              const estClient = offre?.client_id === utilisateur?.id;
+              const estPrestataire = m.prestataire_id === utilisateur?.id;
               return (
                 <Card key={m.id} className="anim-float-in">
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "8px" }}>
@@ -267,10 +311,7 @@ export function MicroJobsPage() {
                   </div>
 
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                    {estClient && m.statut === "en_cours" && !m.paiement_confirme && (
-                      <KkiapayButton montant={m.prix_paye} reference={m.id} onSucces={(txId) => payer(m.id, txId)} disabled={actionEnCoursId === m.id} />
-                    )}
-                    {estPrestataire && m.statut === "en_cours" && m.paiement_confirme && (
+                    {estPrestataire && m.statut === "en_cours" && (
                       <Btn variant="primary" size="sm" loading={actionEnCoursId === m.id} onClick={() => declarerFin(m.id)}>
                         Déclarer la mission terminée
                       </Btn>

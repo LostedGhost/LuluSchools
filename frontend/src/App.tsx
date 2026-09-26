@@ -411,11 +411,11 @@ function App() {
               }
             />
 
-            {/* Micro-jobs (enseignant, tuteur, admin etablissement, admin ministeriel) */}
+            {/* Micro-jobs : publier/payer ouvert a tous les roles, accepter reserve aux non-eleves (verifie cote backend) */}
             <Route
               path="/micro-jobs"
               element={
-                <RequireAuth roles={["enseignant", "tuteur", "admin_etablissement", "admin_ministeriel"]}>
+                <RequireAuth roles={["enseignant", "tuteur", "admin_etablissement", "admin_ministeriel", "eleve"]}>
                   <MicroJobsPage />
                 </RequireAuth>
               }

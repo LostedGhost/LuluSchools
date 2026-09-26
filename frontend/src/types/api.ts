@@ -431,7 +431,7 @@ export interface ParticipationLiveOut {
    Phase 2/3 — UC-18 : micro-jobs et séquestre
    ═══════════════════════════════════════════════════════════════ */
 
-export type StatutOffreMicroJob = "ouverte" | "fermee";
+export type StatutOffreMicroJob = "en_attente_paiement" | "ouverte" | "fermee" | "annulee";
 export type StatutMissionMicroJob =
   | "en_cours"
   | "terminee_declaree"
@@ -443,17 +443,18 @@ export type StatutContestationMicroJob = "en_attente" | "acceptee" | "rejetee";
 
 export interface OffreMicroJobOut {
   id: string;
-  prestataire_id: string;
+  client_id: string;
   titre: string;
   description: string;
   prix: number;
   statut: StatutOffreMicroJob;
+  paiement_confirme: boolean;
 }
 
 export interface MissionMicroJobOut {
   id: string;
   offre_id: string;
-  client_id: string;
+  prestataire_id: string;
   statut: StatutMissionMicroJob;
   prix_paye: number;
   paiement_confirme: boolean;
