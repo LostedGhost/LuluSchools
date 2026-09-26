@@ -186,6 +186,28 @@ def test_annonce_reservee_a_son_propre_etablissement(marketplace_ctx, client, cl
     assert len(ok.json()["photos"]) == 1
 
 
+def test_admin_etablissement_peut_consulter_le_catalogue_de_son_etablissement(
+    marketplace_ctx, client, classe_avec_enseignant_et_eleve
+):
+    """UC-20 : l'A+ doit pouvoir consulter les annonces de son etablissement de sa
+    propre initiative, pas seulement via un signalement qui lui est notifie."""
+    ctx = marketplace_ctx
+    annonce = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"]).json()
+
+    catalogue = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/marketplace/annonces", headers=ctx["admin_headers"]
+    )
+    assert catalogue.status_code == 200
+    assert annonce["id"] in [a["id"] for a in catalogue.json()["items"]]
+
+    detail = client.get(f"/api/v1/marketplace/annonces/{annonce['id']}", headers=ctx["admin_headers"])
+    assert detail.status_code == 200
+
+    autre_etablissement_admin = classe_avec_enseignant_et_eleve["admin_headers"]
+    refus = client.get(f"/api/v1/marketplace/annonces/{annonce['id']}", headers=autre_etablissement_admin)
+    assert refus.status_code == 403
+
+
 def test_vendeur_ne_peut_pas_acheter_sa_propre_annonce(marketplace_ctx, client):
     ctx = marketplace_ctx
     annonce = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"]).json()

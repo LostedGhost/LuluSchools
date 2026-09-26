@@ -472,3 +472,83 @@ export interface ContestationMicroJobOut {
   statut: StatutContestationMicroJob;
   decision_motif: string | null;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 4 — UC-20/21/22 : marketplace étudiante
+   ═══════════════════════════════════════════════════════════════ */
+
+export type CategorieAnnonce =
+  | "fournitures_scolaires"
+  | "manuels_livres"
+  | "vetements_uniformes"
+  | "electronique"
+  | "autre";
+export type EtatArticle = "neuf" | "tres_bon_etat" | "bon_etat" | "use";
+export type StatutAnnonce = "disponible" | "reservee" | "vendue" | "retiree";
+export type StatutTransactionMarketplace =
+  | "en_attente_paiement"
+  | "paiement_confirme"
+  | "remise_declaree"
+  | "confirmee"
+  | "contestee"
+  | "finalisee"
+  | "remboursee"
+  | "annulee";
+export type StatutContestationMarketplace = "en_attente" | "acceptee" | "rejetee";
+
+export interface AnnonceMarketplaceOut {
+  id: string;
+  etablissement_id: string;
+  vendeur_id: string;
+  titre: string;
+  description: string;
+  categorie: CategorieAnnonce;
+  etat: EtatArticle;
+  prix: number;
+  statut: StatutAnnonce;
+}
+
+export interface PhotoAnnonceLienOut {
+  id: string;
+  url: string;
+  ordre: number;
+}
+
+export interface AnnonceMarketplaceDetailOut extends AnnonceMarketplaceOut {
+  photos: PhotoAnnonceLienOut[];
+}
+
+export interface AnnoncesMarketplacePage {
+  items: AnnonceMarketplaceOut[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface SignalementAnnonceOut {
+  id: string;
+  annonce_id: string;
+  signale_par_id: string;
+  traite: boolean;
+  decision: string | null;
+}
+
+export interface TransactionMarketplaceOut {
+  id: string;
+  annonce_id: string;
+  acheteur_id: string;
+  statut: StatutTransactionMarketplace;
+  prix_paye: number;
+  paiement_confirme: boolean;
+  date_remise_declaree: string | null;
+  date_limite_confirmation: string | null;
+  reference_paiement_vendeur: string | null;
+}
+
+export interface ContestationMarketplaceOut {
+  id: string;
+  transaction_id: string;
+  motif: string;
+  statut: StatutContestationMarketplace;
+  decision_motif: string | null;
+}

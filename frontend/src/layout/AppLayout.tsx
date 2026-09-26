@@ -31,6 +31,7 @@ import {
   CalendarDays,
   Handshake,
   Gavel,
+  ShoppingBag,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -99,6 +100,7 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/eleve/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
       { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
       { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
+      { to: "/eleve/marketplace", label: "Marketplace", icon: <ShoppingBag size={iconSize} /> },
       { to: "/messagerie", label: "Messagerie", icon: <MessageCircle size={iconSize} /> },
     ];
   }
@@ -129,6 +131,7 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/admin-etablissement/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
       { to: "/admin-etablissement/evenements", label: "Événements", icon: <CalendarDays size={iconSize} /> },
       { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
+      { to: "/admin-etablissement/marketplace", label: "Marketplace", icon: <ShoppingBag size={iconSize} /> },
       { to: "/valider-acces", label: "Valider un accès", icon: <ShieldCheck size={iconSize} /> },
       { to: "/admin-etablissement/signalements", label: "Signalements", icon: <Flag size={iconSize} /> },
     ];

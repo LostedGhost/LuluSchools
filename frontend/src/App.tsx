@@ -61,6 +61,8 @@ import { BilletteriePage } from "./pages/billetterie/BilletteriePage";
 import { ValiderAccesPage } from "./pages/controle_acces/ValiderAccesPage";
 import { MicroJobsPage } from "./pages/micro_jobs/MicroJobsPage";
 import { MicroJobsArbitragePage } from "./pages/admin_ministeriel/MicroJobsArbitragePage";
+import { MarketplacePage } from "./pages/eleve/MarketplacePage";
+import { MarketplaceAdminPage } from "./pages/admin_etablissement/MarketplaceAdminPage";
 
 function App() {
   return (
@@ -226,6 +228,16 @@ function App() {
                 </RequireAuth>
               }
             />
+            <Route
+              path="/eleve/marketplace"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <EleveProfileProvider>
+                    <MarketplacePage />
+                  </EleveProfileProvider>
+                </RequireAuth>
+              }
+            />
 
             {/* Enseignant */}
             <Route
@@ -380,6 +392,16 @@ function App() {
                 <RequireAuth roles={["admin_etablissement"]}>
                   <AdminEtabProvider>
                     <EvenementsAdminPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/marketplace"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <MarketplaceAdminPage />
                   </AdminEtabProvider>
                 </RequireAuth>
               }

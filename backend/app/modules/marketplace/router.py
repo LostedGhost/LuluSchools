@@ -93,6 +93,18 @@ def _verifier_eleve_de_l_etablissement(db: Session, utilisateur: Utilisateur, et
     return eleve
 
 
+def _verifier_acces_lecture_marketplace(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> None:
+    """Lecture (catalogue + detail) ouverte a l'Eleve du bon etablissement ET a l'A+
+    de ce meme etablissement : UC-20 prevoit explicitement que l'A+ puisse retirer une
+    annonce "sans devoir attendre un signalement", ce qui suppose qu'il puisse consulter
+    le catalogue de son etablissement de sa propre initiative, pas seulement via les
+    signalements qui lui sont notifies."""
+    if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    else:
+        _verifier_eleve_de_l_etablissement(db, utilisateur, etablissement_id)
+
+
 def _transaction_en_cours(db: Session, annonce_id: str) -> TransactionMarketplace | None:
     return (
         db.query(TransactionMarketplace)
@@ -204,9 +216,9 @@ def lister_annonces(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=60),
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.ADMIN_ETABLISSEMENT)),
 ) -> AnnoncesMarketplacePage:
-    _verifier_eleve_de_l_etablissement(db, utilisateur, etablissement_id)
+    _verifier_acces_lecture_marketplace(db, utilisateur, etablissement_id)
 
     requete = db.query(AnnonceMarketplace).filter(
         AnnonceMarketplace.etablissement_id == etablissement_id, AnnonceMarketplace.statut == statut
@@ -235,12 +247,12 @@ def obtenir_annonce(
     annonce_id: str,
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
-    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.ADMIN_ETABLISSEMENT)),
 ) -> AnnonceMarketplaceDetailOut:
     annonce = db.get(AnnonceMarketplace, annonce_id)
     if annonce is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Annonce introuvable.")
-    _verifier_eleve_de_l_etablissement(db, utilisateur, annonce.etablissement_id)
+    _verifier_acces_lecture_marketplace(db, utilisateur, annonce.etablissement_id)
     return _serialiser_annonce_detail(db, annonce, files_client)
 
 
