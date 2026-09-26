@@ -8,6 +8,7 @@ import {
 } from "../api/etablissements";
 import { Carousel } from "../components/Carousel";
 import { lienGoogleMaps } from "../utils/geo";
+import { photoParDefaut } from "../utils/photosParDefaut";
 import {
   Search,
   Building2,
@@ -44,10 +45,15 @@ function EtablissementCard({ etab }: { etab: EtablissementVitrine }) {
     };
   }, [etab.id]);
 
+  const imagesCarrousel =
+    photos.length > 0
+      ? photos.map((p) => ({ id: p.id, url: p.url }))
+      : [{ id: "defaut", url: photoParDefaut(etab.type, etab.id).url }];
+
   return (
     <div className="vitrine-card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ padding: "var(--space-3)" }}>
-        <Carousel images={photos.map((p) => ({ id: p.id, url: p.url }))} />
+        <Carousel images={imagesCarrousel} />
       </div>
       <div style={{ padding: "0 var(--space-5) var(--space-5)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>

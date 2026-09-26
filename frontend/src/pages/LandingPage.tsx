@@ -4,6 +4,7 @@ import { FloatingXPBadge, ProgressCard3D, XPBar } from "../components/gamificati
 import { Tilt3D } from "../components/Tilt3D";
 import { DiplomaCard, FloatingMedal } from "../components/FloatingObjects3D";
 import { vitrinePublique, type VitrinePublique } from "../api/etablissements";
+import { PHOTO_HERO_CLASSE } from "../utils/photosParDefaut";
 import {
   ChevronRight,
   Zap,
@@ -660,6 +661,31 @@ export function LandingPage() {
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── Bande photo : vraie vie de classe (photo libre de droits, Pexels) ── */}
+      <section
+        style={{
+          position: "relative",
+          minHeight: "340px",
+          display: "flex",
+          alignItems: "center",
+          backgroundImage: `linear-gradient(90deg, rgba(11,18,14,0.82) 0%, rgba(11,18,14,0.45) 55%, rgba(11,18,14,0.15) 100%), url(${PHOTO_HERO_CLASSE})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 24px", width: "100%" }}>
+          <p className="text-eyebrow" style={{ color: "rgba(255,255,255,0.75)", marginBottom: "12px" }}>
+            Sur le terrain
+          </p>
+          <h2 className="text-headline" style={{ margin: "0 0 16px", color: "#fff", maxWidth: "36ch" }}>
+            La vraie vie d'une classe, chaque jour.
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.85)", maxWidth: "48ch", fontSize: "var(--text-lg)", margin: 0 }}>
+            Derrière chaque tableau de bord, des élèves, des enseignants et des établissements bien réels — du primaire au supérieur.
+          </p>
         </div>
       </section>
 

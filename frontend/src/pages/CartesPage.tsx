@@ -1,49 +1,93 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { annuairePublic, type EtablissementVitrine } from "../api/etablissements";
 import { lienGoogleMaps } from "../utils/geo";
-import {
-  Search,
-  Building2,
-  GraduationCap,
-  School,
-  ChevronRight,
-  ChevronLeft,
-  ArrowLeft,
-  MapPin,
-  Navigation,
-} from "lucide-react";
+import { Search, Building2, GraduationCap, School, ArrowLeft, MapPin, Navigation } from "lucide-react";
+
+// Corrige un problème connu de Leaflet + bundlers (Vite) : les URLs d'icônes par
+// défaut, calculées depuis import.meta.url, ne résolvent pas correctement - on les
+// réimporte explicitement comme assets Vite plutôt que de les laisser casser en silence.
+delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
 
 const TYPE_LABEL: Record<string, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur" };
 const TYPE_ICON: Record<string, typeof School> = { EP: School, ES: Building2, UP: GraduationCap };
 
-const PAGE_SIZE = 12;
+// Centre par défaut : Cotonou, en l'absence de tout établissement géolocalisé.
+const CENTRE_PAR_DEFAUT: [number, number] = [6.3703, 2.3912];
+const PAGE_LIMIT = 60; // plafond serveur (voir annuaire_public côté backend)
+
+function AjusterVue({ points }: { points: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], 14);
+    } else {
+      map.fitBounds(points, { padding: [40, 40] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(points)]);
+  return null;
+}
+
+function VolerVersSelection({ point }: { point: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (point) map.flyTo(point, 16);
+  }, [point, map]);
+  return null;
+}
 
 export function CartesPage() {
   const [items, setItems] = useState<EtablissementVitrine[] | null>(null);
-  const [total, setTotal] = useState(0);
   const [erreur, setErreur] = useState(false);
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "EP" | "ES" | "UP">("");
-  const [page, setPage] = useState(0);
+  const [selectionId, setSelectionId] = useState<string | null>(null);
 
   useEffect(() => {
     setItems(null);
     setErreur(false);
-    const t = setTimeout(() => {
-      annuairePublic({ q: q || undefined, type: type || undefined, limit: PAGE_SIZE, offset: page * PAGE_SIZE })
-        .then((res) => {
-          setItems(res.data.items);
-          setTotal(res.data.total);
-        })
-        .catch(() => setErreur(true));
+    setSelectionId(null);
+    const t = setTimeout(async () => {
+      try {
+        // Recupere TOUTES les pages correspondant au filtre (une carte n'a pas de
+        // pagination - on veut chaque etablissement filtre simultanement).
+        const premiere = await annuairePublic({ q: q || undefined, type: type || undefined, limit: PAGE_LIMIT, offset: 0 });
+        let tous = premiere.data.items;
+        let recupere = tous.length;
+        while (recupere < premiere.data.total) {
+          const suite = await annuairePublic({ q: q || undefined, type: type || undefined, limit: PAGE_LIMIT, offset: recupere });
+          tous = tous.concat(suite.data.items);
+          recupere += suite.data.items.length;
+          if (suite.data.items.length === 0) break;
+        }
+        setItems(tous);
+      } catch {
+        setErreur(true);
+      }
     }, 250);
     return () => clearTimeout(t);
-  }, [q, type, page]);
+  }, [q, type]);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const itemsAvecPosition = items?.filter((e) => e.latitude !== null && e.longitude !== null) ?? [];
-  const itemsSansPosition = items?.filter((e) => e.latitude === null || e.longitude === null) ?? [];
+  const avecPosition = useMemo(
+    () => (items ?? []).filter((e): e is EtablissementVitrine & { latitude: number; longitude: number } => e.latitude !== null && e.longitude !== null),
+    [items],
+  );
+  const sansPosition = (items ?? []).filter((e) => e.latitude === null || e.longitude === null);
+  const points: [number, number][] = avecPosition.map((e) => [e.latitude, e.longitude]);
+  const selection = avecPosition.find((e) => e.id === selectionId) ?? null;
 
   return (
     <div style={{ background: "var(--bg)", color: "var(--ink)", minHeight: "100dvh" }}>
@@ -51,7 +95,7 @@ export function CartesPage() {
         className="card-glass"
         style={{ position: "sticky", top: 0, zIndex: 10, borderRadius: 0, borderLeft: "none", borderRight: "none", borderTop: "none" }}
       >
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px", height: "64px", display: "flex", alignItems: "center", gap: "16px" }}>
+        <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 24px", height: "64px", display: "flex", alignItems: "center", gap: "16px" }}>
           <Link to="/" style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--ink-soft)", fontWeight: 600, fontSize: "var(--text-sm)", textDecoration: "none" }}>
             <ArrowLeft size={16} /> Accueil
           </Link>
@@ -64,24 +108,21 @@ export function CartesPage() {
         </div>
       </header>
 
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 24px 80px" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "48px 24px 80px" }}>
         <p className="text-eyebrow" style={{ marginBottom: "10px" }}>Cartes</p>
         <h1 className="text-headline" style={{ margin: "0 0 12px", color: "var(--ink)" }}>
           Se diriger vers un établissement
         </h1>
         <p style={{ color: "var(--ink-soft)", maxWidth: "60ch", margin: "0 0 32px", fontSize: "var(--text-lg)" }}>
-          Retrouvez la position de chaque établissement partenaire et ouvrez l'itinéraire dans Google Maps.
+          Carte interactive de tous les établissements partenaires (OpenStreetMap). Cliquez un repère pour ses informations, ou lancez l'itinéraire Google Maps.
         </p>
 
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "32px" }}>
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "24px" }}>
           <div style={{ position: "relative", flex: "1 1 280px" }}>
             <Search size={16} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--ink-faint)" }} />
             <input
               value={q}
-              onChange={(e) => {
-                setPage(0);
-                setQ(e.target.value);
-              }}
+              onChange={(e) => setQ(e.target.value)}
               placeholder="Rechercher un établissement..."
               className="field-input"
               style={{ width: "100%", paddingLeft: "40px" }}
@@ -93,10 +134,7 @@ export function CartesPage() {
                 key={t || "tous"}
                 type="button"
                 className={`btn ${type === t ? "btn-primary" : "btn-outline"} btn-sm`}
-                onClick={() => {
-                  setPage(0);
-                  setType(t);
-                }}
+                onClick={() => setType(t)}
               >
                 {t === "" ? "Tous" : TYPE_LABEL[t]}
               </button>
@@ -104,100 +142,87 @@ export function CartesPage() {
           </div>
         </div>
 
-        {items === null && !erreur && (
-          <div className="grid-3">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="vitrine-card">
-                <div className="skeleton" style={{ height: "18px", width: "70%", marginBottom: "10px" }} />
-                <div className="skeleton" style={{ height: "14px", width: "50%" }} />
-              </div>
-            ))}
-          </div>
-        )}
-
         {erreur && (
           <div className="card-soft" style={{ textAlign: "center", padding: "48px 24px" }}>
             <p style={{ color: "var(--ink-soft)", margin: 0 }}>Impossible de charger la carte pour le moment.</p>
           </div>
         )}
 
-        {items && items.length === 0 && !erreur && (
-          <div className="card-soft" style={{ textAlign: "center", padding: "48px 24px" }}>
-            <MapPin size={28} style={{ color: "var(--ink-faint)", marginBottom: "12px" }} aria-hidden="true" />
-            <p style={{ color: "var(--ink-soft)", margin: 0 }}>Aucun établissement ne correspond à votre recherche.</p>
-          </div>
+        {items === null && !erreur && (
+          <div className="skeleton" style={{ height: "560px", borderRadius: "var(--radius-lg)" }} />
         )}
 
-        {items && items.length > 0 && (
-          <>
-            <div className="grid-3">
-              {itemsAvecPosition.map((etab) => {
-                const Icon = TYPE_ICON[etab.type];
-                return (
-                  <a
-                    key={etab.id}
-                    href={lienGoogleMaps(etab.latitude!, etab.longitude!)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="vitrine-card card-hover"
-                    style={{ textDecoration: "none", color: "inherit", display: "block" }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-                      <span
-                        style={{
-                          width: "40px", height: "40px", borderRadius: "var(--radius-md)",
-                          background: "var(--primary-tint)", color: "var(--primary-deep)",
-                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        }}
-                        aria-hidden="true"
-                      >
-                        <Icon size={20} />
+        {items !== null && !erreur && (
+          <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: "16px", alignItems: "stretch" }}>
+            <div
+              className="card-soft"
+              style={{ height: "560px", overflowY: "auto", padding: "var(--space-3)", display: "flex", flexDirection: "column", gap: "6px" }}
+            >
+              {avecPosition.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "24px 8px", color: "var(--ink-faint)" }}>
+                  <MapPin size={22} style={{ marginBottom: "8px" }} aria-hidden="true" />
+                  <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>Aucun établissement géolocalisé ne correspond à votre recherche.</p>
+                </div>
+              ) : (
+                avecPosition.map((etab) => {
+                  const Icon = TYPE_ICON[etab.type];
+                  const actif = etab.id === selectionId;
+                  return (
+                    <button
+                      key={etab.id}
+                      type="button"
+                      onClick={() => setSelectionId(etab.id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px",
+                        borderRadius: "var(--radius-md)", border: "none", textAlign: "left", cursor: "pointer",
+                        background: actif ? "var(--primary-tint)" : "transparent",
+                        color: actif ? "var(--primary-deep)" : "var(--ink)",
+                      }}
+                    >
+                      <Icon size={16} style={{ flexShrink: 0 }} aria-hidden="true" />
+                      <span style={{ fontSize: "var(--text-sm)", fontWeight: actif ? 700 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {etab.nom}
                       </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <h3 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-base)", fontWeight: 700, margin: 0, color: "var(--ink)" }}>
-                          {etab.nom}
-                        </h3>
-                        <span className="chip chip-neutral" style={{ fontSize: "11px", marginTop: "4px" }}>{TYPE_LABEL[etab.type]}</span>
-                      </div>
-                    </div>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--primary-deep)" }}>
-                      <Navigation size={14} aria-hidden="true" /> Itinéraire Google Maps
-                    </div>
-                  </a>
-                );
-              })}
+                    </button>
+                  );
+                })
+              )}
+              {sansPosition.length > 0 && (
+                <p style={{ margin: "8px 4px 0", fontSize: "var(--text-xs)", color: "var(--ink-faint)" }}>
+                  + {sansPosition.length} sans position renseignée
+                </p>
+              )}
             </div>
 
-            {itemsSansPosition.length > 0 && (
-              <p style={{ marginTop: "24px", fontSize: "var(--text-sm)", color: "var(--ink-faint)" }}>
-                {itemsSansPosition.length} établissement{itemsSansPosition.length > 1 ? "s" : ""} de cette page n'{itemsSansPosition.length > 1 ? "ont" : "a"} pas encore de position renseignée.
-              </p>
-            )}
-
-            {totalPages > 1 && (
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "40px" }}>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                >
-                  <ChevronLeft size={14} /> Précédent
-                </button>
-                <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>
-                  Page {page + 1} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  disabled={page + 1 >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                >
-                  Suivant <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
-          </>
+            <div style={{ height: "560px", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--border)" }}>
+              <MapContainer center={CENTRE_PAR_DEFAUT} zoom={7} style={{ height: "100%", width: "100%" }}>
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <AjusterVue points={points} />
+                <VolerVersSelection point={selection ? [selection.latitude, selection.longitude] : null} />
+                {avecPosition.map((etab) => (
+                  <Marker key={etab.id} position={[etab.latitude, etab.longitude]}>
+                    <Popup>
+                      <strong>{etab.nom}</strong>
+                      <br />
+                      {TYPE_LABEL[etab.type]} · {etab.statut === "public" ? "Public" : "Privé"}
+                      <br />
+                      <a
+                        href={lienGoogleMaps(etab.latitude, etab.longitude)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "6px", fontWeight: 700 }}
+                      >
+                        <Navigation size={12} /> Itinéraire Google Maps
+                      </a>
+                    </Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+            </div>
+          </div>
         )}
       </div>
     </div>

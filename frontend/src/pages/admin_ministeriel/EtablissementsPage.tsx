@@ -19,6 +19,7 @@ import {
 import { LocationPicker } from "../../components/LocationPicker";
 import { Building2, MapPin } from "lucide-react";
 import { lienGoogleMaps } from "../../utils/geo";
+import { PHOTOS_PAR_DEFAUT } from "../../utils/photosParDefaut";
 import { estRempli, estEmailValide } from "../../utils/validation";
 
 export function EtablissementsPage() {
@@ -197,7 +198,7 @@ export function EtablissementsPage() {
           <SkeletonCard />
         </div>
       ) : etablissements.length === 0 ? (
-        <EmptyState icon={<Building2 size={24} />} title="Aucun établissement" desc="Créez le premier établissement du réseau ci-dessus." />
+        <EmptyState photo={PHOTOS_PAR_DEFAUT.ES[0].url} title="Aucun établissement" desc="Créez le premier établissement du réseau ci-dessus." />
       ) : (
         <div className="grid-3">
           {etablissements.map((e) => (

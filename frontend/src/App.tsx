@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
@@ -8,7 +9,9 @@ import { AdminEtabProvider } from "./admin/AdminEtabContext";
 
 import { LandingPage } from "./pages/LandingPage";
 import { EtablissementsAnnuairePage } from "./pages/EtablissementsAnnuairePage";
-import { CartesPage } from "./pages/CartesPage";
+// Chargée à la demande : Leaflet + react-leaflet ne doivent jamais alourdir le
+// bundle des autres pages (même principe que StarfieldScene, voir LandingPage.tsx).
+const CartesPage = lazy(() => import("./pages/CartesPage").then((m) => ({ default: m.CartesPage })));
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
@@ -68,7 +71,14 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/etablissements" element={<EtablissementsAnnuairePage />} />
-            <Route path="/cartes" element={<CartesPage />} />
+            <Route
+              path="/cartes"
+              element={
+                <Suspense fallback={<div className="page-content" />}>
+                  <CartesPage />
+                </Suspense>
+              }
+            />
             <Route
               path="/connexion"
               element={

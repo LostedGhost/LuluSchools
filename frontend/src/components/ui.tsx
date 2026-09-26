@@ -353,18 +353,32 @@ export function SectionHead({
 
 export function EmptyState({
   icon,
+  photo,
   title,
   desc,
   action,
 }: {
   icon?: ReactNode;
+  /** Photo optionnelle (URL) affichée au-dessus du titre à la place de l'icône -
+   * réservé aux cas où une vraie photo apporte du contexte (voir utils/photosParDefaut.ts) ;
+   * l'icône reste le défaut partout ailleurs (identité visuelle, voir ADR-007). */
+  photo?: string;
   title: string;
   desc?: string;
   action?: ReactNode;
 }) {
   return (
     <div className="empty-state">
-      <span className="empty-state-icon" aria-hidden="true">{icon ?? <Inbox size={24} />}</span>
+      {photo ? (
+        <img
+          src={photo}
+          alt=""
+          aria-hidden="true"
+          style={{ width: "100%", maxWidth: "280px", aspectRatio: "16 / 10", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "var(--space-3)" }}
+        />
+      ) : (
+        <span className="empty-state-icon" aria-hidden="true">{icon ?? <Inbox size={24} />}</span>
+      )}
       <p className="empty-state-title">{title}</p>
       {desc && <p className="empty-state-desc">{desc}</p>}
       {action}
