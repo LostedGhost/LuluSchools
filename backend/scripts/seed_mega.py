@@ -137,7 +137,7 @@ from app.modules.visites_virtuelles.models import TypeVisiteVirtuelle, VisiteVir
 # ═══════════════════════════════════════════════════════════════════════════
 
 MOT_DE_PASSE_COMMUN = "Password1!"
-DOMAINE_SEED = "seed.luluschools.test"
+DOMAINE_SEED = "seed.luluschools.example"
 
 
 class Config:
