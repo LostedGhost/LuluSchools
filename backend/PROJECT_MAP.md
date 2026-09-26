@@ -63,7 +63,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `mon_espace_router` expose aussi `GET /etablissements/{id}/inscriptions-a-valider` (A+, ajouté pour l'étape 6 frontend — sans lui, l'admin n'a aucun moyen de découvrir les inscriptions `soumise` en attente).
 
 ### app/modules/recrutement/
-- `models.py` — `Poste`, `CritereDocumentPoste` (coefficient + seuil par type de document), `Candidature`, `DocumentCandidature` (note IA), `VerificationCasierJudiciaire` (1-1, hors pipeline IA, contenu chiffre Fernet stocke en base `contenu_chiffre` — jamais sur LuluFiles, voir docstring + `app/core/crypto.py`, Art. 395 ; migration 0022, remplace l'ancien `chemin_fichier_local` sur disque, incompatible avec le plan Render gratuit sans disque persistant), `Contestation`, `Contrat` (+ `date_fin`, + `signature_image_lulufiles_id`), `PropositionReconduction`. **Bugs corriges lors du test manuel en navigateur (etape 6)** :
+- `models.py` — `Poste`, `CritereDocumentPoste` (coefficient + seuil par type de document), `Candidature`, `DocumentCandidature` (note IA), `VerificationCasierJudiciaire` (1-1, hors pipeline IA, contenu chiffre Fernet stocke en base `contenu_chiffre` — jamais sur LuluFiles, voir docstring + `app/core/crypto.py`, Art. 395 ; remplace l'ancien `chemin_fichier_local` sur disque, incompatible avec le plan Render gratuit sans disque persistant), `Contestation`, `Contrat` (+ `date_fin`, + `signature_image_lulufiles_id`), `PropositionReconduction`. **Bugs corriges lors du test manuel en navigateur (etape 6)** :
   1. `DocumentCandidatureOut` n'exposait pas `id`, rendant l'ecran de revision manuelle (`POST /documents-candidature/{id}/noter-manuellement`) inutilisable en pratique (aucun moyen de connaitre l'id du document a noter depuis la reponse de l'API) — corrige.
   2. `ContratOut` n'exposait pas `etablissement_id`, rendant impossible pour le frontend enseignant de savoir dans quel etablissement publier un cours/devoir a partir de la liste de ses contrats — corrige.
   3. Aucune route ne permettait de lister les candidatures d'un poste (`GET /postes/{id}/candidatures`) : sans elle, un A+ n'avait litteralement aucun moyen d'utiliser `POST /candidatures/{id}/contrat` sans deja connaitre l'id de la candidature — ajoutee.
@@ -119,27 +119,11 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `router.py` — rôles autorisés (prestataire ou client) : Enseignant/Tuteur/A+/A++, **Élève structurellement exclu** (âge minimum légal de rémunération d'un mineur hors périmètre loi n° 2017-20, ADR-008). Validation tacite après 5 jours appliquée paresseusement (`_appliquer_validation_tacite`, pas de tâche planifiée). Arbitrage des contestations et reversement au prestataire réservés à l'**A++** (pas d'établissement résoluble pour une mission — un Tuteur prestataire n'en a aucun — correction du premier jet du contrat).
 
 ### alembic/versions/
-- `0001_identite_initial.py` — utilisateurs, tuteurs, otp_verifications.
-- `0002_identite_login_id.py` — ajoute `login_id`/`mot_de_passe_temporaire`, rend `email` optionnel.
-- `0003_etablissements_classes.py` — etablissements, admins_etablissement, classes.
-- `0004_inscriptions.py` — eleves, inscriptions.
-- `0005_enseignants.py` — enseignants.
-- `0006_recrutement.py` — postes, criteres_document_poste, candidatures, documents_candidature, verifications_casier_judiciaire, contestations, contrats, propositions_reconduction.
-- `0007_contrats_date_fin.py` — ajoute `date_fin` sur `contrats` (nécessaire à la fenêtre de reconduction).
-- `0008_pedagogie_evaluations_actes.py` — cours, quiz, tentatives_quiz, devoirs, soumissions, referentiels_coefficients, bulletins, types_acte_academique, demandes_acte_academique.
-- `0009_contrats_signature_image.py` — ajoute `signature_image_lulufiles_id` sur `contrats` (signature dessinée, remplace le nom tapé — ADR-004).
-- `0010_formulaires_llm.py` — recrée `soumissions` en formulaire de réponses (plus de fichier joint), ajoute `questions_devoir`/`reponses_soumission`/`questions_quiz`, `matiere` sur `devoirs`, `reponses` sur `tentatives_quiz`, `kkiapay_transaction_id` sur `demandes_acte_academique`. **Note** : recrée la table `soumissions` plutôt que d'altérer l'enum Postgres en place — acceptable uniquement parce qu'aucune donnée réelle n'existait encore dans ces tables ; ne pas reproduire ce pattern une fois des données réelles présentes.
-- `0011_eleves_nationalite.py` — ajoute `nationalite` (enum NATIONALE/ETRANGERE) sur `eleves`, nécessaire au nouveau format de matricule. **Note** : crée explicitement le type enum Postgres via `nationalite_enum.create(op.get_bind(), checkfirst=True)` avant le `ADD COLUMN` — `op.add_column` seul ne déclenche pas la création automatique du type (contrairement à une `Table` gérée par les métadonnées SQLAlchemy).
-- `0012_soumissions_en_correction.py` — ajoute la valeur `EN_CORRECTION` à l'enum Postgres `statutsoumission` (voir ADR-005, correction IA passée en arrière-plan). **Note** : `ALTER TYPE ... ADD VALUE` doit sortir du bloc transactionnel d'Alembic (`op.get_context().autocommit_block()`) — pattern standard Postgres, sinon erreur "unsafe use of new value". Pas de downgrade réel possible (Postgres ne supporte pas `DROP VALUE` sur un enum).
-- `0013_designations_controleur.py` — table `designations_controleur` (UC-11/12/17).
-- `0014_services_scolaires.py` — `lignes_transport`, `tickets_transport`, `types_repas_cantine`, `tickets_cantine` (UC-11/12). **Note** : l'enum Postgres `statutticket` est partagé par les deux tables de tickets dans la même migration — créé explicitement une seule fois avec `postgresql.ENUM(..., create_type=False)` sur les colonnes, sinon `op.create_table` retente de le créer pour la seconde table et échoue ("type already exists").
-- `0015_billetterie.py` — `evenements`, `billets_evenement` (UC-17).
-- `0016_messagerie.py` — `conversations`, `participants_conversation`, `messages`, `signalements_message` (UC-13).
-- `0017_el_professor_et_video.py` — `sessions_el_professor`, `messages_el_professor` (UC-14) + valeur `VIDEO` ajoutée à l'enum `formatcours` (UC-15, même pattern `autocommit_block` que 0012).
-- `0018_cours_direct.py` — `sessions_live`, `consentements_camera_live`, `participations_live` (UC-16).
-- `0019_visites_virtuelles.py` — table `visites_virtuelles` (UC-19).
-- `0020_micro_jobs.py` — `offres_micro_job`, `missions_micro_job`, `contestations_micro_job` (UC-18).
-Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** downgrade validés manuellement pour 0001).
+**Squashées en une seule migration le 2026-09-26** : `0001_schema_initial.py`, générée par `alembic revision --autogenerate` contre une base vide (donc directement depuis l'état actuel des modèles SQLAlchemy, pas depuis l'historique des 22 migrations précédentes, supprimées). Déclenché par un vrai bug de déploiement Render (l'ancienne `0010_formulaires_llm.py` faisait `DROP TYPE statutsoumission` puis recréait aussitôt une table l'utilisant, ce qui échouait avec `UndefinedObject: type "statutsoumission" does not exist`) — voir le docstring de `0001_schema_initial.py` pour le détail complet, et la section `seed_mega.py` ci-dessous pour l'impact sur `alembic_version`.
+
+**Conséquence pour le dev local** : toute base Postgres locale ayant déjà l'ancien historique de migrations (`alembic_version` pointant vers `0022_...`) doit être recréée (`DROP DATABASE` + `CREATE DATABASE` + `alembic upgrade head`) plutôt que mise à jour en place — l'ancienne revision n'existe plus dans le code.
+
+**Convention qui reprend à partir d'ici** : une migration par évolution de schéma, jamais réécrite une fois appliquée en production réelle (l'exception ci-dessus ne vaut que pour du pré-pilote sans données réelles).
 
 ### scripts/
 - `seed_admin_ministeriel.py` — crée le tout premier compte A++ (aucune route API ne le fait, choix de sécurité assumé). À exécuter une fois au déploiement, directement sur le serveur.
@@ -227,6 +211,16 @@ LuluFiles, hors périmètre d'un seed hors-ligne) ; `otp_verifications` reste vi
 volontairement court-circuité, son absence est l'état normal en régime établi).
 
 ## Dernière synchronisation
+2026-09-26 (encore plus tard) — Squash des 22 migrations Alembic en une seule
+(`0001_schema_initial.py`), déclenché par un vrai échec de déploiement Render
+(`UndefinedObject: type "statutsoumission" does not exist`, causé par l'ancienne
+`0010_formulaires_llm.py` qui `DROP TYPE` puis recréait aussitôt une table
+l'utilisant). Générée par `alembic revision --autogenerate` contre une base Postgres
+vide (versions/ temporairement vidée pour forcer une comparaison depuis rien),
+vérifiée upgrade **et** downgrade sur une base fraîche avant commit. Voir la section
+`alembic/versions/` ci-dessus pour le détail et l'impact sur les bases locales
+existantes.
+
 2026-09-26 (plus tard) — Ajout de `scripts/seed_mega.py`, seed de développement peuplant
 toutes les tables applicatives à volume « grandeur nature » (voir section dédiée
 ci-dessus). Aucun changement du schéma ni des routers — outil de développement pur.
