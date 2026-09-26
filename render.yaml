@@ -83,10 +83,10 @@ services:
       - key: CASIER_JUDICIAIRE_ENCRYPTION_KEY
         generateValue: true
 
-      # A remplacer par le(s) domaine(s) Vercel reel(s) une fois connu(s), au format
-      # JSON (le champ est une liste cote backend) : ["https://luluschools.vercel.app"]
+      # Liste JSON cote backend - ajouter le domaine Netlify ici aussi si ce
+      # deploiement est active en parallele (voir docs/deploiement-render-vercel.md).
       - key: CORS_ALLOW_ORIGINS
-        value: '["https://luluschools.vercel.app"]'
+        value: '["https://lulu-schools.vercel.app"]'
 
 databases:
   - name: luluschools-db
