@@ -73,6 +73,20 @@ class CandidatureOut(BaseModel):
     enseignant_prenom: str
 
 
+class EnseignantSigneOut(BaseModel):
+    """Utilise pour la recherche par nom lors d'une affectation enseignant<->classe
+    (voir etablissements/router.py::AffectationEnseignant) - expose volontairement le
+    nom/prenom en plus de l'id, contrairement a CandidatureOut qui ne renvoie que l'id
+    de la candidature (jamais celui de l'enseignant)."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    nom: str
+    prenom: str
+    email: str | None
+
+
 class ContestationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

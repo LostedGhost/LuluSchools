@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { CandidatureOut, ContestationOut, ContratOut, LienFichierOut, PosteOut } from "../types/api";
+import type { CandidatureOut, ContestationOut, ContratOut, EnseignantSigneOut, LienFichierOut, PosteOut } from "../types/api";
 
 export function listerPostes(etablissementId: string) {
   return api.get<PosteOut[]>(`/etablissements/${etablissementId}/postes`);
@@ -82,4 +82,10 @@ export function obtenirLienDocumentCandidature(documentId: string) {
 
 export function obtenirLienSignatureContrat(contratId: string) {
   return api.get<LienFichierOut>(`/contrats/${contratId}/lien-signature`);
+}
+
+export function rechercherEnseignantsSignes(etablissementId: string, q?: string) {
+  return api.get<EnseignantSigneOut[]>(`/etablissements/${etablissementId}/enseignants`, {
+    params: q ? { q } : undefined,
+  });
 }

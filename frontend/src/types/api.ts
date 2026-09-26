@@ -220,6 +220,13 @@ export interface CandidatureOut {
   documents: DocumentCandidatureOut[];
 }
 
+export interface EnseignantSigneOut {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string | null;
+}
+
 export type StatutContestation = "en_attente" | "acceptee" | "rejetee";
 
 export interface ContestationOut {

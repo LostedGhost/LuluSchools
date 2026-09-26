@@ -313,7 +313,9 @@ export function ClassesPage() {
                 >
                   {classeOuverteId === c.id ? "Masquer les enseignants affectés" : "Gérer les enseignants affectés"}
                 </Btn>
-                {classeOuverteId === c.id && <AffectationsClasseManager classeId={c.id} />}
+                {classeOuverteId === c.id && (
+                  <AffectationsClasseManager classeId={c.id} etablissementId={etablissement.id} />
+                )}
               </Card>
             );
           })}

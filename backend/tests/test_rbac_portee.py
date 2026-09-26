@@ -201,6 +201,47 @@ def test_obtenir_devoir_refuse_a_un_admin_d_un_autre_etablissement(
     assert reponse_admin_etranger.status_code == 403
 
 
+def test_rechercher_enseignants_signes_filtre_par_nom(
+    client, etablissement_avec_classe, fake_email_client, fake_llm_client
+):
+    """Recherche par nom pour l'affectation enseignant<->classe (evite d'avoir a deja
+    connaitre l'id brut de l'enseignant)."""
+    admin_headers = etablissement_avec_classe["admin_headers"]
+    etablissement_id = etablissement_avec_classe["etablissement"]["id"]
+    _provisionner_enseignant_sous_contrat(
+        client, fake_email_client, fake_llm_client, etablissement_avec_classe, "firmin.zannou.recherche@example.com"
+    )
+
+    trouve = client.get(
+        f"/api/v1/etablissements/{etablissement_id}/enseignants", params={"q": "zannou"}, headers=admin_headers
+    ).json()
+    assert len(trouve) == 1
+    assert trouve[0]["nom"] == "Zannou"
+    assert trouve[0]["prenom"] == "Firmin"
+
+    introuvable = client.get(
+        f"/api/v1/etablissements/{etablissement_id}/enseignants", params={"q": "personne-de-ce-nom"}, headers=admin_headers
+    ).json()
+    assert introuvable == []
+
+    sans_filtre = client.get(f"/api/v1/etablissements/{etablissement_id}/enseignants", headers=admin_headers).json()
+    assert len(sans_filtre) == 1
+
+
+def test_rechercher_enseignants_signes_refuse_pour_un_autre_etablissement(
+    client, etablissement_avec_classe, admin_ministeriel_headers, fake_email_client
+):
+    etablissement_id = etablissement_avec_classe["etablissement"]["id"]
+    etranger = _provisionner_etablissement(
+        client, fake_email_client, admin_ministeriel_headers,
+        nom="Ecole Etrangere Recherche", email="rose.adjovi.recherche@example.com",
+    )
+    reponse = client.get(
+        f"/api/v1/etablissements/{etablissement_id}/enseignants", headers=etranger["admin_headers"]
+    )
+    assert reponse.status_code == 403
+
+
 def test_lister_referentiels_masque_les_propositions_d_un_autre_etablissement(
     client, etablissement_avec_classe, admin_ministeriel_headers, fake_email_client
 ):

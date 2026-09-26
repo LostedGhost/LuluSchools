@@ -2,6 +2,7 @@ import hashlib
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.crypto import chiffrer_bytes
@@ -42,6 +43,7 @@ from app.modules.recrutement.schemas import (
     ContestationOut,
     ContratCreate,
     ContratOut,
+    EnseignantSigneOut,
     LienFichierOut,
     NotationManuelleRequest,
     PosteCreate,
@@ -119,6 +121,30 @@ def lister_postes(
     """Sans cette liste, un enseignant candidat n'a aucun moyen de decouvrir les postes
     ouverts d'un etablissement sans deja en connaitre les id (UC-04)."""
     return db.query(Poste).filter(Poste.etablissement_id == etablissement_id).all()
+
+
+@router.get("/etablissements/{etablissement_id}/enseignants", response_model=list[EnseignantSigneOut])
+def rechercher_enseignants_signes(
+    etablissement_id: str,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[Utilisateur]:
+    """Recherche par nom/prenom des enseignants ayant un contrat SIGNE avec cet
+    etablissement - sert a l'affectation enseignant<->classe (voir
+    etablissements/router.py), qui exigeait jusqu'ici de connaitre l'id brut de
+    l'enseignant faute d'un tel endpoint."""
+    verifier_portee_etablissement(db, admin, etablissement_id)
+    requete = (
+        db.query(Utilisateur)
+        .join(Contrat, Contrat.enseignant_id == Utilisateur.id)
+        .filter(Contrat.etablissement_id == etablissement_id, Contrat.statut == StatutContrat.SIGNE)
+        .distinct()
+    )
+    if q and q.strip():
+        motif = f"%{q.strip()}%"
+        requete = requete.filter(or_(Utilisateur.nom.ilike(motif), Utilisateur.prenom.ilike(motif)))
+    return requete.order_by(Utilisateur.nom.asc()).limit(20).all()
 
 
 @router.get("/mes-candidatures", response_model=list[CandidatureOut])
