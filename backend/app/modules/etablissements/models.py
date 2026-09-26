@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,15 +16,15 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def annee_academique_courante() -> str:
+def annee_academique_courante(reference: date | None = None) -> str:
     """UC-43/58 : format "AAAA-AAAA+1" - la rentree beninoise demarre en septembre, donc
     tout mois >= septembre appartient a l'annee academique qui commence cette annee civile,
     les autres mois (janvier-aout) appartiennent a l'annee academique commencee l'annee
     civile precedente. Utilise comme valeur par defaut quand aucune annee n'est precisee
     explicitement (creation de classe, calcul de portee) - jamais pour trancher une regle
     metier, juste un repli raisonnable."""
-    aujourd_hui = _utcnow()
-    premiere_annee = aujourd_hui.year if aujourd_hui.month >= 9 else aujourd_hui.year - 1
+    aujourdhui = reference or _utcnow().date()
+    premiere_annee = aujourdhui.year if aujourdhui.month >= 9 else aujourdhui.year - 1
     return f"{premiere_annee}-{premiere_annee + 1}"
 
 
@@ -93,7 +93,7 @@ class Classe(Base):
     filiere: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # UC-43/44/58 : dimension manquante jusqu'ici - une classe existait perpetuellement,
     # sans notion de rentree. Format "AAAA-AAAA+1" (annee_academique_courante()).
-    annee_academique: Mapped[str] = mapped_column(String(20))
+    annee_academique: Mapped[str] = mapped_column(String(20), default=annee_academique_courante, index=True)
     # UC-44/59 : trace la reconduction d'une annee sur l'autre (pas une contrainte forte -
     # une classe reconduite peut ensuite etre modifiee librement, la tracabilite reste
     # informative, pas structurante).
@@ -119,6 +119,11 @@ class AffectationEnseignant(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     enseignant_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
     classe_id: Mapped[str] = mapped_column(ForeignKey("classes.id"), index=True)
+    # UC-23 : au plus un professeur principal par classe (voir vie_scolaire) - il voit la
+    # vie scolaire complete de la classe, un enseignant de matiere ne voit que ses propres
+    # entrees. Invariant applique cote applicatif (POST .../professeur-principal), pas par
+    # une contrainte SQL - coherent avec le reste du module (ex. capacite de la classe).
+    est_professeur_principal: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     classe: Mapped["Classe"] = relationship()

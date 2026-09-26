@@ -3,10 +3,12 @@ import type {
   CandidatureOut,
   ChampFormulaire,
   ContestationOut,
+  ContratAvecEnseignantOut,
   ContratOut,
   EnseignantSigneOut,
   LienFichierOut,
   PosteOut,
+  PropositionReconductionOut,
 } from "../types/api";
 
 export function listerPostes(etablissementId: string) {
@@ -99,6 +101,17 @@ export function deciderContestation(contestationId: string, decision: "acceptee"
 
 export function creerContrat(candidatureId: string, syllabus: string, dateFin: string) {
   return api.post<ContratOut>(`/candidatures/${candidatureId}/contrat`, { syllabus, date_fin: dateFin });
+}
+
+export function listerContratsEtablissement(etablissementId: string) {
+  return api.get<ContratAvecEnseignantOut[]>(`/etablissements/${etablissementId}/contrats`);
+}
+
+export function proposerReconduction(contratId: string, syllabus: string, dateFin: string) {
+  return api.post<PropositionReconductionOut>(`/contrats/${contratId}/reconduction`, {
+    syllabus,
+    date_fin: dateFin,
+  });
 }
 
 export function obtenirLienDocumentCandidature(documentId: string) {

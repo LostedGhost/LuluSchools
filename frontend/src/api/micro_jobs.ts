@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type {
+  ContestationMicroJobAEtrancherOut,
   ContestationMicroJobDetailOut,
   ContestationMicroJobOut,
   MissionAReverserOut,
@@ -43,6 +44,10 @@ export function validerMission(missionId: string) {
 
 export function contesterMission(missionId: string, motif: string) {
   return api.post<ContestationMicroJobOut>(`/missions-micro-job/${missionId}/contester`, { motif });
+}
+
+export function contestationsMicroJobEnAttente() {
+  return api.get<ContestationMicroJobAEtrancherOut[]>("/contestations-micro-job-en-attente");
 }
 
 export function deciderContestationMicroJob(contestationId: string, decision: "acceptee" | "rejetee", decisionMotif?: string) {

@@ -98,6 +98,16 @@ class ContestationMarketplaceOut(BaseModel):
     decision_motif: str | None
 
 
+class ContestationMarketplaceAEtrancherOut(ContestationMarketplaceOut):
+    """Vue enrichie utilisee uniquement par la liste d'arbitrage (GET .../contestations-en-
+    attente) - meme raisonnement que ContestationMicroJobAEtrancherOut : sans elle, l'admin
+    n'a aucun moyen de decouvrir quelles contestations existent."""
+
+    created_at: datetime
+    annonce_titre: str
+    prix_paye: float
+
+
 class DecisionContestationMarketplaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

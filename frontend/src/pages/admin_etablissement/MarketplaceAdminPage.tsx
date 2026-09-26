@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAdminEtab } from "../../admin/AdminEtabContext";
 import {
+  contestationsMarketplaceEnAttente,
   deciderContestationMarketplace,
   listerAnnonces,
   retirerAnnonceModeration,
@@ -9,7 +10,7 @@ import {
   traiterSignalementAnnonce,
 } from "../../api/marketplace";
 import { messageErreur } from "../../api/client";
-import type { AnnonceMarketplaceOut, SignalementAnnonceOut } from "../../types/api";
+import type { AnnonceMarketplaceOut, ContestationMarketplaceAEtrancherOut, SignalementAnnonceOut } from "../../types/api";
 import {
   Badge,
   Btn,
@@ -24,7 +25,7 @@ import {
   TextArea,
   TextInput,
 } from "../../components/ui";
-import { CheckCircle2, Flag, Landmark, ShoppingBag, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Flag, Landmark, MessageSquareWarning, ShoppingBag, Trash2, XCircle } from "lucide-react";
 import { estRempli } from "../../utils/validation";
 
 const STATUT_ANNONCE_LABEL: Record<AnnonceMarketplaceOut["statut"], string> = {
@@ -45,6 +46,7 @@ export function MarketplaceAdminPage() {
 
   const [signalements, setSignalements] = useState<SignalementAnnonceOut[]>([]);
   const [annonces, setAnnonces] = useState<AnnonceMarketplaceOut[]>([]);
+  const [contestationsEnAttente, setContestationsEnAttente] = useState<ContestationMarketplaceAEtrancherOut[]>([]);
   const [decisionParId, setDecisionParId] = useState<Record<string, string>>({});
   const [motifRetraitParId, setMotifRetraitParId] = useState<Record<string, string>>({});
   const [chargement, setChargement] = useState(true);
@@ -61,10 +63,12 @@ export function MarketplaceAdminPage() {
       signalementsMarketplaceEnAttente(etablissement.id),
       listerAnnonces(etablissement.id, { statut: "disponible", page_size: 60 }),
       listerAnnonces(etablissement.id, { statut: "reservee", page_size: 60 }),
+      contestationsMarketplaceEnAttente(etablissement.id),
     ])
-      .then(([resSignalements, resDisponibles, resReservees]) => {
+      .then(([resSignalements, resDisponibles, resReservees, resContestations]) => {
         setSignalements(resSignalements.data);
         setAnnonces([...resDisponibles.data.items, ...resReservees.data.items]);
+        setContestationsEnAttente(resContestations.data);
       })
       .catch((err) => setErreur(messageErreur(err)))
       .finally(() => setChargement(false));
@@ -108,9 +112,9 @@ export function MarketplaceAdminPage() {
     }
   };
 
-  // --- Litige et reversement (identifiants saisis manuellement, comme pour
-  // l'arbitrage micro-jobs — aucun endpoint ne liste les contestations/transactions
-  // par établissement pour l'instant, voir Limites frontend/PROJECT_MAP.md).
+  // --- Litige et reversement. Les contestations en attente sont listées ci-dessous
+  // (contestationsMarketplaceEnAttente) ; le reversement au vendeur reste manuel
+  // (aucune liste de transactions confirmées par établissement pour l'instant).
   const [contestationId, setContestationId] = useState("");
   const [motifDecision, setMotifDecision] = useState("");
   const [enCoursDecision, setEnCoursDecision] = useState<"acceptee" | "rejetee" | null>(null);
@@ -142,6 +146,7 @@ export function MarketplaceAdminPage() {
       );
       setContestationId("");
       setMotifDecision("");
+      charger();
     } catch (err) {
       setErreurLitige(messageErreur(err, "Impossible de trancher cette contestation. Vérifiez l'identifiant."));
     } finally {
@@ -253,8 +258,42 @@ export function MarketplaceAdminPage() {
 
       <SectionHead
         title="Litige et reversement"
-        desc="Renseignez l'identifiant communiqué par l'élève concerné (aucune liste automatique pour l'instant)."
+        desc="Cliquez sur une contestation en attente pour préremplir son identifiant, ou saisissez-le manuellement."
       />
+      {contestationsEnAttente.length === 0 ? (
+        <Card variant="soft" className="mb-6"><EmptyState icon={<MessageSquareWarning size={20} />} title="Aucune contestation en attente" /></Card>
+      ) : (
+        <div className="space-y-3 mb-6">
+          {contestationsEnAttente.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setContestationId(c.id)}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "12px",
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: "var(--radius-sm)",
+                border: contestationId === c.id ? "1px solid var(--primary)" : "1px solid var(--border)",
+                background: contestationId === c.id ? "var(--primary-tint)" : "var(--surface-2)",
+                cursor: "pointer",
+                textAlign: "left",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              <span>
+                <strong>{c.annonce_titre}</strong> ({c.prix_paye.toLocaleString("fr-FR")} FCFA) — {c.motif}
+              </span>
+              <span style={{ color: "var(--ink-faint)", fontSize: "var(--text-xs)", flexShrink: 0 }}>
+                {new Date(c.created_at).toLocaleDateString("fr-FR")}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="grid-2">
         <Card>
           <SectionHead

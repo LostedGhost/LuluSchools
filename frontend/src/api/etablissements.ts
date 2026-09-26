@@ -7,9 +7,11 @@ import type {
   ConsoleEnseignantOut,
   ConsoleNoteOut,
   ConsoleTuteurOut,
+  EleveClasseOut,
   EtablissementOut,
   PageOut,
   RentreeOut,
+  SalleEnseignantOut,
   VieScolaireOut,
 } from "../types/api";
 
@@ -37,8 +39,20 @@ export function revoquerAffectation(affectationId: string) {
   return api.delete(`/affectations/${affectationId}`);
 }
 
-export function mesClassesAffectees() {
-  return api.get<ClasseOut[]>("/mes-classes-affectees");
+export function mesClassesAffectees(options: { toutesAnnees?: boolean; anneeAcademique?: string } = {}) {
+  return api.get<SalleEnseignantOut[]>("/mes-classes-affectees", {
+    params: { toutes_annees: options.toutesAnnees, annee_academique: options.anneeAcademique },
+  });
+}
+
+export function listerElevesDeLaClasse(classeId: string) {
+  return api.get<EleveClasseOut[]>(`/classes/${classeId}/eleves`);
+}
+
+export function designerProfesseurPrincipal(classeId: string, enseignantUtilisateurId: string) {
+  return api.post<AffectationEnseignantOut>(`/classes/${classeId}/professeur-principal`, {
+    enseignant_utilisateur_id: enseignantUtilisateurId,
+  });
 }
 
 export interface EtablissementPayload {

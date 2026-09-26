@@ -23,6 +23,11 @@ import {
   Ticket,
   Handshake,
   Box,
+  Wallet,
+  Radar,
+  Bot,
+  Award,
+  ShoppingBag,
 } from "lucide-react";
 
 // Chargé à la demande : Three.js pèse à lui seul plus que tout le reste de
@@ -98,14 +103,21 @@ const NOUVEAUTES = [
     icon: <Radio size={26} />,
     tone: "primary",
     title: "Cours en direct",
-    desc: "Sessions live planifiées par l'enseignant, avec consentement caméra du tuteur pour les mineurs.",
+    desc: "Sessions live avec tableau collaboratif « craie et chiffon » : traits à main levée, texte, plusieurs élèves autorisés à écrire en même temps, sans jamais s'écraser.",
     bientot: false,
   },
   {
     icon: <Sparkles size={26} />,
     tone: "magic",
     title: "El Professor",
-    desc: "Un assistant pédagogique IA disponible sur chaque cours pour répondre aux questions des élèves.",
+    desc: "Un assistant pédagogique IA present sur chaque cours pour l'élève, mais aussi pour l'enseignant, le tuteur, et même en fil partagé parent-enfant — avec un garde-fou de sécurité qui alerte l'établissement en cas de besoin.",
+    bientot: false,
+  },
+  {
+    icon: <ShoppingBag size={26} />,
+    tone: "reward",
+    title: "Marketplace étudiante",
+    desc: "Les élèves de 16 ans et plus revendent fournitures et manuels entre eux, paiement sécurisé par séquestre — le tuteur garde un droit de regard en lecture seule.",
     bientot: false,
   },
   {
@@ -135,6 +147,33 @@ const NOUVEAUTES = [
     title: "Visites virtuelles 3D",
     desc: "Explorez un établissement en 3D avant d'y inscrire votre enfant.",
     bientot: true,
+  },
+];
+
+const INNOVATIONS_FAMILLE = [
+  {
+    icon: <Wallet size={26} />,
+    tone: "action",
+    title: "Coffre-fort familial",
+    desc: "Le tuteur fixe, s'il le souhaite, un plafond de dépense hebdomadaire ou un seuil de validation sur les achats de son enfant (marketplace, micro-jobs, actes). Jamais de blocage silencieux : l'enfant voit toujours pourquoi une dépense attend son feu vert.",
+  },
+  {
+    icon: <Radar size={26} />,
+    tone: "info",
+    title: "Radar familial",
+    desc: "Un résumé hebdomadaire généré par IA à partir de la vie scolaire, des devoirs corrigés et des sessions suivies de son enfant — chaque phrase cite sa source, jamais une affirmation en l'air.",
+  },
+  {
+    icon: <Bot size={26} />,
+    tone: "magic",
+    title: "El Professor Famille",
+    desc: "Un fil de discussion à trois : le tuteur invite son enfant, tous deux posent leurs questions à l'IA dans la même conversation. Un signal de danger remonte toujours directement à l'établissement — jamais seulement au tuteur.",
+  },
+  {
+    icon: <Award size={26} />,
+    tone: "reward",
+    title: "Passeport de compétences",
+    desc: "Quiz réussis, cours suivis, moyennes par matière : un récapitulatif automatique de tout ce que l'élève a déjà accompli, exportable en PDF pour une candidature ou un dossier d'orientation.",
   },
 ];
 
@@ -598,6 +637,63 @@ export function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── Innovations famille (Élève/Tuteur) ── */}
+      <section style={{ maxWidth: "1200px", margin: "0 auto", padding: "80px 24px" }}>
+        <div style={{ textAlign: "center", marginBottom: "56px" }}>
+          <p className="text-eyebrow" style={{ marginBottom: "12px", display: "block" }}>
+            Pensé pour la famille
+          </p>
+          <h2 className="text-headline" style={{ margin: "0 0 12px", color: "var(--ink)" }}>
+            Le tuteur, jamais tenu à l'écart.
+          </h2>
+          <p style={{ color: "var(--ink-soft)", maxWidth: "56ch", margin: "0 auto", fontSize: "var(--text-lg)" }}>
+            Quatre fonctionnalités pensées pour que le tuteur reste présent au quotidien, sans jamais réduire l'autonomie de son enfant.
+          </p>
+        </div>
+
+        <div className="grid-2">
+          {INNOVATIONS_FAMILLE.map((f, i) => (
+            <div
+              key={f.title}
+              className="card card-hover anim-float-in"
+              style={{ display: "flex", gap: "18px", animationDelay: `${i * 60}ms` }}
+            >
+              <div
+                style={{
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "var(--radius-md)",
+                  background: `var(--${f.tone}-tint)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: `var(--${f.tone}-deep, var(--${f.tone}))`,
+                  flexShrink: 0,
+                }}
+              >
+                {f.icon}
+              </div>
+              <div>
+                <h3
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--text-lg)",
+                    fontWeight: 600,
+                    margin: "0 0 8px",
+                    color: "var(--ink)",
+                  }}
+                >
+                  {f.title}
+                </h3>
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)", margin: 0, lineHeight: 1.65 }}>
+                  {f.desc}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

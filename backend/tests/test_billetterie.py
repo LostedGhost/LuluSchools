@@ -132,6 +132,57 @@ def test_parrain_designe_peut_gerer_l_evenement_sans_etre_admin(client, classe_a
     assert annulation.status_code == 200
 
 
+def test_tuteur_peut_acheter_un_billet_pour_son_enfant(client, classe_avec_enseignant_et_eleve):
+    """UC-29.1 : correction - jusqu'ici un tuteur ne pouvait acheter un billet que pour
+    lui-meme, contrairement au transport/cantine/actes qui acceptent tous un achat
+    "pour mon enfant"."""
+    ctx = classe_avec_enseignant_et_eleve
+    evenement = _creer_evenement(client, ctx, prix=0)
+    eleve_id = client.get("/api/v1/me", headers=ctx["eleve_headers"]).json()["id"]
+
+    billet = client.post(
+        f"/api/v1/evenements/{evenement['id']}/billets",
+        json={"eleve_utilisateur_id": eleve_id},
+        headers=ctx["tuteur_headers"],
+    )
+    assert billet.status_code == 201
+    assert billet.json()["utilisateur_id"] == eleve_id
+
+    # Le tuteur retrouve ce billet dans son propre historique, et peut le rembourser.
+    mes_billets_tuteur = client.get("/api/v1/mes-billets", headers=ctx["tuteur_headers"]).json()
+    assert any(b["id"] == billet.json()["id"] for b in mes_billets_tuteur)
+
+    remboursement = client.post(f"/api/v1/billets/{billet.json()['id']}/rembourser", headers=ctx["tuteur_headers"])
+    assert remboursement.status_code == 200
+
+
+def test_tuteur_ne_peut_pas_acheter_pour_un_eleve_qui_n_est_pas_son_enfant(
+    client, classe_avec_enseignant_et_eleve, fake_email_client
+):
+    ctx = classe_avec_enseignant_et_eleve
+    evenement = _creer_evenement(client, ctx, prix=0)
+
+    autre_tuteur_payload = {
+        "nom": "Zinsou", "prenom": "Paul", "email": "paul.zinsou.billet@example.com", "mot_de_passe": "Password1",
+    }
+    client.post("/api/v1/auth/tuteurs", json=autre_tuteur_payload)
+    code = next(m["code"] for m in reversed(fake_email_client.sent) if m.get("to_email") == autre_tuteur_payload["email"])
+    client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": autre_tuteur_payload["email"], "code": code})
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": autre_tuteur_payload["email"], "mot_de_passe": autre_tuteur_payload["mot_de_passe"]},
+    ).json()
+    autre_tuteur_headers = {"Authorization": f"Bearer {login['access_token']}"}
+
+    eleve_id = client.get("/api/v1/me", headers=ctx["eleve_headers"]).json()["id"]
+    refus = client.post(
+        f"/api/v1/evenements/{evenement['id']}/billets",
+        json={"eleve_utilisateur_id": eleve_id},
+        headers=autre_tuteur_headers,
+    )
+    assert refus.status_code == 403
+
+
 def test_remboursement_billet_refuse_apres_le_delai(client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve
     proche = (datetime.now(timezone.utc) + timedelta(hours=10)).isoformat()

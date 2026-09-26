@@ -11,6 +11,7 @@ from app.modules.billetterie.models import BilletEvenement, Evenement, StatutBil
 from app.modules.billetterie.schemas import (
     AdminEvenementOut,
     AdminEvenementPageOut,
+    BilletAchatRequest,
     BilletEvenementOut,
     DesignerParrainRequest,
     EvenementCreate,
@@ -20,6 +21,7 @@ from app.modules.controle_acces.models import ServiceControle
 from app.modules.controle_acces.router import est_controleur_designe, verifier_admin_de_l_etablissement
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+from app.modules.inscriptions.models import Eleve
 from app.modules.paiements.schemas import AmorcerPaiementRequest
 from app.modules.ticketerie.generation import generer_pdf_ticket
 
@@ -153,17 +155,52 @@ def annuler_evenement(
     return evenement
 
 
+def _resoudre_beneficiaire_billet(db: Session, utilisateur: Utilisateur, eleve_utilisateur_id: str | None) -> str:
+    """UC-29.1 : le beneficiaire d'un billet est l'appelant lui-meme par defaut. Un
+    TUTEUR peut acheter POUR SON ENFANT en precisant eleve_utilisateur_id - meme pattern
+    que services_scolaires._resoudre_beneficiaire (chaque module duplique ce petit
+    helper plutot que de creer un couplage cross-module pour quelques lignes)."""
+    if eleve_utilisateur_id is None:
+        return utilisateur.id
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
+    if eleve is None or eleve.tuteur_id != utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+    return eleve_utilisateur_id
+
+
+def _verifier_proprietaire_ou_tuteur_billet(db: Session, utilisateur: Utilisateur, beneficiaire_id: str) -> None:
+    if utilisateur.id == beneficiaire_id:
+        return
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == beneficiaire_id).first()
+    if eleve is not None and eleve.tuteur_id == utilisateur.id:
+        return
+    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce billet ne vous appartient pas.")
+
+
+def _mes_beneficiaire_ids_billet(db: Session, utilisateur: Utilisateur) -> list[str]:
+    if utilisateur.role != RoleUtilisateur.TUTEUR:
+        return [utilisateur.id]
+    return [utilisateur.id] + [
+        e.utilisateur_id for e in db.query(Eleve).filter(Eleve.tuteur_id == utilisateur.id).all() if e.utilisateur_id
+    ]
+
+
 @router.post(
     "/evenements/{evenement_id}/billets", response_model=BilletEvenementOut, status_code=status.HTTP_201_CREATED
 )
 def acheter_billet(
-    evenement_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+    evenement_id: str,
+    payload: BilletAchatRequest | None = None,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> BilletEvenement:
     evenement = db.get(Evenement, evenement_id)
     if evenement is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Evenement introuvable.")
     if evenement.statut != StatutEvenement.OUVERT:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cet evenement n'accepte plus d'achats.")
+
+    beneficiaire_id = _resoudre_beneficiaire_billet(db, utilisateur, payload.eleve_utilisateur_id if payload else None)
 
     deja_vendus = (
         db.query(BilletEvenement)
@@ -178,7 +215,7 @@ def acheter_billet(
 
     billet = BilletEvenement(
         evenement_id=evenement_id,
-        utilisateur_id=utilisateur.id,
+        utilisateur_id=beneficiaire_id,
         prix_paye=evenement.prix_billet,
         paiement_confirme=evenement.prix_billet == 0,
     )
@@ -198,8 +235,7 @@ def amorcer_paiement_billet(
     billet = db.get(BilletEvenement, billet_id)
     if billet is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Billet introuvable.")
-    if billet.utilisateur_id != utilisateur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce billet ne vous appartient pas.")
+    _verifier_proprietaire_ou_tuteur_billet(db, utilisateur, billet.utilisateur_id)
     if billet.statut != StatutBillet.ACHETE or billet.paiement_confirme:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce billet n'attend pas de paiement.")
 
@@ -239,8 +275,7 @@ def rembourser_billet(
     billet = db.get(BilletEvenement, billet_id)
     if billet is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Billet introuvable.")
-    if billet.utilisateur_id != utilisateur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce billet ne vous appartient pas.")
+    _verifier_proprietaire_ou_tuteur_billet(db, utilisateur, billet.utilisateur_id)
     if billet.statut != StatutBillet.ACHETE:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce billet ne peut plus etre rembourse.")
     evenement = db.get(Evenement, billet.evenement_id)
@@ -287,9 +322,11 @@ def obtenir_pdf_billet(
 def mes_billets(
     db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[BilletEvenement]:
+    """UC-29.1 : pour un TUTEUR, inclut aussi les billets achetes pour ses enfants -
+    sinon un achat "pour mon enfant" serait invisible sur son propre historique."""
     return (
         db.query(BilletEvenement)
-        .filter(BilletEvenement.utilisateur_id == utilisateur.id)
+        .filter(BilletEvenement.utilisateur_id.in_(_mes_beneficiaire_ids_billet(db, utilisateur)))
         .order_by(BilletEvenement.created_at.desc())
         .all()
     )

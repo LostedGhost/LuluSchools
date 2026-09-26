@@ -155,6 +155,17 @@ def marketplace_ctx(client, fake_email_client, admin_ministeriel_headers):
     }
 
 
+def _tuteur_headers_et_eleve_utilisateur_id(client, email):
+    """UC-34 : retrouve le tuteur (mot de passe jamais change par `_creer_eleve_dans_classe`)
+    et l'utilisateur_id de son enfant, a partir de l'email utilise a la creation."""
+    login_tuteur = client.post(
+        "/api/v1/auth/login", json={"identifiant": email, "mot_de_passe": "Password1"}
+    ).json()
+    tuteur_headers = {"Authorization": f"Bearer {login_tuteur['access_token']}"}
+    inscriptions = client.get("/api/v1/tuteurs/me/inscriptions", headers=tuteur_headers).json()
+    return tuteur_headers, inscriptions[0]["eleve_utilisateur_id"]
+
+
 def _creer_annonce(client, headers, etablissement_id, **overrides):
     payload = {
         "titre": "Cartable bleu",
@@ -316,6 +327,48 @@ def test_annuler_transaction_avant_paiement(marketplace_ctx, client):
     assert annonce_a_jour["statut"] == "disponible"
 
 
+def test_contestations_en_attente_liste_pour_l_admin(marketplace_ctx, client, kkiapay_secret):
+    ctx = marketplace_ctx
+    annonce = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"]).json()
+    transaction = client.post(
+        f"/api/v1/marketplace/annonces/{annonce['id']}/reserver", headers=ctx["acheteur_headers"]
+    ).json()
+    client.post(
+        f"/api/v1/marketplace/transactions/{transaction['id']}/paiement/amorcer",
+        json={"transaction_id": f"tx-{transaction['id']}"},
+        headers=ctx["acheteur_headers"],
+    )
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    client.post(
+        f"/api/v1/marketplace/transactions/{transaction['id']}/declarer-remise", headers=ctx["vendeur_headers"]
+    )
+    contestation = client.post(
+        f"/api/v1/marketplace/transactions/{transaction['id']}/contester",
+        json={"motif": "Article non conforme a la description"},
+        headers=ctx["acheteur_headers"],
+    ).json()
+
+    liste = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/marketplace/contestations-en-attente",
+        headers=ctx["admin_headers"],
+    )
+    assert liste.status_code == 200
+    assert len(liste.json()) == 1
+    assert liste.json()[0]["id"] == contestation["id"]
+    assert liste.json()[0]["annonce_titre"] == annonce["titre"]
+
+    client.post(
+        f"/api/v1/marketplace/contestations/{contestation['id']}/decision",
+        json={"decision": "acceptee"},
+        headers=ctx["admin_headers"],
+    )
+    liste_apres = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/marketplace/contestations-en-attente",
+        headers=ctx["admin_headers"],
+    ).json()
+    assert liste_apres == []
+
+
 def test_contestation_acceptee_rembourse_et_reannonce_disponible(marketplace_ctx, client, kkiapay_secret):
     ctx = marketplace_ctx
     annonce = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"]).json()
@@ -454,3 +507,60 @@ def test_retrait_par_admin_rembourse_la_transaction_en_cours(marketplace_ctx, cl
 
     transaction_a_jour = client.get("/api/v1/mes-transactions-marketplace", headers=ctx["acheteur_headers"]).json()[0]
     assert transaction_a_jour["statut"] == "remboursee"
+
+
+def test_tuteur_peut_consulter_en_lecture_seule_le_marketplace_de_son_enfant(
+    marketplace_ctx, client, kkiapay_secret
+):
+    ctx = marketplace_ctx
+    vendeur_tuteur_headers, vendeur_utilisateur_id = _tuteur_headers_et_eleve_utilisateur_id(
+        client, "vendeur.marketplace@example.com"
+    )
+    annonce = _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"]).json()
+
+    annonces = client.get(
+        f"/api/v1/mes-enfants/{vendeur_utilisateur_id}/marketplace/annonces", headers=vendeur_tuteur_headers
+    )
+    assert annonces.status_code == 200
+    assert [a["id"] for a in annonces.json()] == [annonce["id"]]
+
+    transaction = client.post(
+        f"/api/v1/marketplace/annonces/{annonce['id']}/reserver", headers=ctx["acheteur_headers"]
+    ).json()
+    client.post(
+        f"/api/v1/marketplace/transactions/{transaction['id']}/paiement/amorcer",
+        json={"transaction_id": f"tx-{transaction['id']}"},
+        headers=ctx["acheteur_headers"],
+    )
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+
+    transactions = client.get(
+        f"/api/v1/mes-enfants/{vendeur_utilisateur_id}/marketplace/transactions", headers=vendeur_tuteur_headers
+    ).json()
+    assert len(transactions) == 1
+    assert transactions[0]["id"] == transaction["id"]
+
+    acheteur_tuteur_headers, acheteur_utilisateur_id = _tuteur_headers_et_eleve_utilisateur_id(
+        client, "acheteur.marketplace@example.com"
+    )
+    transactions_acheteur = client.get(
+        f"/api/v1/mes-enfants/{acheteur_utilisateur_id}/marketplace/transactions", headers=acheteur_tuteur_headers
+    ).json()
+    assert len(transactions_acheteur) == 1
+    assert transactions_acheteur[0]["id"] == transaction["id"]
+
+
+def test_tuteur_ne_peut_pas_consulter_le_marketplace_d_un_eleve_qui_n_est_pas_son_enfant(marketplace_ctx, client):
+    ctx = marketplace_ctx
+    _creer_annonce(client, ctx["vendeur_headers"], ctx["etablissement"]["id"])
+    acheteur_tuteur_headers, _ = _tuteur_headers_et_eleve_utilisateur_id(
+        client, "acheteur.marketplace@example.com"
+    )
+    _, vendeur_utilisateur_id = _tuteur_headers_et_eleve_utilisateur_id(
+        client, "vendeur.marketplace@example.com"
+    )
+
+    refus = client.get(
+        f"/api/v1/mes-enfants/{vendeur_utilisateur_id}/marketplace/annonces", headers=acheteur_tuteur_headers
+    )
+    assert refus.status_code == 403

@@ -9,7 +9,7 @@ from app.core.deps import api_error, require_roles, verifier_portee_etablissemen
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.security import generate_temporary_password, hash_password
-from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement, TypeEtablissement
+from app.modules.etablissements.models import AdminEtablissement, AffectationEnseignant, Classe, Etablissement, TypeEtablissement
 from app.modules.identite.models import RoleUtilisateur, Tuteur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, Nationalite, StatutInscription
 from app.modules.inscriptions.schemas import (
@@ -48,6 +48,24 @@ _PREFIXES_CYCLE_MATRICULE = {
     TypeEtablissement.ES: "8",
     TypeEtablissement.UP: "",
 }
+
+
+def _professeur_principal_de(db: Session, classe_id: str) -> tuple[str | None, str | None]:
+    """UC-30.3 : le professeur principal d'une classe (voir
+    AffectationEnseignant.est_professeur_principal, UC-23) n'etait expose a aucun
+    endpoint lisible par ELEVE/TUTEUR - corrige ici pour les deux points d'entree
+    "ma classe" (mon_profil_eleve, mes_inscriptions)."""
+    affectation = (
+        db.query(AffectationEnseignant)
+        .filter(AffectationEnseignant.classe_id == classe_id, AffectationEnseignant.est_professeur_principal.is_(True))
+        .first()
+    )
+    if affectation is None:
+        return None, None
+    enseignant = db.get(Utilisateur, affectation.enseignant_id)
+    if enseignant is None:
+        return None, None
+    return enseignant.nom, enseignant.prenom
 
 
 def _generer_matricule(db: Session, type_etablissement: TypeEtablissement, nationalite: Nationalite) -> str:
@@ -329,6 +347,11 @@ def mes_inscriptions(
     resultat = []
     for inscription in inscriptions:
         eleve = db.get(Eleve, inscription.eleve_id)
+        pp_nom, pp_prenom = (
+            _professeur_principal_de(db, inscription.classe_id)
+            if inscription.statut == StatutInscription.VALIDEE
+            else (None, None)
+        )
         resultat.append(
             {
                 "id": inscription.id,
@@ -341,6 +364,8 @@ def mes_inscriptions(
                 "eleve_prenom": eleve.prenom,
                 "eleve_matricule": eleve.matricule,
                 "eleve_utilisateur_id": eleve.utilisateur_id,
+                "professeur_principal_nom": pp_nom,
+                "professeur_principal_prenom": pp_prenom,
             }
         )
     return resultat
@@ -364,6 +389,7 @@ def mon_profil_eleve(
         .first()
     )
     classe = db.get(Classe, inscription_validee.classe_id) if inscription_validee else None
+    pp_nom, pp_prenom = _professeur_principal_de(db, classe.id) if classe else (None, None)
 
     return {
         "id": eleve.utilisateur_id,
@@ -375,4 +401,6 @@ def mon_profil_eleve(
         "niveau": classe.niveau if classe else None,
         "etablissement_id": classe.etablissement_id if classe else None,
         "est_etudiant": est_etudiant_fn(db, eleve.id),
+        "professeur_principal_nom": pp_nom,
+        "professeur_principal_prenom": pp_prenom,
     }

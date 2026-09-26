@@ -8,6 +8,8 @@ from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
 from app.core.etudiant import est_etudiant
+from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
+from app.modules.coffre_fort.service import evaluer_depense
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve
 from app.modules.micro_jobs.models import (
@@ -19,6 +21,7 @@ from app.modules.micro_jobs.models import (
     StatutOffreMicroJob,
 )
 from app.modules.micro_jobs.schemas import (
+    ContestationMicroJobAEtrancherOut,
     ContestationMicroJobDetailOut,
     ContestationMicroJobOut,
     ContesterMissionRequest,
@@ -126,6 +129,24 @@ def amorcer_paiement_offre(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette offre ne vous appartient pas.")
     if offre.statut != StatutOffreMicroJob.EN_ATTENTE_PAIEMENT:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette offre n'attend pas de paiement.")
+
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+        if eleve is not None and eleve.tuteur_id is not None:
+            validation = evaluer_depense(
+                db,
+                tuteur_id=eleve.tuteur_id,
+                eleve_utilisateur_id=utilisateur.id,
+                module=ModuleDepenseCoffreFort.MICRO_JOB,
+                reference_id=offre.id,
+                montant=offre.prix,
+            )
+            if validation is not None:
+                raise api_error(
+                    status.HTTP_409_CONFLICT,
+                    "en_attente_validation_parentale",
+                    "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+                )
 
     offre.kkiapay_transaction_id = payload.transaction_id
     db.commit()
@@ -324,6 +345,35 @@ def lister_contestations_micro_job(
             )
         )
     return resultat
+
+
+@router.get("/contestations-micro-job-en-attente", response_model=list[ContestationMicroJobAEtrancherOut])
+def contestations_micro_job_en_attente(
+    db: Session = Depends(get_db), _admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL))
+) -> list[dict]:
+    """UC-18 : sans cette liste, l'admin ministeriel n'a aucun moyen de decouvrir quelles
+    contestations attendent un arbitrage - seule une communication hors plateforme de
+    l'identifiant permettait d'agir (voir MicroJobsArbitragePage.tsx cote frontend)."""
+    contestations = (
+        db.query(ContestationMicroJob).filter(ContestationMicroJob.statut == StatutContestationMicroJob.EN_ATTENTE).all()
+    )
+    resultats = []
+    for contestation in contestations:
+        mission = db.get(MissionMicroJob, contestation.mission_id)
+        offre = db.get(OffreMicroJob, mission.offre_id) if mission is not None else None
+        resultats.append(
+            {
+                "id": contestation.id,
+                "mission_id": contestation.mission_id,
+                "motif": contestation.motif,
+                "statut": contestation.statut,
+                "decision_motif": contestation.decision_motif,
+                "created_at": contestation.created_at,
+                "offre_titre": offre.titre if offre is not None else "Offre introuvable",
+                "offre_prix": offre.prix if offre is not None else 0.0,
+            }
+        )
+    return resultats
 
 
 @router.post("/contestations-micro-job/{contestation_id}/decision", response_model=ContestationMicroJobOut)

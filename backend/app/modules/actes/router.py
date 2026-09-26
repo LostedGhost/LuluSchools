@@ -6,6 +6,8 @@ from app.core.deps import api_error, require_roles, verifier_portee_etablissemen
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.formulaire import valider_reponses_formulaire
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
+from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
+from app.modules.coffre_fort.service import evaluer_depense
 from app.modules.actes.schemas import (
     AmorcerPaiementRequest,
     DemandeActeCreate,
@@ -196,6 +198,24 @@ def amorcer_paiement(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette demande ne vous appartient pas.")
     if demande.statut != StatutDemandeActe.SOUMISE:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande n'attend pas de paiement.")
+
+    if utilisateur.role == RoleUtilisateur.ELEVE and eleve.tuteur_id is not None:
+        type_acte = db.get(TypeActeAcademique, demande.type_acte_id) if demande.type_acte_id else None
+        montant = type_acte.prix if type_acte is not None else 0.0
+        validation = evaluer_depense(
+            db,
+            tuteur_id=eleve.tuteur_id,
+            eleve_utilisateur_id=utilisateur.id,
+            module=ModuleDepenseCoffreFort.ACTE,
+            reference_id=demande.id,
+            montant=montant,
+        )
+        if validation is not None:
+            raise api_error(
+                status.HTTP_409_CONFLICT,
+                "en_attente_validation_parentale",
+                "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+            )
 
     demande.kkiapay_transaction_id = payload.transaction_id
     db.commit()

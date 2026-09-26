@@ -8,6 +8,8 @@ from app.core.database import get_db
 from app.core.deps import api_error, require_roles
 from app.core.etudiant import est_etudiant
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
+from app.modules.coffre_fort.service import evaluer_depense
 from app.modules.controle_acces.router import verifier_admin_de_l_etablissement
 from app.modules.etablissements.models import Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -28,6 +30,7 @@ from app.modules.marketplace.schemas import (
     AnnonceMarketplaceDetailOut,
     AnnonceMarketplaceOut,
     AnnoncesMarketplacePage,
+    ContestationMarketplaceAEtrancherOut,
     ContestationMarketplaceOut,
     ContesterTransactionRequest,
     DecisionContestationMarketplaceRequest,
@@ -423,6 +426,23 @@ def amorcer_paiement_transaction(
     if transaction.statut != StatutTransactionMarketplace.EN_ATTENTE_PAIEMENT:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction n'attend pas de paiement.")
 
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+    if eleve is not None and eleve.tuteur_id is not None:
+        validation = evaluer_depense(
+            db,
+            tuteur_id=eleve.tuteur_id,
+            eleve_utilisateur_id=utilisateur.id,
+            module=ModuleDepenseCoffreFort.MARKETPLACE,
+            reference_id=transaction.id,
+            montant=transaction.prix_paye,
+        )
+        if validation is not None:
+            raise api_error(
+                status.HTTP_409_CONFLICT,
+                "en_attente_validation_parentale",
+                "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+            )
+
     transaction.kkiapay_transaction_id = payload.transaction_id
     db.commit()
     db.refresh(transaction)
@@ -530,6 +550,57 @@ def contester_transaction(
     return contestation
 
 
+@router.get(
+    "/etablissements/{etablissement_id}/marketplace/contestations-en-attente",
+    response_model=list[ContestationMarketplaceAEtrancherOut],
+)
+def contestations_en_attente(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[dict]:
+    """UC-20/21 : sans cette liste, l'admin n'a aucun moyen de decouvrir quelles
+    contestations de transaction attendent un arbitrage (meme constat que
+    signalements_en_attente juste au-dessus, pour les contestations plutot que les
+    signalements d'annonce)."""
+    verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    annonce_ids = [
+        a.id for a in db.query(AnnonceMarketplace).filter(AnnonceMarketplace.etablissement_id == etablissement_id).all()
+    ]
+    if not annonce_ids:
+        return []
+    transaction_ids = [
+        t.id for t in db.query(TransactionMarketplace).filter(TransactionMarketplace.annonce_id.in_(annonce_ids)).all()
+    ]
+    if not transaction_ids:
+        return []
+    contestations = (
+        db.query(ContestationMarketplace)
+        .filter(
+            ContestationMarketplace.transaction_id.in_(transaction_ids),
+            ContestationMarketplace.statut == StatutContestationMarketplace.EN_ATTENTE,
+        )
+        .all()
+    )
+    resultats = []
+    for contestation in contestations:
+        transaction = db.get(TransactionMarketplace, contestation.transaction_id)
+        annonce = db.get(AnnonceMarketplace, transaction.annonce_id) if transaction is not None else None
+        resultats.append(
+            {
+                "id": contestation.id,
+                "transaction_id": contestation.transaction_id,
+                "motif": contestation.motif,
+                "statut": contestation.statut,
+                "decision_motif": contestation.decision_motif,
+                "created_at": contestation.created_at,
+                "annonce_titre": annonce.titre if annonce is not None else "Annonce introuvable",
+                "prix_paye": transaction.prix_paye if transaction is not None else 0.0,
+            }
+        )
+    return resultats
+
+
 @router.post("/marketplace/contestations/{contestation_id}/decision", response_model=ContestationMarketplaceOut)
 def decider_contestation(
     contestation_id: str,
@@ -596,6 +667,52 @@ def mes_transactions(
     query = db.query(TransactionMarketplace).filter(
         or_(
             TransactionMarketplace.acheteur_id == utilisateur.id,
+            TransactionMarketplace.annonce_id.in_(mes_annonce_ids or [""]),
+        )
+    )
+    return query.order_by(TransactionMarketplace.created_at.desc()).all()
+
+
+def _verifier_tuteur_de_l_eleve(db: Session, tuteur: Utilisateur, eleve_utilisateur_id: str) -> None:
+    """UC-34 : droit de regard en lecture seule du tuteur sur le marketplace de son enfant."""
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
+    if eleve is None or eleve.tuteur_id != tuteur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte tuteur.")
+
+
+@router.get(
+    "/mes-enfants/{eleve_utilisateur_id}/marketplace/annonces", response_model=list[AnnonceMarketplaceOut]
+)
+def annonces_de_mon_enfant(
+    eleve_utilisateur_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+) -> list[AnnonceMarketplace]:
+    _verifier_tuteur_de_l_eleve(db, utilisateur, eleve_utilisateur_id)
+    return (
+        db.query(AnnonceMarketplace)
+        .filter(AnnonceMarketplace.vendeur_id == eleve_utilisateur_id)
+        .order_by(AnnonceMarketplace.created_at.desc())
+        .all()
+    )
+
+
+@router.get(
+    "/mes-enfants/{eleve_utilisateur_id}/marketplace/transactions", response_model=list[TransactionMarketplaceOut]
+)
+def transactions_de_mon_enfant(
+    eleve_utilisateur_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+) -> list[TransactionMarketplace]:
+    _verifier_tuteur_de_l_eleve(db, utilisateur, eleve_utilisateur_id)
+    mes_annonce_ids = [
+        a.id
+        for a in db.query(AnnonceMarketplace).filter(AnnonceMarketplace.vendeur_id == eleve_utilisateur_id).all()
+    ]
+    query = db.query(TransactionMarketplace).filter(
+        or_(
+            TransactionMarketplace.acheteur_id == eleve_utilisateur_id,
             TransactionMarketplace.annonce_id.in_(mes_annonce_ids or [""]),
         )
     )

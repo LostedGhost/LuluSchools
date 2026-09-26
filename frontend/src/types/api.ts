@@ -71,6 +71,27 @@ export interface AffectationEnseignantOut {
   id: string;
   enseignant_id: string;
   classe_id: string;
+  est_professeur_principal: boolean;
+}
+
+/* UC-24 : vue enrichie d'une classe pour l'enseignant qui la consulte */
+export interface SalleEnseignantOut {
+  id: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  niveau: string;
+  capacite: number;
+  effectif: number;
+  annee_academique: string;
+  est_professeur_principal: boolean;
+}
+
+export interface EleveClasseOut {
+  eleve_id: string;
+  utilisateur_id: string | null;
+  nom: string;
+  prenom: string;
+  matricule: string | null;
 }
 
 export type Nationalite = "nationale" | "etrangere";
@@ -145,6 +166,7 @@ export interface TentativeQuizOut {
 }
 
 export type BaremeDevoir = "rigide" | "flexible";
+export type NatureEvaluation = "formative" | "sommative";
 
 export interface QuestionDevoirOut {
   id: string;
@@ -160,7 +182,13 @@ export interface DevoirOut {
   matiere: string;
   date_limite: string;
   bareme: BaremeDevoir;
+  nature: NatureEvaluation;
+  sujet_lulufiles_file_id: string | null;
   questions: QuestionDevoirOut[];
+}
+
+export interface DevoirProprietaireOut extends DevoirOut {
+  bareme_document_lulufiles_file_id: string | null;
 }
 
 export type StatutSoumission = "en_correction" | "corrigee" | "echec_correction";
@@ -176,6 +204,7 @@ export interface SoumissionOut {
   devoir_id: string;
   note: number | null;
   statut: StatutSoumission;
+  copie_image_lulufiles_file_id: string | null;
   reponses: ReponseOut[];
 }
 
@@ -271,6 +300,20 @@ export interface ContratOut {
   statut: StatutContrat;
   signature_horodatage: string | null;
   signature_image_lulufiles_id: string | null;
+}
+
+export interface ContratAvecEnseignantOut extends ContratOut {
+  enseignant_nom: string;
+  enseignant_prenom: string;
+}
+
+export type StatutProposition = "en_attente" | "acceptee" | "refusee";
+
+export interface PropositionReconductionOut {
+  id: string;
+  contrat_precedent_id: string;
+  nouveau_contrat_id: string | null;
+  statut: StatutProposition;
 }
 
 export interface TypeActeOut {
@@ -510,6 +553,12 @@ export interface ContestationMicroJobOut {
   motif: string;
   statut: StatutContestationMicroJob;
   decision_motif: string | null;
+}
+
+export interface ContestationMicroJobAEtrancherOut extends ContestationMicroJobOut {
+  created_at: string;
+  offre_titre: string;
+  offre_prix: number;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -783,4 +832,314 @@ export interface ConsoleNoteOut {
   periode: string;
   moyenne_generale: number;
   decision_passage: string | null;
+}
+
+export interface ContestationMarketplaceAEtrancherOut extends ContestationMarketplaceOut {
+  created_at: string;
+  annonce_titre: string;
+  prix_paye: number;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-23 : vie scolaire
+   ═══════════════════════════════════════════════════════════════ */
+
+export type NatureEntreeVieScolaire = "absence" | "retard" | "appreciation" | "incident" | "felicitation";
+
+export interface EntreeVieScolaireOut {
+  id: string;
+  eleve_id: string;
+  classe_id: string;
+  auteur_id: string;
+  nature: NatureEntreeVieScolaire;
+  matiere: string | null;
+  description: string;
+  date_survenue: string;
+  created_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-28 : recherche d'utilisateur designable (controleur)
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface UtilisateurDesignableOut {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string | null;
+  role: Role;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-27 : El Professor, volet enseignant
+   ═══════════════════════════════════════════════════════════════ */
+
+export type RoleMessageElProfessorEnseignant = "enseignant" | "assistant";
+
+export interface MessageElProfessorEnseignantOut {
+  id: string;
+  session_id: string;
+  role: RoleMessageElProfessorEnseignant;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SessionElProfessorEnseignantOut {
+  id: string;
+  enseignant_id: string;
+  eleve_utilisateur_id: string | null;
+  sujet: string | null;
+  messages: MessageElProfessorEnseignantOut[];
+}
+
+export interface AlerteElProfessorOut {
+  id: string;
+  session_id: string;
+  etablissement_id: string | null;
+  motif: string;
+  traite: boolean;
+  created_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-25 : tableau collaboratif de session live
+   ═══════════════════════════════════════════════════════════════ */
+
+export type TypeTraitTableau = "trait_libre" | "texte" | "effacement";
+export type ModePermissionEcriture = "pretee" | "accordee";
+export type StatutDemandeCraie = "en_attente" | "accordee" | "refusee";
+
+export interface DonneesTraitLibre {
+  points: [number, number][];
+  epaisseur?: number;
+  couleur?: string;
+}
+
+export interface DonneesTraitTexte {
+  x: number;
+  y: number;
+  texte: string;
+  taille?: number;
+  couleur?: string;
+}
+
+export interface PanneauTableauOut {
+  id: string;
+  session_id: string;
+  ordre: number;
+}
+
+export interface TraitTableauOut {
+  id: string;
+  panneau_id: string;
+  auteur_id: string;
+  type: TypeTraitTableau;
+  donnees: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface PanneauAvecTraitsOut {
+  panneau: PanneauTableauOut;
+  traits: TraitTableauOut[];
+}
+
+export interface PermissionEcritureOut {
+  id: string;
+  session_id: string;
+  eleve_utilisateur_id: string;
+  mode: ModePermissionEcriture;
+}
+
+export interface DemandeCraieOut {
+  id: string;
+  session_id: string;
+  eleve_utilisateur_id: string;
+  statut: StatutDemandeCraie;
+}
+
+export interface EtatTableauOut {
+  panneaux: PanneauAvecTraitsOut[];
+  permissions: PermissionEcritureOut[];
+  demandes_en_attente: DemandeCraieOut[];
+}
+
+export interface CaptureTableauOut {
+  id: string;
+  session_id: string;
+  panneau_id: string;
+  lulufiles_file_id: string;
+  created_at: string;
+}
+
+export interface MessageSessionLiveOut {
+  id: string;
+  session_id: string;
+  auteur_id: string;
+  contenu: string;
+  created_at: string;
+}
+
+export type EvenementTempsReelSessionLive =
+  | { type: "trait"; panneau_id: string; trait: TraitTableauOut }
+  | { type: "demande_craie"; demande: DemandeCraieOut }
+  | { type: "demande_craie_tranchee"; demande: DemandeCraieOut }
+  | { type: "permission_accordee"; eleve_utilisateur_id: string }
+  | { type: "permission_revoquee"; eleve_utilisateur_id: string }
+  | { type: "message"; message: MessageSessionLiveOut }
+  | { type: "webrtc_signal"; from: string; payload: unknown };
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-32/37 : El Professor Tuteur et El Professor Famille
+   ═══════════════════════════════════════════════════════════════ */
+
+export type RoleMessageElProfessorTuteur = "tuteur" | "assistant";
+
+export interface MessageElProfessorTuteurOut {
+  id: string;
+  session_id: string;
+  role: RoleMessageElProfessorTuteur;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SessionElProfessorTuteurOut {
+  id: string;
+  tuteur_id: string;
+  eleve_utilisateur_id: string;
+  sujet: string | null;
+  messages: MessageElProfessorTuteurOut[];
+}
+
+export type RoleMessageElProfessorFamille = "tuteur" | "eleve" | "assistant";
+
+export interface MessageElProfessorFamilleOut {
+  id: string;
+  session_id: string;
+  role: RoleMessageElProfessorFamille;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SessionElProfessorFamilleOut {
+  id: string;
+  tuteur_id: string;
+  eleve_utilisateur_id: string;
+  sujet: string | null;
+  rejointe_le: string | null;
+  messages: MessageElProfessorFamilleOut[];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-33 : résumé asynchrone de session live (tuteur)
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface ResumeSessionLiveOut {
+  id: string;
+  session_id: string;
+  contenu: string;
+  created_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-35 : coffre-fort familial
+   ═══════════════════════════════════════════════════════════════ */
+
+export type ModuleDepenseCoffreFort = "micro_job" | "marketplace" | "acte";
+export type StatutValidationParentale = "en_attente" | "approuvee" | "refusee";
+
+export interface PlafondFamilialOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  plafond_hebdomadaire: number | null;
+  seuil_validation: number | null;
+  updated_at: string;
+}
+
+export interface ValidationParentaleOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  module: ModuleDepenseCoffreFort;
+  reference_id: string;
+  montant: number;
+  statut: StatutValidationParentale;
+  motif_refus: string | null;
+  decidee_at: string | null;
+  created_at: string;
+}
+
+export interface AlerteDepassementPlafondOut {
+  id: string;
+  eleve_utilisateur_id: string;
+  module: ModuleDepenseCoffreFort;
+  montant_semaine: number;
+  plafond: number;
+  created_at: string;
+}
+
+export interface ReleveFinancierOut {
+  eleve_utilisateur_id: string;
+  periode_debut: string | null;
+  periode_fin: string | null;
+  gains_micro_jobs: number;
+  ventes_marketplace: number;
+  achats_marketplace: number;
+  depenses_micro_jobs: number;
+  frais_actes: number;
+  solde_net: number;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-36 : radar familial (digest hebdomadaire)
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface RadarFamilialOut {
+  eleve_utilisateur_id: string;
+  periode_debut: string;
+  periode_fin: string;
+  resume: string;
+  sources: string[];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-38 : passeport de compétences
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface QuizReussiOut {
+  quiz_id: string;
+  cours_titre: string;
+  cours_chapitre: string;
+  score: number;
+  date: string;
+}
+
+export interface CoursSuiviOut {
+  id: string;
+  titre: string;
+  chapitre: string;
+  format: string;
+}
+
+export interface MoyenneMatiereOut {
+  matiere: string;
+  moyenne: number;
+}
+
+export interface BadgeOut {
+  id: string;
+  label: string;
+}
+
+export interface PasseportOut {
+  eleve_utilisateur_id: string;
+  eleve_nom: string;
+  eleve_prenom: string;
+  quiz_reussis: QuizReussiOut[];
+  cours_suivis: CoursSuiviOut[];
+  moyennes_par_matiere: MoyenneMatiereOut[];
+  badges: BadgeOut[];
+}
+
+export interface PasseportExportOut {
+  lulufiles_file_id: string;
+  lien: string;
 }

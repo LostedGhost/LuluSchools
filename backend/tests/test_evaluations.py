@@ -1,3 +1,4 @@
+import io
 from datetime import datetime, timedelta, timezone
 
 from app.core.security import decode_token
@@ -227,3 +228,129 @@ def test_gouvernance_referentiel_coefficient(client, admin_ministeriel_headers, 
     )
     assert validation.status_code == 200
     assert validation.json()["statut"] == "valide"
+
+
+def test_devoir_formatif_exclu_du_calcul_du_bulletin(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    devoir_formatif = client.post(
+        f"/api/v1/classes/{ctx['classe']['id']}/devoirs",
+        json={
+            "titre": "Entrainement",
+            "matiere": "Mathematiques",
+            "date_limite": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+            "bareme": "flexible",
+            "nature": "formative",
+            "questions": [{"enonce": "Q1", "bareme_reponse": "Reponse.", "points_max": 10}],
+        },
+        headers=ctx["enseignant_headers"],
+    ).json()
+    assert devoir_formatif["nature"] == "formative"
+
+    eleve_utilisateur_id = _extraire_sub(ctx)
+    sans_devoir_sommatif = client.get(
+        f"/api/v1/eleves/{eleve_utilisateur_id}/bulletins",
+        params={"classe_id": ctx["classe"]["id"], "periode": "T1"},
+        headers=ctx["enseignant_headers"],
+    )
+    # Aucun devoir SOMMATIF clos : le seul devoir existant (formatif) ne doit pas compter.
+    assert sans_devoir_sommatif.status_code == 404
+
+
+def test_sujet_document_visible_par_l_eleve_bareme_document_reserve_a_l_enseignant(
+    client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    devoir = _creer_devoir(client, ctx, datetime.now(timezone.utc) + timedelta(days=1))
+
+    ajout_sujet = client.post(
+        f"/api/v1/devoirs/{devoir['id']}/sujet-document",
+        files={"fichier": ("sujet.png", io.BytesIO(b"image-sujet"), "image/png")},
+        headers=ctx["enseignant_headers"],
+    )
+    assert ajout_sujet.status_code == 200
+    assert ajout_sujet.json()["sujet_lulufiles_file_id"] is not None
+    assert "bareme_document_lulufiles_file_id" not in ajout_sujet.json()
+
+    lien_eleve = client.get(f"/api/v1/devoirs/{devoir['id']}/sujet-document/lien", headers=ctx["eleve_headers"])
+    assert lien_eleve.status_code == 200
+
+    ajout_bareme = client.post(
+        f"/api/v1/devoirs/{devoir['id']}/bareme-document",
+        files={"fichier": ("bareme.pdf", io.BytesIO(b"%PDF-1.4 bareme"), "application/pdf")},
+        headers=ctx["enseignant_headers"],
+    )
+    assert ajout_bareme.status_code == 200
+    assert ajout_bareme.json()["bareme_document_lulufiles_file_id"] is not None
+
+    lien_bareme_eleve_refuse = client.get(
+        f"/api/v1/devoirs/{devoir['id']}/bareme-document/lien", headers=ctx["eleve_headers"]
+    )
+    assert lien_bareme_eleve_refuse.status_code == 403
+
+    lien_bareme_enseignant = client.get(
+        f"/api/v1/devoirs/{devoir['id']}/bareme-document/lien", headers=ctx["enseignant_headers"]
+    )
+    assert lien_bareme_enseignant.status_code == 200
+
+
+def test_soumission_par_copie_image_corrigee_de_facon_holistique(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    devoir = _creer_devoir(client, ctx, datetime.now(timezone.utc) + timedelta(days=1))
+
+    reponse = client.post(
+        f"/api/v1/devoirs/{devoir['id']}/soumissions/copie-image",
+        files={"fichier": ("copie.png", io.BytesIO(b"image-copie-eleve"), "image/png")},
+        headers=ctx["eleve_headers"],
+    )
+    assert reponse.status_code == 201
+    assert reponse.json()["copie_image_lulufiles_file_id"] is not None
+
+    soumission = client.get(f"/api/v1/soumissions/{reponse.json()['id']}", headers=ctx["eleve_headers"]).json()
+    assert soumission["statut"] == "corrigee"
+    assert soumission["note"] == 20.0  # 2 x 10 points, le fake LLM accorde tout le bareme par defaut
+    assert soumission["reponses"] == []
+
+    doublon = client.post(
+        f"/api/v1/devoirs/{devoir['id']}/soumissions/copie-image",
+        files={"fichier": ("copie2.png", io.BytesIO(b"autre"), "image/png")},
+        headers=ctx["eleve_headers"],
+    )
+    assert doublon.status_code == 409
+
+
+def test_correction_manuelle_de_la_note_globale_apres_echec(
+    client, fake_llm_client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    devoir = _creer_devoir(client, ctx, datetime.now(timezone.utc) + timedelta(days=1))
+
+    fake_llm_client.echec_correction_copie_image = True
+    soumission = client.post(
+        f"/api/v1/devoirs/{devoir['id']}/soumissions/copie-image",
+        files={"fichier": ("copie.png", io.BytesIO(b"image-copie-eleve"), "image/png")},
+        headers=ctx["eleve_headers"],
+    ).json()
+
+    en_echec = client.get(f"/api/v1/soumissions/{soumission['id']}", headers=ctx["eleve_headers"]).json()
+    assert en_echec["statut"] == "echec_correction"
+
+    a_revoir = client.get(
+        f"/api/v1/devoirs/{devoir['id']}/soumissions-a-revoir", headers=ctx["enseignant_headers"]
+    ).json()
+    assert any(s["id"] == soumission["id"] for s in a_revoir)
+
+    correction = client.post(
+        f"/api/v1/soumissions/{soumission['id']}/corriger-note-globale",
+        json={"note": 15},
+        headers=ctx["enseignant_headers"],
+    )
+    assert correction.status_code == 200
+    assert correction.json()["statut"] == "corrigee"
+    assert correction.json()["note"] == 15
+
+    trop_haute = client.post(
+        f"/api/v1/soumissions/{soumission['id']}/corriger-note-globale",
+        json={"note": 999},
+        headers=ctx["enseignant_headers"],
+    )
+    assert trop_haute.status_code == 422

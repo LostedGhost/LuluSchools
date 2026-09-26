@@ -15,9 +15,17 @@ import {
   ShieldCheck,
   Handshake,
   MessageCircle,
+  School,
 } from "lucide-react";
 
 const NAV_CARDS = [
+  {
+    to: "/enseignant/salles",
+    icon: <School size={24} />,
+    tone: "primary" as const,
+    title: "Mes salles",
+    desc: "Établissement, effectif, élèves et vie scolaire",
+  },
   {
     to: "/enseignant/postes",
     icon: <Briefcase size={24} />,
@@ -87,6 +95,13 @@ const NAV_CARDS = [
     tone: "info" as const,
     title: "Messagerie",
     desc: "Groupes de classe et messages privés",
+  },
+  {
+    to: "/enseignant/el-professor",
+    icon: <Bot size={24} />,
+    tone: "magic" as const,
+    title: "El Professor",
+    desc: "Conseil éducatif, moral et professionnel sur vos élèves",
   },
 ];
 

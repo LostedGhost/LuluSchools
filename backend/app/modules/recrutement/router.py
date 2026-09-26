@@ -14,12 +14,12 @@ from app.core.deps import (
     require_roles,
     verifier_portee_etablissement,
 )
+from app.core.conversion import convertir_en_image
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.formulaire import valider_reponses_formulaire
 from app.core.llm import DocumentScoringError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
 from app.modules.identite.models import Enseignant, RoleUtilisateur, Utilisateur
-from app.modules.recrutement.conversion import convertir_en_image
 from app.modules.recrutement.models import (
     Candidature,
     Contestation,
@@ -42,6 +42,7 @@ from app.modules.recrutement.schemas import (
     ContestationCreate,
     ContestationDecisionRequest,
     ContestationOut,
+    ContratAvecEnseignantOut,
     ContratCreate,
     ContratOut,
     EnseignantSigneOut,
@@ -169,6 +170,39 @@ def mes_contrats(
     db: Session = Depends(get_db), enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT))
 ) -> list[Contrat]:
     return db.query(Contrat).filter(Contrat.enseignant_id == enseignant.id).all()
+
+
+@router.get("/etablissements/{etablissement_id}/contrats", response_model=list[ContratAvecEnseignantOut])
+def lister_contrats_etablissement(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[ContratAvecEnseignantOut]:
+    """Sans cette liste, l'admin n'a aucun moyen de retrouver les contrats de son
+    etablissement pour proposer une reconduction (UC-05b) sans deja connaitre leur id."""
+    verifier_portee_etablissement(db, admin, etablissement_id)
+    lignes = (
+        db.query(Contrat, Utilisateur.nom, Utilisateur.prenom)
+        .join(Utilisateur, Utilisateur.id == Contrat.enseignant_id)
+        .filter(Contrat.etablissement_id == etablissement_id)
+        .order_by(Contrat.date_fin.asc())
+        .all()
+    )
+    return [
+        ContratAvecEnseignantOut(
+            id=contrat.id,
+            candidature_id=contrat.candidature_id,
+            etablissement_id=contrat.etablissement_id,
+            syllabus=contrat.syllabus,
+            date_fin=contrat.date_fin,
+            statut=contrat.statut,
+            signature_horodatage=contrat.signature_horodatage,
+            signature_image_lulufiles_id=contrat.signature_image_lulufiles_id,
+            enseignant_nom=nom,
+            enseignant_prenom=prenom,
+        )
+        for contrat, nom, prenom in lignes
+    ]
 
 
 @router.get("/etablissements/{etablissement_id}/contestations-en-attente", response_model=list[ContestationOut])

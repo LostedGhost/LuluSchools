@@ -181,6 +181,33 @@ def test_contestation_rejetee_exige_un_motif_et_valide_la_mission(
     assert mission_a_jour["statut"] == "validee"
 
 
+def test_contestations_en_attente_liste_pour_l_admin_ministeriel(
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers, etudiant_headers
+):
+    ctx = classe_avec_enseignant_et_eleve
+    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers)
+    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
+    contestation = client.post(
+        f"/api/v1/missions-micro-job/{mission['id']}/contester",
+        json={"motif": "Travail non conforme"},
+        headers=ctx["tuteur_headers"],
+    ).json()
+
+    liste = client.get("/api/v1/contestations-micro-job-en-attente", headers=admin_ministeriel_headers)
+    assert liste.status_code == 200
+    assert len(liste.json()) == 1
+    assert liste.json()[0]["id"] == contestation["id"]
+    assert liste.json()[0]["offre_titre"] == offre["titre"]
+
+    client.post(
+        f"/api/v1/contestations-micro-job/{contestation['id']}/decision",
+        json={"decision": "rejetee", "decision_motif": "Preuve insuffisante"},
+        headers=admin_ministeriel_headers,
+    )
+    liste_apres = client.get("/api/v1/contestations-micro-job-en-attente", headers=admin_ministeriel_headers).json()
+    assert liste_apres == []
+
+
 def test_contestation_acceptee_rembourse_le_client(
     client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers, etudiant_headers
 ):

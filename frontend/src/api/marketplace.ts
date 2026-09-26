@@ -4,6 +4,7 @@ import type {
   AnnonceMarketplaceOut,
   AnnoncesMarketplacePage,
   CategorieAnnonce,
+  ContestationMarketplaceAEtrancherOut,
   ContestationMarketplaceOut,
   EtatArticle,
   SignalementAnnonceOut,
@@ -62,6 +63,14 @@ export function mesAnnonces() {
   return api.get<AnnonceMarketplaceOut[]>("/mes-annonces-marketplace");
 }
 
+export function annoncesDeMonEnfant(eleveUtilisateurId: string) {
+  return api.get<AnnonceMarketplaceOut[]>(`/mes-enfants/${eleveUtilisateurId}/marketplace/annonces`);
+}
+
+export function transactionsDeMonEnfant(eleveUtilisateurId: string) {
+  return api.get<TransactionMarketplaceOut[]>(`/mes-enfants/${eleveUtilisateurId}/marketplace/transactions`);
+}
+
 export function reserverAnnonce(annonceId: string) {
   return api.post<TransactionMarketplaceOut>(`/marketplace/annonces/${annonceId}/reserver`);
 }
@@ -104,6 +113,12 @@ export function traiterSignalementAnnonce(signalementId: string, decision: strin
 
 export function retirerAnnonceModeration(annonceId: string, motif: string) {
   return api.post<AnnonceMarketplaceOut>(`/marketplace/annonces/${annonceId}/retirer`, { motif });
+}
+
+export function contestationsMarketplaceEnAttente(etablissementId: string) {
+  return api.get<ContestationMarketplaceAEtrancherOut[]>(
+    `/etablissements/${etablissementId}/marketplace/contestations-en-attente`,
+  );
 }
 
 export function deciderContestationMarketplace(

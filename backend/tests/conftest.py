@@ -10,7 +10,15 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db, get_session_factory
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
-from app.core.llm import CorrectionError, DocumentScoringError, ElProfessorError, QuizGenerationError, get_llm_client
+from app.core.llm import (
+    CorrectionError,
+    DigestFamilleError,
+    DocumentScoringError,
+    ElProfessorError,
+    QuizGenerationError,
+    ResumeSessionLiveError,
+    get_llm_client,
+)
 from app.core.security import create_access_token, decode_token, hash_password
 from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -97,6 +105,18 @@ class FakeLLMClient:
         self.echec_generation_quiz = False
         self.reponse_el_professor = "Voici l'explication demandee."
         self.echec_el_professor = False
+        self.note_copie_image_ratio = 1.0  # part de points_max_total accordee par defaut
+        self.echec_correction_copie_image = False
+        self.reponse_conseil_enseignant = "Voici mon conseil."
+        self.echec_conseil_enseignant = False
+        self.reponse_conseil_tuteur = "Voici mon conseil pour votre enfant."
+        self.echec_conseil_tuteur = False
+        self.reponse_resume_session_live = "Resume : la classe a revu les fractions."
+        self.echec_resume_session_live = False
+        self.reponse_conseil_famille = "Voici mon conseil pour vous deux."
+        self.echec_conseil_famille = False
+        self.reponse_digest_famille = "Cette semaine, votre enfant a bien avance."
+        self.echec_digest_famille = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -128,6 +148,40 @@ class FakeLLMClient:
         if self.echec_el_professor:
             raise ElProfessorError("echec simule")
         return self.reponse_el_professor
+
+    def corriger_copie_image(
+        self, consigne_globale: str, points_max_total: float, image_bytes: bytes, content_type: str, strict: bool
+    ) -> float:
+        if self.echec_correction_copie_image:
+            raise CorrectionError("echec simule")
+        return points_max_total * self.note_copie_image_ratio
+
+    def conseiller_enseignant(self, contexte_eleve: str | None, historique: list[dict], question: str) -> str:
+        if self.echec_conseil_enseignant:
+            raise ElProfessorError("echec simule")
+        return self.reponse_conseil_enseignant
+
+    def conseiller_tuteur(self, contexte_eleve: str | None, historique: list[dict], question: str) -> str:
+        if self.echec_conseil_tuteur:
+            raise ElProfessorError("echec simule")
+        return self.reponse_conseil_tuteur
+
+    def resumer_session_live(self, messages_chat: list[str], contenu_tableau: str) -> str:
+        if self.echec_resume_session_live:
+            raise ResumeSessionLiveError("echec simule")
+        return self.reponse_resume_session_live
+
+    def conseiller_famille(
+        self, contexte_eleve: str | None, historique: list[dict], question: str, qui_parle: str
+    ) -> str:
+        if self.echec_conseil_famille:
+            raise ElProfessorError("echec simule")
+        return self.reponse_conseil_famille
+
+    def generer_digest_famille(self, eleve_nom: str, sources: list[str]) -> str:
+        if self.echec_digest_famille:
+            raise DigestFamilleError("echec simule")
+        return self.reponse_digest_famille
 
 
 @pytest.fixture()
@@ -265,6 +319,79 @@ def etudiant_headers(client, fake_email_client, admin_ministeriel_headers):
         headers=headers,
     )
     return headers
+
+
+@pytest.fixture()
+def classe_avec_tuteur_et_etudiant(client, fake_email_client, admin_ministeriel_headers):
+    """Meme etablissement UP + etudiant que `etudiant_headers`, mais expose aussi les
+    headers du tuteur (necessaire pour les tests coffre-fort : depuis l'arbitrage
+    utilisateur du 2026-09-26, seul un ETUDIANT peut etre CLIENT d'un micro-job ou
+    publier sur la marketplace - `classe_avec_enseignant_et_eleve`, dont l'eleve est
+    EP/CE1, ne convient plus pour exercer ces deux modules de depense)."""
+    etablissement = client.post(
+        "/api/v1/etablissements",
+        json={
+            "nom": "Universite Test Coffre-Fort",
+            "type": "UP",
+            "statut": "public",
+            "admin": {"nom": "Dossou", "prenom": "Universite", "email": "admin.universite.coffrefort@example.com"},
+            "latitude": 6.4,
+            "longitude": 2.4,
+        },
+        headers=admin_ministeriel_headers,
+    ).json()
+    mot_de_passe_temp = next(
+        m["mot_de_passe"] for m in fake_email_client.sent if m.get("to_email") == "admin.universite.coffrefort@example.com"
+    )
+    login_admin = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": "admin.universite.coffrefort@example.com", "mot_de_passe": mot_de_passe_temp},
+    ).json()
+    admin_headers = {"Authorization": f"Bearer {login_admin['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=admin_headers,
+    )
+
+    classe = client.post(
+        f"/api/v1/etablissements/{etablissement['id']}/classes",
+        json={"niveau": "1ère année de Licence", "capacite": 3, "politique_depassement": "ordre_arrivee"},
+        headers=admin_headers,
+    ).json()
+
+    tuteur_payload = {
+        "nom": "Zannou", "prenom": "Parent", "email": "parent.coffrefort.fixture@example.com", "mot_de_passe": "Password1",
+    }
+    client.post("/api/v1/auth/tuteurs", json=tuteur_payload)
+    code = next(m["code"] for m in reversed(fake_email_client.sent) if m.get("to_email") == tuteur_payload["email"])
+    client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": tuteur_payload["email"], "code": code})
+    login_tuteur = client.post(
+        "/api/v1/auth/login", json={"identifiant": tuteur_payload["email"], "mot_de_passe": tuteur_payload["mot_de_passe"]}
+    ).json()
+    tuteur_headers = {"Authorization": f"Bearer {login_tuteur['access_token']}"}
+
+    inscription = client.post(
+        "/api/v1/inscriptions",
+        json={
+            "nom": "Etudiant", "prenom": "Test", "date_naissance": "2003-01-01", "classe_id": classe["id"],
+            "consentement_parental_donne": True,
+        },
+        headers=tuteur_headers,
+    ).json()
+    client.post(f"/api/v1/inscriptions/{inscription['id']}/valider", headers=admin_headers)
+    identifiants = next(m for m in fake_email_client.sent if "login_id" in m and m["to_email"] == tuteur_payload["email"])
+    login_eleve = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": identifiants["login_id"], "mot_de_passe": identifiants["mot_de_passe"]},
+    ).json()
+    eleve_headers = {"Authorization": f"Bearer {login_eleve['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": identifiants["mot_de_passe"], "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=eleve_headers,
+    )
+    return {"etablissement": etablissement, "classe": classe, "tuteur_headers": tuteur_headers, "eleve_headers": eleve_headers}
 
 
 @pytest.fixture()

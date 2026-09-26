@@ -8,7 +8,7 @@ import {
 } from "../../api/services_scolaires";
 import { designerControleur, listerControleurs, revoquerControleur } from "../../api/controle_acces";
 import { messageErreur } from "../../api/client";
-import type { DesignationControleurOut, LigneTransportOut, ServiceControle, TypeRepasCantineOut } from "../../types/api";
+import type { DesignationControleurOut, LigneTransportOut, ServiceControle, TypeRepasCantineOut, UtilisateurDesignableOut } from "../../types/api";
 import {
   Badge,
   Btn,
@@ -23,6 +23,7 @@ import {
   SuccessBanner,
   TextInput,
 } from "../../components/ui";
+import { RechercheUtilisateurDesignable } from "../../components/RechercheUtilisateurDesignable";
 import { Bus, ShieldCheck, Trash2, Utensils } from "lucide-react";
 import { estRempli } from "../../utils/validation";
 
@@ -51,7 +52,7 @@ export function ServicesScolairesAdminPage() {
   const [capaciteType, setCapaciteType] = useState("");
   const [enCoursType, setEnCoursType] = useState(false);
 
-  const [utilisateurIdControleur, setUtilisateurIdControleur] = useState("");
+  const [controleurSelectionne, setControleurSelectionne] = useState<UtilisateurDesignableOut | null>(null);
   const [serviceControleur, setServiceControleur] = useState<ServiceControle>("transport");
   const [enCoursControleur, setEnCoursControleur] = useState(false);
   const [revocationEnCoursId, setRevocationEnCoursId] = useState<string | null>(null);
@@ -120,19 +121,19 @@ export function ServicesScolairesAdminPage() {
 
   const soumettreControleur = async (e: FormEvent) => {
     e.preventDefault();
-    if (!estRempli(utilisateurIdControleur)) {
-      setErreur("Veuillez saisir l'identifiant de l'utilisateur à désigner.");
+    if (!controleurSelectionne) {
+      setErreur("Veuillez sélectionner un utilisateur à désigner.");
       return;
     }
     setErreur(null);
     setEnCoursControleur(true);
     try {
-      await designerControleur(etablissement.id, utilisateurIdControleur.trim(), serviceControleur);
-      setUtilisateurIdControleur("");
-      setSucces("Contrôleur désigné.");
+      await designerControleur(etablissement.id, controleurSelectionne.id, serviceControleur);
+      setControleurSelectionne(null);
+      setSucces(`${controleurSelectionne.prenom} ${controleurSelectionne.nom} désigné(e) contrôleur.`);
       charger();
     } catch (err) {
-      setErreur(messageErreur(err, "Impossible de désigner ce contrôleur. Vérifiez l'identifiant."));
+      setErreur(messageErreur(err, "Impossible de désigner ce contrôleur."));
     } finally {
       setEnCoursControleur(false);
     }
@@ -248,9 +249,11 @@ export function ServicesScolairesAdminPage() {
         <Card variant="soft" style={{ marginBottom: "16px" }}>
           <form onSubmit={soumettreControleur} style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ flex: 1, minWidth: "220px" }}>
-              <Field label="Identifiant utilisateur" required helper="ID interne du compte à désigner comme contrôleur.">
-                <TextInput value={utilisateurIdControleur} onChange={(e) => setUtilisateurIdControleur(e.target.value)} placeholder="ID utilisateur" />
-              </Field>
+              <RechercheUtilisateurDesignable
+                etablissementId={etablissement.id}
+                selection={controleurSelectionne}
+                onSelect={setControleurSelectionne}
+              />
             </div>
             <div style={{ minWidth: "160px" }}>
               <Field label="Service">

@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { BulletinOut, DevoirOut, SoumissionOut } from "../types/api";
+import type { BulletinOut, DevoirOut, DevoirProprietaireOut, LienFichierOut, NatureEvaluation, SoumissionOut } from "../types/api";
 
 export function listerDevoirs(classeId: string) {
   return api.get<DevoirOut[]>(`/classes/${classeId}/devoirs`);
@@ -26,6 +26,10 @@ export function obtenirSoumission(soumissionId: string) {
   return api.get<SoumissionOut>(`/soumissions/${soumissionId}`);
 }
 
+export function obtenirSoumissionDeMonEnfant(devoirId: string, eleveUtilisateurId: string) {
+  return api.get<SoumissionOut>(`/devoirs/${devoirId}/soumission-de/${eleveUtilisateurId}`);
+}
+
 export function obtenirBulletin(eleveUtilisateurId: string, classeId: string, periode: string) {
   return api.get<BulletinOut>(`/eleves/${eleveUtilisateurId}/bulletins`, {
     params: { classe_id: classeId, periode },
@@ -45,14 +49,52 @@ export function creerDevoir(
   dateLimite: string,
   bareme: "rigide" | "flexible",
   questions: QuestionDevoirPayload[],
+  nature: NatureEvaluation = "sommative",
 ) {
   return api.post<DevoirOut>(`/classes/${classeId}/devoirs`, {
     titre,
     matiere,
     date_limite: dateLimite,
     bareme,
+    nature,
     questions,
   });
+}
+
+export function televerserSujetDocument(devoirId: string, fichier: File) {
+  const formData = new FormData();
+  formData.append("fichier", fichier);
+  return api.post<DevoirOut>(`/devoirs/${devoirId}/sujet-document`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+export function obtenirLienSujetDocument(devoirId: string) {
+  return api.get<LienFichierOut>(`/devoirs/${devoirId}/sujet-document/lien`);
+}
+
+export function televerserBaremeDocument(devoirId: string, fichier: File) {
+  const formData = new FormData();
+  formData.append("fichier", fichier);
+  return api.post<DevoirProprietaireOut>(`/devoirs/${devoirId}/bareme-document`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+export function obtenirLienBaremeDocument(devoirId: string) {
+  return api.get<LienFichierOut>(`/devoirs/${devoirId}/bareme-document/lien`);
+}
+
+export function soumettreDevoirParCopieImage(devoirId: string, fichier: File) {
+  const formData = new FormData();
+  formData.append("fichier", fichier);
+  return api.post<SoumissionOut>(`/devoirs/${devoirId}/soumissions/copie-image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+export function corrigerNoteGlobale(soumissionId: string, note: number) {
+  return api.post<SoumissionOut>(`/soumissions/${soumissionId}/corriger-note-globale`, { note });
 }
 
 export function soumissionsARevoir(devoirId: string) {

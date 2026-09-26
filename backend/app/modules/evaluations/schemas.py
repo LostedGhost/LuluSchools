@@ -2,7 +2,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.evaluations.models import BaremeDevoir, StatutReferentiel, StatutSoumission
+from app.modules.evaluations.models import BaremeDevoir, NatureEvaluation, StatutReferentiel, StatutSoumission
+
+
+class LienFichierOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
 
 
 class QuestionDevoirCreate(BaseModel):
@@ -44,6 +50,7 @@ class DevoirCreate(BaseModel):
     matiere: str
     date_limite: datetime
     bareme: BaremeDevoir
+    nature: NatureEvaluation = NatureEvaluation.SOMMATIVE
     questions: list[QuestionDevoirCreate] = Field(min_length=1)
 
 
@@ -56,7 +63,17 @@ class DevoirOut(BaseModel):
     matiere: str
     date_limite: datetime
     bareme: BaremeDevoir
+    nature: NatureEvaluation
+    sujet_lulufiles_file_id: str | None
     questions: list[QuestionDevoirOut]
+
+
+class DevoirProprietaireOut(DevoirOut):
+    """Reservee au proprietaire du devoir (reponses aux uploads de sujet/bareme) - meme
+    logique que QuestionDevoirAvecBaremeOut : bareme_document_lulufiles_file_id ne doit
+    JAMAIS apparaitre sur DevoirOut, lu aussi par l'eleve avant sa soumission."""
+
+    bareme_document_lulufiles_file_id: str | None
 
 
 class ReponseCreate(BaseModel):
@@ -87,6 +104,7 @@ class SoumissionOut(BaseModel):
     devoir_id: str
     note: float | None
     statut: StatutSoumission
+    copie_image_lulufiles_file_id: str | None
     reponses: list[ReponseOut]
 
 
@@ -101,6 +119,16 @@ class CorrectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reponses: list[CorrectionManuelleReponse] = Field(min_length=1)
+
+
+class CorrectionNoteGlobaleRequest(BaseModel):
+    """UC-26.4 : revision manuelle d'une soumission par copie image - une seule note
+    globale (pas de decoupage par question), voir POST /soumissions/{id}/corriger pour
+    l'equivalent des soumissions texte question par question."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: float = Field(ge=0)
 
 
 class ReferentielCreate(BaseModel):

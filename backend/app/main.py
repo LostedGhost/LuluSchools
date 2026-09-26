@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.modules.actes.router import router as actes_router
 from app.modules.audit.router import router as audit_router
 from app.modules.billetterie.router import router as billetterie_router
+from app.modules.coffre_fort.router import router as coffre_fort_router
 from app.modules.controle_acces.router import router as controle_acces_router
 from app.modules.cours_direct.router import router as cours_direct_router
 from app.modules.etablissements.router import classes_router as etablissements_classes_router
@@ -24,8 +25,11 @@ from app.modules.marketplace.router import router as marketplace_router
 from app.modules.messagerie.router import router as messagerie_router
 from app.modules.micro_jobs.router import router as micro_jobs_router
 from app.modules.paiements.router import router as kkiapay_webhook_router
+from app.modules.passeport_competences.router import router as passeport_competences_router
+from app.modules.radar_familial.router import router as radar_familial_router
 from app.modules.recrutement.router import router as recrutement_router
 from app.modules.services_scolaires.router import router as services_scolaires_router
+from app.modules.vie_scolaire.router import router as vie_scolaire_router
 from app.modules.visites_virtuelles.router import router as visites_virtuelles_router
 from app.system.router import router as system_router
 
@@ -81,10 +85,14 @@ app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")
 app.include_router(services_scolaires_router, prefix="/api/v1")
+app.include_router(vie_scolaire_router, prefix="/api/v1")
 app.include_router(billetterie_router, prefix="/api/v1")
 app.include_router(messagerie_router, prefix="/api/v1")
 app.include_router(cours_direct_router, prefix="/api/v1")
 app.include_router(visites_virtuelles_router, prefix="/api/v1")
 app.include_router(micro_jobs_router, prefix="/api/v1")
 app.include_router(marketplace_router, prefix="/api/v1")
+app.include_router(coffre_fort_router, prefix="/api/v1")
+app.include_router(radar_familial_router, prefix="/api/v1")
+app.include_router(passeport_competences_router, prefix="/api/v1")
 app.include_router(kkiapay_webhook_router, prefix="/api/v1")

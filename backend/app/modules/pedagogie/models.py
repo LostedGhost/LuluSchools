@@ -113,3 +113,158 @@ class MessageElProfessor(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     session: Mapped[SessionElProfessor] = relationship(back_populates="messages")
+
+
+class RoleMessageElProfessorEnseignant(str, enum.Enum):
+    ENSEIGNANT = "enseignant"
+    ASSISTANT = "assistant"
+
+
+class SessionElProfessorEnseignant(Base):
+    """UC-27 : El Professor cote enseignant - conseil educatif/moral/professionnel sur un
+    eleve ou une question generale de pratique. Contrairement a SessionElProfessor (cote
+    eleve, upsert unique par cours), un enseignant peut ouvrir plusieurs sessions
+    distinctes (un fil par sujet/eleve) - c'est un historique de conversations, pas un
+    fil de continuite pedagogique unique."""
+
+    __tablename__ = "sessions_el_professor_enseignant"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    enseignant_id: Mapped[str] = mapped_column(ForeignKey("enseignants.utilisateur_id"), index=True)
+    eleve_utilisateur_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True, index=True)
+    sujet: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    messages: Mapped[list["MessageElProfessorEnseignant"]] = relationship(
+        back_populates="session", order_by="MessageElProfessorEnseignant.created_at"
+    )
+
+
+class MessageElProfessorEnseignant(Base):
+    __tablename__ = "messages_el_professor_enseignant"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions_el_professor_enseignant.id"), index=True)
+    role: Mapped[RoleMessageElProfessorEnseignant] = mapped_column(Enum(RoleMessageElProfessorEnseignant))
+    contenu: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    session: Mapped[SessionElProfessorEnseignant] = relationship(back_populates="messages")
+
+
+class RoleMessageElProfessorTuteur(str, enum.Enum):
+    TUTEUR = "tuteur"
+    ASSISTANT = "assistant"
+
+
+class SessionElProfessorTuteur(Base):
+    """UC-32 : El Professor cote tuteur - conseil sur SON enfant (contrairement au fil
+    enseignant, eleve_utilisateur_id est toujours requis : un tuteur ne consulte jamais
+    "en general", toujours a propos d'un enfant precis). Meme logique de fils multiples
+    que SessionElProfessorEnseignant (pas d'upsert unique)."""
+
+    __tablename__ = "sessions_el_professor_tuteur"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    tuteur_id: Mapped[str] = mapped_column(ForeignKey("tuteurs.utilisateur_id"), index=True)
+    eleve_utilisateur_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
+    sujet: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    messages: Mapped[list["MessageElProfessorTuteur"]] = relationship(
+        back_populates="session", order_by="MessageElProfessorTuteur.created_at"
+    )
+
+
+class MessageElProfessorTuteur(Base):
+    __tablename__ = "messages_el_professor_tuteur"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions_el_professor_tuteur.id"), index=True)
+    role: Mapped[RoleMessageElProfessorTuteur] = mapped_column(Enum(RoleMessageElProfessorTuteur))
+    contenu: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    session: Mapped[SessionElProfessorTuteur] = relationship(back_populates="messages")
+
+
+class OrigineAlerteElProfessor(str, enum.Enum):
+    ENSEIGNANT = "enseignant"
+    TUTEUR = "tuteur"
+    FAMILLE = "famille"
+
+
+class AlerteElProfessor(Base):
+    """UC-27.3/UC-32.2 : garde-fou de securite - quand une conversation (cote enseignant
+    OU cote tuteur, voir `origine`) contient un signal de danger (voir
+    pedagogie/router.py::_detecter_signal_alerte), El Professor ne traite jamais seul :
+    une alerte est preparee ici pour l'administration, en plus d'une recommandation
+    explicite d'escalade dans la reponse elle-meme. `session_id` n'est PAS une vraie
+    ForeignKey (reference soit sessions_el_professor_enseignant soit
+    sessions_el_professor_tuteur selon `origine` - meme choix que
+    DesignationControleur.evenement_id) : verification applicative uniquement.
+    `eleve_utilisateur_id` est denormalise (redondant avec la session referencee) pour
+    permettre une requete directe "les alertes concernant MON enfant" cote tuteur, sans
+    jointure polymorphe. etablissement_id reste NULL si aucun eleve precis n'est
+    concerne (question generale cote enseignant), auquel cas seul l'audit interne (pas
+    d'ecran admin/tuteur) la conserve."""
+
+    __tablename__ = "alertes_el_professor"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    origine: Mapped[OrigineAlerteElProfessor] = mapped_column(
+        Enum(OrigineAlerteElProfessor), default=OrigineAlerteElProfessor.ENSEIGNANT
+    )
+    session_id: Mapped[str] = mapped_column(String(36), index=True)
+    etablissement_id: Mapped[str | None] = mapped_column(ForeignKey("etablissements.id"), nullable=True, index=True)
+    eleve_utilisateur_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True, index=True)
+    motif: Mapped[str] = mapped_column(Text)
+    traite: Mapped[bool] = mapped_column(Boolean, default=False)
+    traite_par_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+# --- UC-37 : El Professor Famille (fil partage tuteur + enfant) ---
+
+
+class RoleMessageElProfessorFamille(str, enum.Enum):
+    TUTEUR = "tuteur"
+    ELEVE = "eleve"
+    ASSISTANT = "assistant"
+
+
+class SessionElProfessorFamille(Base):
+    """UC-37 : fil El Professor partage entre un tuteur et son enfant, contrairement aux
+    fils strictement individuels SessionElProfessorTuteur/SessionElProfessor - les deux
+    posent des questions dans le meme fil, l'IA s'adresse explicitement a l'un ou
+    l'autre (voir role sur MessageElProfessorFamille). Toujours cree par le tuteur (qui
+    "invite" son enfant) ; `rejointe_le` reste NULL tant que l'enfant n'a pas
+    explicitement rejoint (voir router.py::rejoindre_session_el_professor_famille) -
+    aucun message ne peut etre poste avant, ni par l'un ni par l'autre (R3 : jamais l'IA
+    ne bascule seule un fil individuel existant vers le mode famille, la co-initiation
+    est toujours explicite des deux cotes)."""
+
+    __tablename__ = "sessions_el_professor_famille"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    tuteur_id: Mapped[str] = mapped_column(ForeignKey("tuteurs.utilisateur_id"), index=True)
+    eleve_utilisateur_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
+    sujet: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    rejointe_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    messages: Mapped[list["MessageElProfessorFamille"]] = relationship(
+        back_populates="session", order_by="MessageElProfessorFamille.created_at"
+    )
+
+
+class MessageElProfessorFamille(Base):
+    __tablename__ = "messages_el_professor_famille"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions_el_professor_famille.id"), index=True)
+    role: Mapped[RoleMessageElProfessorFamille] = mapped_column(Enum(RoleMessageElProfessorFamille))
+    contenu: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    session: Mapped[SessionElProfessorFamille] = relationship(back_populates="messages")

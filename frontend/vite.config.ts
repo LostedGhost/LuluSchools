@@ -10,6 +10,7 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
+        ws: true, // UC-25 : canal temps reel /api/v1/ws/sessions-live/{id}
       },
     },
   },

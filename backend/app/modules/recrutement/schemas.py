@@ -158,6 +158,15 @@ class ContratOut(BaseModel):
     signature_image_lulufiles_id: str | None
 
 
+class ContratAvecEnseignantOut(ContratOut):
+    """Utilise pour la liste des contrats d'un etablissement cote admin (UC-05b) -
+    expose le nom/prenom de l'enseignant en plus des champs de ContratOut, sur le
+    meme principe que EnseignantSigneOut."""
+
+    enseignant_nom: str
+    enseignant_prenom: str
+
+
 class ReconductionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

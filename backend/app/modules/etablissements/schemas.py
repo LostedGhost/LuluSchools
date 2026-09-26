@@ -67,6 +67,9 @@ class ClasseCreate(BaseModel):
     annee_academique: str | None = None
     capacite: int
     politique_depassement: PolitiqueDepassement
+    # UC-24 : optionnel - permet a un A+/A++ de preparer les classes de l'annee suivante
+    # en avance. Par defaut, l'annee academique en cours au moment de la creation.
+    annee_academique: str | None = None
 
 
 class ClasseOut(BaseModel):
@@ -80,6 +83,7 @@ class ClasseOut(BaseModel):
     reconduite_depuis_id: str | None
     capacite: int
     politique_depassement: PolitiqueDepassement
+    annee_academique: str
 
 
 class ReconduireClassesRequest(BaseModel):
@@ -101,6 +105,45 @@ class AffectationEnseignantOut(BaseModel):
     id: str
     enseignant_id: str
     classe_id: str
+    est_professeur_principal: bool
+
+
+class ProfesseurPrincipalCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enseignant_utilisateur_id: str
+
+
+class SalleEnseignantOut(BaseModel):
+    """UC-24 : vue enrichie d'une classe pour l'enseignant qui la consulte (GET
+    /mes-classes-affectees) - une ClasseOut ne suffit pas, il faut aussi le nom de
+    l'etablissement (l'enseignant peut intervenir dans plusieurs etablissements) et
+    l'effectif, sans que l'enseignant ait a faire d'appels supplementaires."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    etablissement_id: str
+    etablissement_nom: str
+    niveau: str
+    capacite: int
+    effectif: int
+    annee_academique: str
+    est_professeur_principal: bool
+
+
+class EleveClasseOut(BaseModel):
+    """UC-24.3 : liste des eleves d'une classe, cote enseignant - jamais plus que le
+    strict necessaire pour identifier l'eleve (pas de date de naissance/nationalite ici,
+    reservees aux ecrans d'inscription)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_id: str
+    utilisateur_id: str | None
+    nom: str
+    prenom: str
+    matricule: str | None
 
 
 class EtablissementVitrineOut(BaseModel):

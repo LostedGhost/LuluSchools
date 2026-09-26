@@ -80,3 +80,291 @@ def test_seul_l_enseignant_organisateur_peut_demarrer_ou_terminer(client, classe
 
     refus_rejoindre = client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
     assert refus_rejoindre.status_code == 409
+
+
+def test_tuteur_ne_voit_les_sessions_live_que_de_la_classe_de_son_enfant(
+    client, classe_avec_enseignant_et_eleve, admin_ministeriel_headers, fake_email_client
+):
+    """UC-29.2 : correction - lister_sessions_live acceptait TUTEUR sans jamais
+    verifier sa portee reelle (contrairement a ELEVE/ENSEIGNANT)."""
+    ctx = classe_avec_enseignant_et_eleve
+    _planifier_session(client, ctx)
+
+    autre_etablissement = client.post(
+        "/api/v1/etablissements",
+        json={
+            "nom": "Ecole Etrangere Live",
+            "type": "EP",
+            "statut": "public",
+            "admin": {"nom": "Adjovi", "prenom": "Rose", "email": "rose.adjovi.live@example.com"},
+            "latitude": 6.4969,
+            "longitude": 2.6289,
+        },
+        headers=admin_ministeriel_headers,
+    ).json()
+    mot_de_passe_temp = next(
+        m["mot_de_passe"] for m in fake_email_client.sent if m.get("to_email") == "rose.adjovi.live@example.com"
+    )
+    login_admin_etranger = client.post(
+        "/api/v1/auth/login", json={"identifiant": "rose.adjovi.live@example.com", "mot_de_passe": mot_de_passe_temp}
+    ).json()
+    admin_etranger_headers = {"Authorization": f"Bearer {login_admin_etranger['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=admin_etranger_headers,
+    )
+    autre_classe = client.post(
+        f"/api/v1/etablissements/{autre_etablissement['id']}/classes",
+        json={"niveau": "CE2", "capacite": 20, "politique_depassement": "ordre_arrivee"},
+        headers=admin_etranger_headers,
+    ).json()
+
+    accepte = client.get(f"/api/v1/classes/{ctx['classe']['id']}/sessions-live", headers=ctx["tuteur_headers"])
+    assert accepte.status_code == 200
+
+    refuse = client.get(f"/api/v1/classes/{autre_classe['id']}/sessions-live", headers=ctx["tuteur_headers"])
+    assert refuse.status_code == 403
+
+
+def test_eleve_peut_rejoindre_la_salle_sociale_avant_le_debut(client, classe_avec_enseignant_et_eleve):
+    """UC-25.5 : la session n'a pas besoin d'etre demarree pour qu'un eleve la rejoigne
+    (salle sociale pre-cours) - seul le tableau reste verrouille en ecriture."""
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+
+    participation = client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
+    assert participation.status_code == 200
+
+    message = client.post(
+        f"/api/v1/sessions-live/{session['id']}/messages",
+        json={"contenu": "Bonjour, le prof n'est pas encore la !"},
+        headers=ctx["eleve_headers"],
+    )
+    assert message.status_code == 201
+
+
+# --- UC-25 : tableau collaboratif ---
+
+
+def test_professeur_ecrit_sur_le_tableau_eleve_sans_permission_est_refuse(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
+
+    etat = client.get(f"/api/v1/sessions-live/{session['id']}/tableau", headers=ctx["enseignant_headers"])
+    assert etat.status_code == 200
+    assert len(etat.json()["panneaux"]) == 1
+    panneau_id = etat.json()["panneaux"][0]["panneau"]["id"]
+
+    trait_prof = client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/traits",
+        json={"type": "trait_libre", "donnees": {"points": [[0.1, 0.1], [0.2, 0.2]], "epaisseur": 0.01}},
+        headers=ctx["enseignant_headers"],
+    )
+    assert trait_prof.status_code == 201
+
+    trait_eleve_refuse = client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/traits",
+        json={"type": "trait_libre", "donnees": {"points": [[0.3, 0.3], [0.4, 0.4]]}},
+        headers=ctx["eleve_headers"],
+    )
+    assert trait_eleve_refuse.status_code == 403
+
+
+def test_demande_de_craie_accordee_puis_revoquee(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    eleve_id = client.get("/api/v1/me", headers=ctx["eleve_headers"]).json()["id"]
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
+    panneau_id = client.get(
+        f"/api/v1/sessions-live/{session['id']}/tableau", headers=ctx["enseignant_headers"]
+    ).json()["panneaux"][0]["panneau"]["id"]
+
+    demande = client.post(f"/api/v1/sessions-live/{session['id']}/demande-craie", headers=ctx["eleve_headers"])
+    assert demande.status_code == 201
+    assert demande.json()["statut"] == "en_attente"
+
+    demandes_prof = client.get(
+        f"/api/v1/sessions-live/{session['id']}/demandes-craie", headers=ctx["enseignant_headers"]
+    ).json()
+    assert len(demandes_prof) == 1
+
+    accord = client.post(
+        f"/api/v1/sessions-live/{session['id']}/demandes-craie/{demande.json()['id']}/accorder",
+        headers=ctx["enseignant_headers"],
+    )
+    assert accord.status_code == 200
+    assert accord.json()["statut"] == "accordee"
+
+    trait_eleve_ok = client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/traits",
+        json={"type": "trait_libre", "donnees": {"points": [[0.5, 0.5], [0.6, 0.6]]}},
+        headers=ctx["eleve_headers"],
+    )
+    assert trait_eleve_ok.status_code == 201
+
+    revocation = client.delete(
+        f"/api/v1/sessions-live/{session['id']}/permissions-ecriture/{eleve_id}", headers=ctx["enseignant_headers"]
+    )
+    assert revocation.status_code == 204
+
+    trait_eleve_refuse_apres_revocation = client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/traits",
+        json={"type": "trait_libre", "donnees": {"points": [[0.7, 0.7], [0.8, 0.8]]}},
+        headers=ctx["eleve_headers"],
+    )
+    assert trait_eleve_refuse_apres_revocation.status_code == 403
+
+
+def test_craie_pretee_directement_par_le_professeur(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    eleve_id = client.get("/api/v1/me", headers=ctx["eleve_headers"]).json()["id"]
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
+
+    pret = client.post(
+        f"/api/v1/sessions-live/{session['id']}/permissions-ecriture",
+        json={"eleve_utilisateur_id": eleve_id},
+        headers=ctx["enseignant_headers"],
+    )
+    assert pret.status_code == 201
+    assert pret.json()["mode"] == "pretee"
+
+
+def test_effacer_le_panneau_ajoute_un_trait_effacement(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    panneau_id = client.get(
+        f"/api/v1/sessions-live/{session['id']}/tableau", headers=ctx["enseignant_headers"]
+    ).json()["panneaux"][0]["panneau"]["id"]
+
+    client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/traits",
+        json={"type": "trait_libre", "donnees": {"points": [[0.1, 0.1], [0.2, 0.2]]}},
+        headers=ctx["enseignant_headers"],
+    )
+    effacement = client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/effacer",
+        headers=ctx["enseignant_headers"],
+    )
+    assert effacement.status_code == 201
+    assert effacement.json()["type"] == "effacement"
+
+    etat = client.get(f"/api/v1/sessions-live/{session['id']}/tableau", headers=ctx["enseignant_headers"]).json()
+    assert len(etat["panneaux"][0]["traits"]) == 2
+
+
+def test_nouveau_panneau_reserve_a_l_organisateur(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
+    # Le panneau 0 est cree paresseusement au premier acces a l'etat du tableau.
+    client.get(f"/api/v1/sessions-live/{session['id']}/tableau", headers=ctx["enseignant_headers"])
+
+    refus = client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux", headers=ctx["eleve_headers"]
+    )
+    assert refus.status_code == 403
+
+    reussite = client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux", headers=ctx["enseignant_headers"]
+    )
+    assert reussite.status_code == 201
+    assert reussite.json()["ordre"] == 1
+
+
+def test_capture_du_tableau_a_la_cloture_de_la_session(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    panneau_id = client.get(
+        f"/api/v1/sessions-live/{session['id']}/tableau", headers=ctx["enseignant_headers"]
+    ).json()["panneaux"][0]["panneau"]["id"]
+    client.post(
+        f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/traits",
+        json={"type": "texte", "donnees": {"x": 0.1, "y": 0.1, "texte": "Titre du cours"}},
+        headers=ctx["enseignant_headers"],
+    )
+
+    client.post(f"/api/v1/sessions-live/{session['id']}/terminer", headers=ctx["enseignant_headers"])
+
+    captures = client.get(
+        f"/api/v1/sessions-live/{session['id']}/captures", headers=ctx["enseignant_headers"]
+    ).json()
+    assert len(captures) == 1
+    assert captures[0]["panneau_id"] == panneau_id
+
+
+def test_canal_temps_reel_diffuse_un_trait_ajoute_par_rest(client, classe_avec_enseignant_et_eleve):
+    """Verifie que le canal WebSocket diffuse bien un evenement declenche par un appel
+    REST classique (pas de logique metier dans le canal lui-meme, voir realtime.py)."""
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    panneau_id = client.get(
+        f"/api/v1/sessions-live/{session['id']}/tableau", headers=ctx["enseignant_headers"]
+    ).json()["panneaux"][0]["panneau"]["id"]
+
+    jeton_prof = ctx["enseignant_headers"]["Authorization"].split(" ")[1]
+    with client.websocket_connect(f"/api/v1/ws/sessions-live/{session['id']}?token={jeton_prof}") as websocket:
+        client.post(
+            f"/api/v1/sessions-live/{session['id']}/tableau/panneaux/{panneau_id}/traits",
+            json={"type": "trait_libre", "donnees": {"points": [[0.1, 0.1], [0.9, 0.9]]}},
+            headers=ctx["enseignant_headers"],
+        )
+        evenement = websocket.receive_json()
+        assert evenement["type"] == "trait"
+        assert evenement["panneau_id"] == panneau_id
+
+
+def test_canal_temps_reel_refuse_un_jeton_invalide(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+
+    from starlette.websockets import WebSocketDisconnect
+    import pytest
+
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(f"/api/v1/ws/sessions-live/{session['id']}?token=jeton-invalide"):
+            pass
+
+
+def test_resume_asynchrone_disponible_au_tuteur_apres_cloture(client, classe_avec_enseignant_et_eleve):
+    """UC-33.1/33.2 : le tuteur ne rejoint jamais la session en direct, il consulte un
+    resume texte une fois la session terminee."""
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
+    client.post(
+        f"/api/v1/sessions-live/{session['id']}/messages",
+        json={"contenu": "Je n'ai pas compris la question 2."},
+        headers=ctx["eleve_headers"],
+    )
+
+    avant_cloture = client.get(f"/api/v1/sessions-live/{session['id']}/resume", headers=ctx["tuteur_headers"])
+    assert avant_cloture.status_code == 404
+
+    client.post(f"/api/v1/sessions-live/{session['id']}/terminer", headers=ctx["enseignant_headers"])
+
+    resume = client.get(f"/api/v1/sessions-live/{session['id']}/resume", headers=ctx["tuteur_headers"])
+    assert resume.status_code == 200
+    assert resume.json()["contenu"]
+
+
+def test_resume_de_session_refuse_a_un_tuteur_dont_l_enfant_n_a_pas_participe(
+    client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/terminer", headers=ctx["enseignant_headers"])
+
+    refus = client.get(f"/api/v1/sessions-live/{session['id']}/resume", headers=ctx["tuteur_headers"])
+    assert refus.status_code == 403

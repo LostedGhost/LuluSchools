@@ -9,7 +9,8 @@ import {
   LevelBadge,
   type MedalDef,
 } from "../../components/gamification";
-import { BookOpen, ClipboardList, Trophy, FileText, ClipboardCheck, Target, PenLine, Flag, Radio, Bus, Ticket, MessageCircle, Handshake } from "lucide-react";
+import { ValidationsEnAttenteBanner } from "../../components/coffre_fort/ValidationsEnAttenteBanner";
+import { BookOpen, ClipboardList, Trophy, FileText, ClipboardCheck, Target, PenLine, Flag, Radio, Bus, Ticket, MessageCircle, Handshake, Bot, Award } from "lucide-react";
 
 /* Données de gamification simulées (à remplacer par des vraies API quand disponibles) */
 const DEMO_STREAK = 12;
@@ -75,6 +76,8 @@ export function EleveDashboard() {
         </div>
         <StreakPill days={DEMO_STREAK} />
       </div>
+
+      <ValidationsEnAttenteBanner />
 
       {/* ── Profil XP ── */}
       <div
@@ -193,6 +196,20 @@ export function EleveDashboard() {
               tone: "info" as const,
               title: "Messagerie",
               desc: "Groupe de classe et messages privés",
+            },
+            {
+              to: "/eleve/el-professor-famille",
+              icon: <Bot size={24} />,
+              tone: "magic" as const,
+              title: "El Professor Famille",
+              desc: "Conversation partagée avec votre tuteur",
+            },
+            {
+              to: "/eleve/passeport",
+              icon: <Award size={24} />,
+              tone: "reward" as const,
+              title: "Passeport de compétences",
+              desc: "Consulter et exporter mon passeport",
             },
           ].map((item) => (
             <Link
