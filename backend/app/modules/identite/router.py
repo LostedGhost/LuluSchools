@@ -9,6 +9,7 @@ from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_roles
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
+from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -20,6 +21,7 @@ from app.core.security import (
     verify_password,
 )
 from app.modules.identite.models import Enseignant, OtpVerification, RoleUtilisateur, Tuteur, Utilisateur
+from app.modules.inscriptions.models import Eleve
 from app.modules.identite.schemas import (
     AdminUtilisateurOut,
     AdminUtilisateurPageOut,
@@ -274,7 +276,7 @@ def changer_mot_de_passe(
     payload: ChangePasswordRequest,
     utilisateur: Utilisateur = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> Utilisateur:
+) -> dict:
     if not verify_password(payload.ancien_mot_de_passe, utilisateur.mot_de_passe_hash):
         raise _api_error(
             status.HTTP_401_UNAUTHORIZED, "mot_de_passe_incorrect", "Ancien mot de passe incorrect."
@@ -284,12 +286,31 @@ def changer_mot_de_passe(
     utilisateur.mot_de_passe_temporaire = False
     db.commit()
     db.refresh(utilisateur)
-    return utilisateur
+    return _construire_me_out(db, utilisateur)
+
+
+def _construire_me_out(db: Session, utilisateur: Utilisateur) -> dict:
+    """UC-57/58 (lot admin etablissement) : `est_etudiant` calcule une seule fois ici et
+    reutilise par tout le frontend (ex. gating des micro-jobs cote prestataire) et par les
+    deux endpoints qui renvoient un MeOut (`/me`, `/auth/change-password`), plutot que de
+    dupliquer la logique - source unique : app.core.etudiant.est_etudiant."""
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first() if utilisateur.role == RoleUtilisateur.ELEVE else None
+    return {
+        "id": utilisateur.id,
+        "nom": utilisateur.nom,
+        "prenom": utilisateur.prenom,
+        "login_id": utilisateur.login_id,
+        "email": utilisateur.email,
+        "role": utilisateur.role,
+        "email_verifie": utilisateur.email_verifie,
+        "mot_de_passe_temporaire": utilisateur.mot_de_passe_temporaire,
+        "est_etudiant": eleve is not None and est_etudiant_fn(db, eleve.id),
+    }
 
 
 @me_router.get("/me", response_model=MeOut)
-def mon_profil(utilisateur: Utilisateur = Depends(get_current_user)) -> Utilisateur:
-    return utilisateur
+def mon_profil(db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_user)) -> dict:
+    return _construire_me_out(db, utilisateur)
 
 
 admin_router = APIRouter(prefix="/admin", tags=["identite"])

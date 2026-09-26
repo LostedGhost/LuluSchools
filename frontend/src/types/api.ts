@@ -29,6 +29,7 @@ export interface MeOut {
   role: Role;
   email_verifie: boolean;
   mot_de_passe_temporaire: boolean;
+  est_etudiant: boolean;
 }
 
 export interface TuteurOut {
@@ -59,6 +60,9 @@ export interface ClasseOut {
   id: string;
   etablissement_id: string;
   niveau: string;
+  filiere: string | null;
+  annee_academique: string;
+  reconduite_depuis_id: string | null;
   capacite: number;
   politique_depassement: PolitiqueDepassement;
 }
@@ -101,6 +105,7 @@ export interface EleveMeOut {
   classe_id: string | null;
   niveau: string | null;
   etablissement_id: string | null;
+  est_etudiant: boolean;
 }
 
 export type FormatCours = "texte" | "pdf" | "audio" | "video";
@@ -192,10 +197,25 @@ export interface CritereDocument {
   seuil_minimal: number;
 }
 
+export type TypeChampFormulaire = "texte_court" | "texte_long" | "fichier" | "choix_unique" | "choix_multiple";
+
+export interface ChampFormulaire {
+  id: string;
+  label: string;
+  type: TypeChampFormulaire;
+  requis: boolean;
+  options: string[] | null;
+}
+
 export interface PosteOut {
   id: string;
   etablissement_id: string;
   titre: string;
+  description: string | null;
+  matiere: string | null;
+  remuneration_min: number | null;
+  remuneration_max: number | null;
+  schema_formulaire: ChampFormulaire[] | null;
   statut: StatutPoste;
   criteres: CritereDocument[];
 }
@@ -217,6 +237,7 @@ export interface CandidatureOut {
   poste_id: string;
   statut: StatutCandidature;
   score: number | null;
+  reponses_formulaire: Record<string, unknown> | null;
   enseignant_nom: string;
   enseignant_prenom: string;
   documents: DocumentCandidatureOut[];
@@ -259,6 +280,7 @@ export interface TypeActeOut {
   prix: number;
   pieces_requises: string;
   condition_eligibilite: string | null;
+  schema_formulaire: ChampFormulaire[] | null;
 }
 
 export type StatutDemandeActe = "soumise" | "en_traitement" | "acceptee" | "rejetee";
@@ -271,6 +293,8 @@ export interface DemandeActeOut {
   eleve_matricule: string | null;
   type_acte_id: string | null;
   est_reclamation: boolean;
+  reponses_formulaire: Record<string, unknown> | null;
+  document_final_lulufiles_id: string | null;
   statut: StatutDemandeActe;
   paiement_confirme: boolean;
   motif_rejet: string | null;
@@ -665,4 +689,98 @@ export interface ContestationMarketplaceOut {
   motif: string;
   statut: StatutContestationMarketplace;
   decision_motif: string | null;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 6 — UC-39 à UC-58 : refonte admin établissement
+   ═══════════════════════════════════════════════════════════════ */
+
+export type StatutRentree = "ouverte" | "fermee";
+
+export interface RentreeOut {
+  id: string;
+  etablissement_id: string;
+  annee_academique: string;
+  statut: StatutRentree;
+  created_at: string;
+}
+
+export interface InscriptionVieScolaireOut {
+  id: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  classe_niveau: string;
+  classe_filiere: string | null;
+  annee_academique: string;
+  statut: string;
+  created_at: string;
+}
+
+export interface BulletinVieScolaireOut {
+  id: string;
+  etablissement_nom: string;
+  periode: string;
+  moyenne_generale: number;
+  decision_passage: string | null;
+}
+
+export interface VieScolaireOut {
+  eleve_id: string;
+  nom: string;
+  prenom: string;
+  date_naissance: string;
+  matricule: string | null;
+  est_etudiant: boolean;
+  photo_url: string | null;
+  inscriptions: InscriptionVieScolaireOut[];
+  bulletins: BulletinVieScolaireOut[];
+}
+
+export interface ConsoleEleveOut {
+  eleve_id: string;
+  nom: string;
+  prenom: string;
+  matricule: string | null;
+  classe_id: string;
+  classe_niveau: string;
+  classe_filiere: string | null;
+  statut_inscription: string;
+}
+
+export interface ConsoleEnseignantOut {
+  utilisateur_id: string;
+  nom: string;
+  prenom: string;
+  classe_id: string;
+  classe_niveau: string;
+  classe_filiere: string | null;
+}
+
+export interface ConsoleTuteurOut {
+  utilisateur_id: string;
+  nom: string;
+  prenom: string;
+  email: string | null;
+  nb_enfants_dans_le_perimetre: number;
+}
+
+export interface ConsoleCoursOut {
+  id: string;
+  titre: string;
+  chapitre: string;
+  classe_id: string;
+  classe_niveau: string;
+  enseignant_nom: string;
+  enseignant_prenom: string;
+}
+
+export interface ConsoleNoteOut {
+  eleve_id: string;
+  eleve_nom: string;
+  eleve_prenom: string;
+  classe_id: string;
+  classe_niveau: string;
+  periode: string;
+  moyenne_generale: number;
+  decision_passage: string | null;
 }

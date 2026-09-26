@@ -122,6 +122,67 @@ Refonte complète du portail A++, jusqu'ici limité à 3 pages isolées — voir
   manuel exhaustif page par page comme la Phase 1, pour limiter le coût (voir demande
   explicite de l'utilisateur de vérifier le fonctionnement structurel plutôt que le rendu).
 
+## Parcours construits (étape 6) — Phase 6 (UC-39 à UC-70, refonte admin établissement)
+
+Refonte complète du portail A+ — voir `docs/cahier-des-charges-refonte-admin-etablissement.md`
+et `docs/diagrammes-uml-phase-6-admin-etablissement.md`. Backend validé en amont endpoint par
+endpoint (175/175 tests, détail dans `backend/PROJECT_MAP.md`) avant tout code frontend, comme
+pour les phases précédentes.
+
+- **`RentreePage`** (nouveau) : déclarer une rentrée (auto-clôture de la précédente côté
+  backend), historique des rentrées avec statut, « Inviter les tuteurs » (notification e-mail
+  de masse, résultat `nb_tuteurs_notifies` affiché).
+- **`VieScolairePage`** (nouveau) : recherche par `eleve_utilisateur_id` (route ou champ
+  manuel), accessible dès qu'une inscription (même en attente) a existé une fois pour cet
+  établissement (RBAC backend, pas de logique dupliquée côté client) — photo affichée
+  uniquement si `est_etudiant` (jamais pour un élève EP/ES, cf. UC-42), inscriptions et
+  bulletins complets tous établissements/années confondus.
+- **`ClassesPage`** (réécrite) : select niveau dépendant du type d'établissement
+  (`NIVEAUX_PAR_TYPE`, reproduit depuis `scripts/seed_mega.py` — filière volontairement
+  laissée en texte libre avec autocomplétion `<datalist>`, jamais un enum, cf. décision
+  documentée dans le diagramme de classes Phase 6), année académique, reconduction en lot
+  (sélection multiple + `DataTable`), lien « Console » par classe.
+- **`ConsoleEtablissementPage`** (nouveau) : pivot lisant `classe_id` en query param, sélecteur
+  d'objet (élèves/enseignants/tuteurs/matières/notes) × année académique, un `DataTable`
+  paginé par objet — flexible par classe ou par établissement entier selon que `classe_id`
+  est renseigné, conformément à la demande explicite de l'utilisateur.
+- **`FormulaireBuilder`/`FormulaireDynamique`** (nouveaux composants partagés) : un seul
+  moteur de formulaire dynamique (schéma JSON `ChampFormulaire[]`) réutilisé pour le
+  recrutement (`RecrutementPage`/`PostulerPage`) et les actes académiques
+  (`ActesAdminPage`/`ActesPage`) — jamais deux implémentations. Les champs de type `fichier`
+  ne sont jamais rendus par `FormulaireDynamique` (uploadés séparément après création du
+  parent, cf. `champsFichierDe()`).
+- **Actes académiques** : document final téléchargeable via lien signé LuluFiles
+  (`obtenirLienDocumentActe`) dès que l'A+ le livre (`ActesAdminPage`, section « Documents à
+  livrer »).
+- **Ticketerie QR (UC-54/68)** : bouton « PDF » (icône `Download`) sur chaque ticket payé
+  (transport/cantine dans `ServicesScolairesPanel.tsx`, billet dans `BilletteriePage.tsx`),
+  téléchargement en blob authentifié (`utils/telechargerBlob.ts::ouvrirBlobPdf` — un lien
+  `<a href>` direct ne porterait pas le token Bearer). `ValiderAccesPage` gagne un mode
+  « Scanner un QR code » (API navigateur native `BarcodeDetector`, pas de nouvelle dépendance
+  npm ; message de repli explicite si le navigateur ne la supporte pas) en plus de la saisie
+  manuelle déjà existante — le jeton scanné (`"{type}:{ticket_id}"`) pré-remplit le formulaire
+  existant plutôt que de valider automatiquement, pour éviter une double validation accidentelle
+  en cas de scan continu.
+- **Restriction étudiants (UC-57/58)** : `GET /me` et `GET /eleves/me` exposent désormais
+  `est_etudiant` (calculé une seule fois côté backend, `app.core.etudiant.est_etudiant`) —
+  `MicroJobsPage` l'utilise pour n'afficher « Accepter » une offre qu'aux étudiants (adultes
+  et élèves EP/ES voient un badge « Réservé aux étudiants » à la place, cohérent avec la
+  règle : le rôle PRESTATAIRE est désormais étudiant-only, y compris pour les adultes qui y
+  avaient accès avant cette phase), et `MarketplacePage` bloque entièrement l'accès aux
+  élèves non-étudiants avec un écran dédié plutôt que de laisser échouer la publication au
+  moment de la soumission.
+- **Bug réel trouvé en écrivant cette section** : avant cette phase, `MicroJobsPage.tsx`
+  gate `estEleve` bloquait tous les élèves (y compris les étudiants, désormais seuls
+  éligibles) tout en laissant les adultes accepter des offres — l'exact inverse de la
+  règle validée par l'utilisateur. `MarketplacePage.tsx` affichait encore un texte
+  « réservé aux élèves de 16 ans ou plus » (ancienne règle d'âge, remplacée par la règle
+  étudiant/non-étudiant). Corrigé en ajoutant `est_etudiant` à `MeOut`/`EleveMeOut` plutôt
+  que de dupliquer un calcul d'âge ou de rôle côté frontend.
+- Validé par `tsc -b` + `vite build` (aucune erreur) après chaque lot de pages ; pas de
+  parcours manuel en navigateur pour cette phase (demande explicite de l'utilisateur de
+  vérifier le fonctionnement structurel plutôt que le rendu visuel).
+
 ## Limites connues (non bloquantes pour un MVP, à traiter avant une mise en production plus large)
 - Pas de vue A+ pour proposer une révision de référentiel de coefficient (`POST /referentiels-coefficients/{id}/proposition`) — seule la création/validation côté A++ a une UI.
 - La correction manuelle d'une soumission en échec IA (`MesDevoirsPage`) affiche le texte de la réponse et un champ de points par question, mais pas le corrigé/barème attendu côté enseignant au même endroit (il doit s'en souvenir ou rouvrir le devoir).

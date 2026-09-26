@@ -1,12 +1,26 @@
 import { api } from "./client";
-import type { AffectationEnseignantOut, ClasseOut, EtablissementOut } from "../types/api";
+import type {
+  AffectationEnseignantOut,
+  ClasseOut,
+  ConsoleCoursOut,
+  ConsoleEleveOut,
+  ConsoleEnseignantOut,
+  ConsoleNoteOut,
+  ConsoleTuteurOut,
+  EtablissementOut,
+  PageOut,
+  RentreeOut,
+  VieScolaireOut,
+} from "../types/api";
 
 export function listerEtablissements() {
   return api.get<EtablissementOut[]>("/etablissements");
 }
 
-export function listerClasses(etablissementId: string) {
-  return api.get<ClasseOut[]>(`/etablissements/${etablissementId}/classes`);
+export function listerClasses(etablissementId: string, anneeAcademique?: string) {
+  return api.get<ClasseOut[]>(`/etablissements/${etablissementId}/classes`, {
+    params: anneeAcademique ? { annee_academique: anneeAcademique } : undefined,
+  });
 }
 
 export function affecterEnseignant(classeId: string, enseignantUtilisateurId: string) {
@@ -46,12 +60,21 @@ export function mettreAJourLocalisation(etablissementId: string, latitude: numbe
 
 export interface ClassePayload {
   niveau: string;
+  filiere?: string | null;
+  annee_academique?: string;
   capacite: number;
   politique_depassement: "ordre_arrivee" | "notes_concours" | "tirage_sort";
 }
 
 export function creerClasse(etablissementId: string, payload: ClassePayload) {
   return api.post<ClasseOut>(`/etablissements/${etablissementId}/classes`, payload);
+}
+
+export function reconduireClasses(etablissementId: string, classeIds: string[], nouvelleAnnee: string) {
+  return api.post<ClasseOut[]>(`/etablissements/${etablissementId}/classes/reconduire`, {
+    classe_ids: classeIds,
+    nouvelle_annee: nouvelleAnnee,
+  });
 }
 
 export function monEtablissement() {
@@ -131,4 +154,61 @@ export function modifierDescriptionEtablissement(etablissementId: string, descri
 
 export function actionGroupeeEtablissements(ids: string[], action: "suspendre" | "reactiver", motif: string) {
   return api.post<EtablissementOut[]>("/etablissements/action-groupee", { ids, action, motif });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Rentrée scolaire (UC-39/40/55/56)
+// ═══════════════════════════════════════════════════════════════
+
+export function declarerRentree(etablissementId: string, anneeAcademique: string) {
+  return api.post<RentreeOut>(`/etablissements/${etablissementId}/rentrees`, { annee_academique: anneeAcademique });
+}
+
+export function listerRentrees(etablissementId: string) {
+  return api.get<RentreeOut[]>(`/etablissements/${etablissementId}/rentrees`);
+}
+
+export function inviterTuteurs(etablissementId: string, rentreeId: string) {
+  return api.post<{ nb_tuteurs_notifies: number }>(
+    `/etablissements/${etablissementId}/rentrees/${rentreeId}/inviter-tuteurs`,
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Vie scolaire (UC-41/42/57)
+// ═══════════════════════════════════════════════════════════════
+
+export function consulterVieScolaire(eleveUtilisateurId: string) {
+  return api.get<VieScolaireOut>(`/eleves/${eleveUtilisateurId}/vie-scolaire`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Console établissement (UC-45/46/60/61)
+// ═══════════════════════════════════════════════════════════════
+
+export interface ConsoleParams {
+  classe_id?: string;
+  annee_academique?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export function consoleEleves(etablissementId: string, params: ConsoleParams = {}) {
+  return api.get<PageOut<ConsoleEleveOut>>(`/etablissements/${etablissementId}/console/eleves`, { params });
+}
+
+export function consoleEnseignants(etablissementId: string, params: ConsoleParams = {}) {
+  return api.get<PageOut<ConsoleEnseignantOut>>(`/etablissements/${etablissementId}/console/enseignants`, { params });
+}
+
+export function consoleTuteurs(etablissementId: string, params: ConsoleParams = {}) {
+  return api.get<PageOut<ConsoleTuteurOut>>(`/etablissements/${etablissementId}/console/tuteurs`, { params });
+}
+
+export function consoleCours(etablissementId: string, params: ConsoleParams = {}) {
+  return api.get<PageOut<ConsoleCoursOut>>(`/etablissements/${etablissementId}/console/cours`, { params });
+}
+
+export function consoleNotes(etablissementId: string, params: ConsoleParams & { periode?: string } = {}) {
+  return api.get<PageOut<ConsoleNoteOut>>(`/etablissements/${etablissementId}/console/notes`, { params });
 }

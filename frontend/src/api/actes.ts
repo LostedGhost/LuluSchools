@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { DemandeActeOut, TypeActeOut } from "../types/api";
+import type { ChampFormulaire, DemandeActeOut, LienFichierOut, TypeActeOut } from "../types/api";
 
 export function listerTypesActes(etablissementId: string) {
   return api.get<TypeActeOut[]>(`/etablissements/${etablissementId}/types-actes`);
@@ -15,6 +15,7 @@ export interface DemandeActePayload {
   reference_evaluation?: string;
   motif?: string;
   eleve_utilisateur_id?: string;
+  reponses_formulaire?: Record<string, unknown>;
 }
 
 export function soumettreDemandeActe(payload: DemandeActePayload) {
@@ -47,8 +48,29 @@ export interface TypeActePayload {
   prix: number;
   pieces_requises: string;
   condition_eligibilite?: string;
+  schema_formulaire?: ChampFormulaire[];
 }
 
 export function creerTypeActe(etablissementId: string, payload: TypeActePayload) {
   return api.post<TypeActeOut>(`/etablissements/${etablissementId}/types-actes`, payload);
+}
+
+export function televerserPieceJointeActe(demandeId: string, champId: string, fichier: File) {
+  const formData = new FormData();
+  formData.append("fichier", fichier);
+  return api.post<DemandeActeOut>(`/demandes-actes/${demandeId}/pieces/${champId}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+export function livrerDocumentActe(demandeId: string, fichier: File) {
+  const formData = new FormData();
+  formData.append("fichier", fichier);
+  return api.post<DemandeActeOut>(`/demandes-actes/${demandeId}/livrer-document`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+export function obtenirLienDocumentActe(demandeId: string) {
+  return api.get<LienFichierOut>(`/demandes-actes/${demandeId}/lien-document`);
 }

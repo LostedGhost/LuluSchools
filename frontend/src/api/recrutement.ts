@@ -1,5 +1,13 @@
 import { api } from "./client";
-import type { CandidatureOut, ContestationOut, ContratOut, EnseignantSigneOut, LienFichierOut, PosteOut } from "../types/api";
+import type {
+  CandidatureOut,
+  ChampFormulaire,
+  ContestationOut,
+  ContratOut,
+  EnseignantSigneOut,
+  LienFichierOut,
+  PosteOut,
+} from "../types/api";
 
 export function listerPostes(etablissementId: string) {
   return api.get<PosteOut[]>(`/etablissements/${etablissementId}/postes`);
@@ -13,11 +21,18 @@ export function obtenirPoste(posteId: string) {
   return api.get<PosteOut>(`/postes/${posteId}`);
 }
 
-export function postuler(posteId: string, types: string[], fichiers: File[], casierJudiciaire: File) {
+export function postuler(
+  posteId: string,
+  types: string[],
+  fichiers: File[],
+  casierJudiciaire: File,
+  reponsesFormulaire?: Record<string, unknown>,
+) {
   const formData = new FormData();
   for (const type of types) formData.append("types", type);
   for (const fichier of fichiers) formData.append("fichiers", fichier);
   formData.append("casier_judiciaire", casierJudiciaire);
+  if (reponsesFormulaire) formData.append("reponses_formulaire", JSON.stringify(reponsesFormulaire));
   return api.post<CandidatureOut>(`/postes/${posteId}/candidatures`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
@@ -49,8 +64,18 @@ export function signerContrat(contratId: string, signatureImage: Blob) {
 
 // --- Vues admin d'etablissement (A+) ---
 
-export function creerPoste(etablissementId: string, titre: string, criteres: { type_document: string; coefficient: number; seuil_minimal: number }[]) {
-  return api.post<PosteOut>(`/etablissements/${etablissementId}/postes`, { titre, criteres });
+export interface CreerPostePayload {
+  titre: string;
+  description?: string;
+  matiere?: string;
+  remuneration_min?: number;
+  remuneration_max?: number;
+  schema_formulaire?: ChampFormulaire[];
+  criteres: { type_document: string; coefficient: number; seuil_minimal: number }[];
+}
+
+export function creerPoste(etablissementId: string, payload: CreerPostePayload) {
+  return api.post<PosteOut>(`/etablissements/${etablissementId}/postes`, payload);
 }
 
 export function candidaturesEnAttenteRevision() {

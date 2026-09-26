@@ -3,11 +3,12 @@ import { useAdminEtab } from "../../admin/AdminEtabContext";
 import {
   creerTypeActe,
   demandesActesEtablissement,
+  livrerDocumentActe,
   listerTypesActes,
   traiterDemandeActe,
 } from "../../api/actes";
 import { messageErreur } from "../../api/client";
-import type { DemandeActeOut, TypeActeOut } from "../../types/api";
+import type { ChampFormulaire, DemandeActeOut, TypeActeOut } from "../../types/api";
 import {
   Badge,
   Btn,
@@ -20,7 +21,8 @@ import {
   SkeletonCard,
   TextInput,
 } from "../../components/ui";
-import { Check, FileText, ScrollText, X } from "lucide-react";
+import { FormulaireBuilder } from "../../components/FormulaireBuilder";
+import { Check, FileText, ScrollText, Upload, X } from "lucide-react";
 import { estRempli } from "../../utils/validation";
 
 export function ActesAdminPage() {
@@ -32,7 +34,9 @@ export function ActesAdminPage() {
   const [nom, setNom] = useState("");
   const [prix, setPrix] = useState(0);
   const [piecesRequises, setPiecesRequises] = useState("");
+  const [schemaFormulaire, setSchemaFormulaire] = useState<ChampFormulaire[]>([]);
   const [motifParId, setMotifParId] = useState<Record<string, string>>({});
+  const [livraisonEnCoursId, setLivraisonEnCoursId] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [champErreurs, setChampErreurs] = useState<{ nom?: string; prix?: string; piecesRequises?: string }>({});
@@ -63,10 +67,18 @@ export function ActesAdminPage() {
 
     setEnCours(true);
     try {
-      await creerTypeActe(etablissement.id, { nom, prix, pieces_requises: piecesRequises });
+      await creerTypeActe(etablissement.id, {
+        nom,
+        prix,
+        pieces_requises: piecesRequises,
+        schema_formulaire: schemaFormulaire.filter((c) => c.label.trim()).length > 0
+          ? schemaFormulaire.filter((c) => c.label.trim())
+          : undefined,
+      });
       setNom("");
       setPrix(0);
       setPiecesRequises("");
+      setSchemaFormulaire([]);
       setShowForm(false);
       charger();
     } catch (err) {
@@ -89,7 +101,22 @@ export function ActesAdminPage() {
     }
   };
 
+  const livrerDocument = async (id: string, fichier: File | undefined) => {
+    if (!fichier) return;
+    setLivraisonEnCoursId(id);
+    setErreur(null);
+    try {
+      await livrerDocumentActe(id, fichier);
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'envoyer le document."));
+    } finally {
+      setLivraisonEnCoursId(null);
+    }
+  };
+
   const demandesATraiter = demandes.filter((d) => d.statut === "en_traitement");
+  const demandesAcceptesSansDocument = demandes.filter((d) => d.statut === "acceptee" && !d.document_final_lulufiles_id);
 
   return (
     <div className="page-content">
@@ -111,13 +138,20 @@ export function ActesAdminPage() {
             <Field label="Prix (FCFA, 0 = gratuit)" error={champErreurs.prix}>
               <TextInput type="number" min={0} value={prix} onChange={(e) => setPrix(Number(e.target.value))} style={{ width: "140px" }} />
             </Field>
-            <Field label="Pièces requises" error={champErreurs.piecesRequises}>
+            <Field label="Pièces requises (description)" error={champErreurs.piecesRequises}>
               <TextInput value={piecesRequises} onChange={(e) => setPiecesRequises(e.target.value)} placeholder="Ex. CIP, acte de naissance" />
             </Field>
             <Btn type="submit" variant="primary" loading={enCours}>
               Ajouter
             </Btn>
           </form>
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <span className="text-eyebrow">Formulaire de demande (optionnel)</span>
+            <p className="text-sm" style={{ color: "var(--ink-soft)", margin: "4px 0 12px" }}>
+              Champs demandés au tuteur/étudiant lors de la soumission — un champ de type « Fichier » sera à téléverser après coup.
+            </p>
+            <FormulaireBuilder champs={schemaFormulaire} onChange={setSchemaFormulaire} />
+          </div>
         </Card>
       )}
 
@@ -175,6 +209,34 @@ export function ActesAdminPage() {
                     <Btn variant="outline" size="sm" onClick={() => traiter(d.id, "rejetee")} leftIcon={<X size={14} />}>
                       Rejeter
                     </Btn>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <SectionHead title="Documents à livrer" desc="Demandes acceptées en attente du document final." />
+          {demandesAcceptesSansDocument.length === 0 ? (
+            <EmptyState icon={<Upload size={24} />} title="Rien à livrer pour l'instant" />
+          ) : (
+            <div className="space-y-3">
+              {demandesAcceptesSansDocument.map((d) => (
+                <Card key={d.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
+                    <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+                      {d.eleve_prenom} {d.eleve_nom}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="file"
+                        id={`document-final-${d.id}`}
+                        style={{ display: "none" }}
+                        onChange={(e) => livrerDocument(d.id, e.target.files?.[0])}
+                      />
+                      <label htmlFor={`document-final-${d.id}`} className="btn btn-primary btn-sm" style={{ cursor: "pointer" }}>
+                        {livraisonEnCoursId === d.id ? "Envoi..." : "Téléverser le document"}
+                      </label>
+                    </div>
                   </div>
                 </Card>
               ))}

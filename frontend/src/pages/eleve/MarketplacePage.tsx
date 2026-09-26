@@ -323,6 +323,18 @@ export function MarketplacePage() {
     );
   }
 
+  if (!profil.est_etudiant) {
+    return (
+      <div className="page-content">
+        <EmptyState
+          icon={<Store size={24} />}
+          title="Marketplace réservée aux étudiants"
+          desc="La marketplace est disponible uniquement pour les étudiants (établissements de niveau universitaire)."
+        />
+      </div>
+    );
+  }
+
   if (chargement) {
     return <div className="page-content"><SkeletonCard /></div>;
   }
@@ -332,8 +344,8 @@ export function MarketplacePage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <SectionHead
           eyebrow="Marketplace étudiante"
-          title="Achetez et vendez entre élèves de votre établissement"
-          desc="Réservé aux élèves de 16 ans ou plus. Paiement sécurisé par séquestre, remise toujours en main propre."
+          title="Achetez et vendez entre étudiants de votre établissement"
+          desc="Réservé aux étudiants. Paiement sécurisé par séquestre, remise toujours en main propre."
         />
         <Btn variant="primary" onClick={() => setShowForm((v) => !v)} leftIcon={<ImagePlus size={16} />}>
           {showForm ? "Fermer" : "Publier une annonce"}
@@ -412,7 +424,7 @@ export function MarketplacePage() {
       <div style={{ marginBottom: "32px" }}>
         <SectionHead
           title="Annonces disponibles"
-          desc="Uniquement les élèves de votre établissement."
+          desc="Uniquement les étudiants de votre établissement."
         />
         <div className="flex gap-3 flex-wrap mb-4">
           <Select value={filtreCategorie} onChange={(e) => setFiltreCategorie(e.target.value as CategorieAnnonce | "")} style={{ maxWidth: "220px" }}>

@@ -51,7 +51,7 @@ const STATUT_MISSION_LABEL: Record<MissionMicroJobOut["statut"], string> = {
 
 export function MicroJobsPage() {
   const { utilisateur } = useAuth();
-  const estEleve = utilisateur?.role === "eleve";
+  const estPrestataireEligible = !!utilisateur?.est_etudiant;
   const [offres, setOffres] = useState<OffreMicroJobOut[]>([]);
   const [missions, setMissions] = useState<MissionMicroJobOut[]>([]);
   const [offreParMission, setOffreParMission] = useState<Record<string, OffreMicroJobOut>>({});
@@ -273,12 +273,12 @@ export function MicroJobsPage() {
                     <p style={{ margin: "0 0 8px", fontWeight: 700, color: "var(--primary-deep)" }}>{o.prix.toLocaleString("fr-FR")} FCFA</p>
                     {o.client_id === utilisateur?.id ? (
                       <Badge tone="info">Votre demande</Badge>
-                    ) : estEleve ? (
-                      <Badge tone="neutral">Réservé aux adultes</Badge>
-                    ) : (
+                    ) : estPrestataireEligible ? (
                       <Btn variant="primary" size="sm" loading={actionEnCoursId === o.id} onClick={() => accepter(o.id)} leftIcon={<Handshake size={14} />}>
                         Accepter
                       </Btn>
+                    ) : (
+                      <Badge tone="neutral">Réservé aux étudiants</Badge>
                     )}
                   </div>
                 </div>

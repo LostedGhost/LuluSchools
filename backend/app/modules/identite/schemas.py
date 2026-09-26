@@ -91,6 +91,7 @@ class MeOut(BaseModel):
     role: str
     email_verifie: bool
     mot_de_passe_temporaire: bool
+    est_etudiant: bool
 
 
 class AdminUtilisateurOut(BaseModel):

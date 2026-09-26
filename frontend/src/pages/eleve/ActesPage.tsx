@@ -3,14 +3,17 @@ import {
   amorcerPaiement,
   listerTypesActes,
   mesDemandesActes,
+  obtenirLienDocumentActe,
   soumettreDemandeActe,
+  televerserPieceJointeActe,
 } from "../../api/actes";
 import { messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { DemandeActeOut, StatutDemandeActe, TypeActeOut } from "../../types/api";
 import { Badge, Card, ErrorBanner, Field, Select, TextArea, TextInput, Btn, EmptyState } from "../../components/ui";
 import { KkiapayButton } from "../../components/KkiapayButton";
-import { FileStack, FlagTriangleRight, ScrollText } from "lucide-react";
+import { FormulaireDynamique, champsFichierDe } from "../../components/FormulaireDynamique";
+import { Download, FileStack, FlagTriangleRight, ScrollText, Upload } from "lucide-react";
 import { estRempli } from "../../utils/validation";
 
 const LIBELLES_STATUT: Record<StatutDemandeActe, { label: string; tone: "neutral" | "success" | "error" | "pending" | "info" }> = {
@@ -28,9 +31,12 @@ export function ActesPage() {
   const [typeActeId, setTypeActeId] = useState("");
   const [referenceEvaluation, setReferenceEvaluation] = useState("");
   const [motif, setMotif] = useState("");
+  const [reponsesFormulaire, setReponsesFormulaire] = useState<Record<string, string | string[]>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [champErreurs, setChampErreurs] = useState<{ typeActeId?: string; referenceEvaluation?: string; motif?: string }>({});
+  const [televersementEnCours, setTeleversementEnCours] = useState<string | null>(null);
+  const [lienEnCoursId, setLienEnCoursId] = useState<string | null>(null);
 
   const charger = () => {
     mesDemandesActes()
@@ -67,13 +73,17 @@ export function ActesPage() {
     setEnCours(true);
     try {
       if (mode === "catalogue") {
-        await soumettreDemandeActe({ type_acte_id: typeActeId });
+        await soumettreDemandeActe({
+          type_acte_id: typeActeId,
+          reponses_formulaire: Object.keys(reponsesFormulaire).length > 0 ? reponsesFormulaire : undefined,
+        });
       } else {
         await soumettreDemandeActe({ est_reclamation: true, reference_evaluation: referenceEvaluation, motif });
       }
       setTypeActeId("");
       setReferenceEvaluation("");
       setMotif("");
+      setReponsesFormulaire({});
       charger();
     } catch (err) {
       setErreur(messageErreur(err, "Impossible de soumettre la demande."));
@@ -88,6 +98,33 @@ export function ActesPage() {
       charger();
     } catch (err) {
       setErreur(messageErreur(err));
+    }
+  };
+
+  const televerserPiece = async (demandeId: string, champId: string, fichier: File | undefined) => {
+    if (!fichier) return;
+    setTeleversementEnCours(`${demandeId}:${champId}`);
+    setErreur(null);
+    try {
+      await televerserPieceJointeActe(demandeId, champId, fichier);
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'envoyer cette pièce jointe."));
+    } finally {
+      setTeleversementEnCours(null);
+    }
+  };
+
+  const telechargerDocument = async (demandeId: string) => {
+    setLienEnCoursId(demandeId);
+    setErreur(null);
+    try {
+      const res = await obtenirLienDocumentActe(demandeId);
+      window.open(res.data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setErreur(messageErreur(err, "Document pas encore disponible."));
+    } finally {
+      setLienEnCoursId(null);
     }
   };
 
@@ -123,6 +160,29 @@ export function ActesPage() {
                         </p>
                       </div>
                       {demande.motif_rejet && <p className="text-sm" style={{ color: "var(--action-deep)" }}>Motif : {demande.motif_rejet}</p>}
+                      {type && champsFichierDe(type.schema_formulaire ?? []).map((champ) => {
+                        const dejaEnvoye = !!demande.reponses_formulaire?.[champ.id];
+                        const cle = `${demande.id}:${champ.id}`;
+                        return (
+                          <div key={champ.id} style={{ marginTop: "6px" }}>
+                            {dejaEnvoye ? (
+                              <span className="text-sm" style={{ color: "var(--primary-deep)" }}>✓ {champ.label} envoyée</span>
+                            ) : (
+                              <>
+                                <input
+                                  type="file"
+                                  id={`piece-${cle}`}
+                                  style={{ display: "none" }}
+                                  onChange={(e) => televerserPiece(demande.id, champ.id, e.target.files?.[0])}
+                                />
+                                <label htmlFor={`piece-${cle}`} className="btn btn-outline btn-sm" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <Upload size={12} /> {televersementEnCours === cle ? "Envoi..." : `Envoyer : ${champ.label}`}
+                                </label>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <Badge tone={statut.tone}>{statut.label}</Badge>
@@ -132,6 +192,17 @@ export function ActesPage() {
                           reference={demande.id}
                           onSucces={(transactionId) => payer(demande.id, transactionId)}
                         />
+                      )}
+                      {demande.document_final_lulufiles_id && (
+                        <Btn
+                          variant="outline"
+                          size="sm"
+                          loading={lienEnCoursId === demande.id}
+                          onClick={() => telechargerDocument(demande.id)}
+                          leftIcon={<Download size={14} />}
+                        >
+                          Télécharger
+                        </Btn>
                       )}
                     </div>
                   </Card>
@@ -179,6 +250,15 @@ export function ActesPage() {
                     <p className="text-sm" style={{ color: "var(--ink-soft)", marginTop: "4px" }}>
                       Pièces requises : {typeSelectionne.pieces_requises}
                     </p>
+                  )}
+                  {typeSelectionne?.schema_formulaire && typeSelectionne.schema_formulaire.length > 0 && (
+                    <div style={{ marginTop: "12px" }}>
+                      <FormulaireDynamique
+                        champs={typeSelectionne.schema_formulaire}
+                        valeurs={reponsesFormulaire}
+                        onChange={(id, valeur) => setReponsesFormulaire((prev) => ({ ...prev, [id]: valeur }))}
+                      />
+                    </div>
                   )}
                 </Field>
               ) : (

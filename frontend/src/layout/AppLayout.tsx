@@ -33,6 +33,9 @@ import {
   Handshake,
   Gavel,
   ShoppingBag,
+  Send,
+  BookMarked,
+  LayoutGrid,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -123,8 +126,11 @@ function navPourRole(role: string | undefined): NavItem[] {
   if (role === "admin_etablissement") {
     return [
       { to: "/admin-etablissement", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
+      { to: "/admin-etablissement/rentree", label: "Rentrée scolaire", icon: <Send size={iconSize} /> },
       { to: "/admin-etablissement/inscriptions", label: "Inscriptions", icon: <UserCheck size={iconSize} /> },
+      { to: "/admin-etablissement/vie-scolaire", label: "Vie scolaire", icon: <BookMarked size={iconSize} /> },
       { to: "/admin-etablissement/classes", label: "Classes", icon: <GraduationCap size={iconSize} /> },
+      { to: "/admin-etablissement/console", label: "Console établissement", icon: <LayoutGrid size={iconSize} /> },
       { to: "/admin-etablissement/postes", label: "Recrutement", icon: <Briefcase size={iconSize} /> },
       { to: "/admin-etablissement/contestations", label: "Contestations", icon: <Scale size={iconSize} /> },
       { to: "/admin-etablissement/actes", label: "Actes académiques", icon: <FileText size={iconSize} /> },

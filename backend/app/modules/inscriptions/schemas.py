@@ -54,3 +54,4 @@ class EleveMeOut(BaseModel):
     classe_id: str | None = None
     niveau: str | None = None
     etablissement_id: str | None = None
+    est_etudiant: bool = False

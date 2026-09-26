@@ -42,6 +42,9 @@ import { SessionsLivePage } from "./pages/enseignant/SessionsLivePage";
 
 import { AdminEtabDashboard } from "./pages/admin_etablissement/AdminEtabDashboard";
 import { ClassesPage } from "./pages/admin_etablissement/ClassesPage";
+import { ConsoleEtablissementPage } from "./pages/admin_etablissement/ConsoleEtablissementPage";
+import { RentreePage } from "./pages/admin_etablissement/RentreePage";
+import { VieScolairePage } from "./pages/admin_etablissement/VieScolairePage";
 import { InscriptionsAValiderPage } from "./pages/admin_etablissement/InscriptionsAValiderPage";
 import { RecrutementPage } from "./pages/admin_etablissement/RecrutementPage";
 import { ContestationsPage } from "./pages/admin_etablissement/ContestationsPage";
@@ -344,6 +347,46 @@ function App() {
                 <RequireAuth roles={["admin_etablissement"]}>
                   <AdminEtabProvider>
                     <InscriptionsAValiderPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/console"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <ConsoleEtablissementPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/rentree"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <RentreePage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/vie-scolaire"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <VieScolairePage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/vie-scolaire/:eleveUtilisateurId"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <VieScolairePage />
                   </AdminEtabProvider>
                 </RequireAuth>
               }

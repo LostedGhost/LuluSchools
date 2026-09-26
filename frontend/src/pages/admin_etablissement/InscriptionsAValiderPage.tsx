@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAdminEtab } from "../../admin/AdminEtabContext";
 import { inscriptionsAValider, rejeterInscription, validerInscription } from "../../api/inscriptions";
 import { messageErreur } from "../../api/client";
@@ -15,7 +16,7 @@ import {
   SuccessBanner,
   TextInput,
 } from "../../components/ui";
-import { CheckCircle2, XCircle, RefreshCw, AlertCircle, Backpack, Check } from "lucide-react";
+import { CheckCircle2, XCircle, RefreshCw, AlertCircle, Backpack, Check, BookOpen } from "lucide-react";
 
 export function InscriptionsAValiderPage() {
   const etablissement = useAdminEtab();
@@ -201,6 +202,13 @@ export function InscriptionsAValiderPage() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    {i.eleve_utilisateur_id && (
+                      <Link to={`/admin-etablissement/vie-scolaire/${i.eleve_utilisateur_id}`}>
+                        <Btn variant="ghost" size="md" leftIcon={<BookOpen size={16} />}>
+                          Vie scolaire
+                        </Btn>
+                      </Link>
+                    )}
                     <Btn
                       variant="primary"
                       size="md"

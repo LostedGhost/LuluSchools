@@ -33,6 +33,8 @@ Détail complet et justification des choix : [docs/choix-technique-phase1.md](do
 | [docs/contrat-api-phase-4-marketplace.md](docs/contrat-api-phase-4-marketplace.md) | Contrat d'API Phase 4 — marketplace étudiante |
 | [docs/cahier-des-charges-refonte-admin-ministeriel.md](docs/cahier-des-charges-refonte-admin-ministeriel.md) | Cas d'utilisation Phase 5 — refonte du portail admin ministériel (UC-23 à UC-38) |
 | [docs/diagrammes-uml-phase-5-admin-ministeriel.md](docs/diagrammes-uml-phase-5-admin-ministeriel.md) | Diagrammes UML Phase 5 (contrat d'API fusionné dans le même document) |
+| [docs/cahier-des-charges-refonte-admin-etablissement.md](docs/cahier-des-charges-refonte-admin-etablissement.md) | Cas d'utilisation Phase 6 — refonte du portail admin établissement (UC-39 à UC-70) |
+| [docs/diagrammes-uml-phase-6-admin-etablissement.md](docs/diagrammes-uml-phase-6-admin-etablissement.md) | Diagrammes UML Phase 6 (contrat d'API fusionné dans le même document) |
 | [docs/adr/](docs/adr/) | Décisions d'architecture (ADR) |
 | [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.md) | Étapes de déploiement (Render + Vercel) |
 
@@ -73,5 +75,7 @@ npm run dev              # démarre le frontend sur http://localhost:5173 (proxy
 **Phase 2/3** (UC-11 à UC-19 : tickets transport/cantine, contrôle d'accès, billetterie, messagerie, assistant El Professor, cours vidéo/en direct, visites 3D/drone, micro-jobs+séquestre) — étapes 1 à 6 validées. Backend complet et validé de bout en bout (`backend/tests/test_e2e_parcours_phase2_3.py`). Frontend complet pour 8 des 9 UC, pour les rôles concernés ; seules les visites virtuelles 3D/drone (UC-19) restent un teaser « Bientôt disponible » sur la page d'accueil, le choix technique de la visite 3D elle-même n'ayant pas encore été arbitré.
 
 **Phase 5** (UC-23 à UC-38 : refonte du portail admin ministériel — établissements enrichis, référentiels en datatable, arbitrage micro-jobs en file d'attente, supervision transverse utilisateurs/contenus/événements, journal d'audit) — étapes 1 à 6 validées. Composant `DataTable` générique réutilisable introduit côté frontend. **163 tests backend passants au total**, `tsc -b`/`vite build` au vert côté frontend, vérifié par des appels réels (navigateur + curl) contre le backend et les données `seed_mega.py` en local.
+
+**Phase 6** (UC-39 à UC-70 : refonte du portail admin établissement — rentrée scolaire et vie scolaire portable entre établissements, classes avec année académique et console de filtrage multi-modules, recrutement et actes académiques avec formulaire dynamique façon Google Forms, ticketerie unifiée avec QR codes, micro-jobs/marketplace réservés aux étudiants) — étapes 1 à 6 validées. Moteur de formulaire dynamique partagé (recrutement + actes), génération de PDF avec QR code (transport/cantine/billetterie), scan de QR code natif (`BarcodeDetector`, sans nouvelle dépendance). **175 tests backend passants au total**, `tsc -b`/`vite build` au vert côté frontend.
 
 Détail complet dans [backend/PROJECT_MAP.md](backend/PROJECT_MAP.md), [frontend/PROJECT_MAP.md](frontend/PROJECT_MAP.md), [docs/contrat-api-phase1.md](docs/contrat-api-phase1.md) et [docs/contrat-api-phase2-3.md](docs/contrat-api-phase2-3.md).

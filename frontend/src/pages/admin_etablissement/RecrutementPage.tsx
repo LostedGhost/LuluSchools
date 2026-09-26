@@ -10,7 +10,7 @@ import {
   obtenirLienDocumentCandidature,
 } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
-import type { CandidatureOut, CritereDocument, PosteOut } from "../../types/api";
+import type { CandidatureOut, ChampFormulaire, CritereDocument, PosteOut } from "../../types/api";
 import {
   Badge,
   Btn,
@@ -21,8 +21,10 @@ import {
   PageTitle,
   SectionHead,
   SkeletonCard,
+  TextArea,
   TextInput,
 } from "../../components/ui";
+import { FormulaireBuilder } from "../../components/FormulaireBuilder";
 import { Briefcase, ExternalLink, FileWarning, Plus, Trash2, Users } from "lucide-react";
 import { estRempli, erreurDateFuture } from "../../utils/validation";
 
@@ -39,6 +41,11 @@ export function RecrutementPage() {
   const [chargement, setChargement] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [titre, setTitre] = useState("");
+  const [description, setDescription] = useState("");
+  const [matiere, setMatiere] = useState("");
+  const [remunerationMin, setRemunerationMin] = useState("");
+  const [remunerationMax, setRemunerationMax] = useState("");
+  const [schemaFormulaire, setSchemaFormulaire] = useState<ChampFormulaire[]>([]);
   const [criteres, setCriteres] = useState<CritereDocument[]>([
     { type_document: "cv", coefficient: 1, seuil_minimal: 60 },
   ]);
@@ -110,8 +117,23 @@ export function RecrutementPage() {
 
     setEnCours(true);
     try {
-      await creerPoste(etablissement.id, titre, criteres);
+      await creerPoste(etablissement.id, {
+        titre,
+        description: description || undefined,
+        matiere: matiere || undefined,
+        remuneration_min: remunerationMin ? Number(remunerationMin) : undefined,
+        remuneration_max: remunerationMax ? Number(remunerationMax) : undefined,
+        schema_formulaire: schemaFormulaire.filter((c) => c.label.trim()).length > 0
+          ? schemaFormulaire.filter((c) => c.label.trim())
+          : undefined,
+        criteres,
+      });
       setTitre("");
+      setDescription("");
+      setMatiere("");
+      setRemunerationMin("");
+      setRemunerationMax("");
+      setSchemaFormulaire([]);
       setCriteres([{ type_document: "cv", coefficient: 1, seuil_minimal: 60 }]);
       setCriteresErreurs({});
       setShowForm(false);
@@ -202,6 +224,27 @@ export function RecrutementPage() {
             <Field label="Titre du poste" required error={titreErreur}>
               <TextInput value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex. Professeur de mathématiques" />
             </Field>
+            <Field label="Description">
+              <TextArea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Détails de l'annonce, missions, profil recherché..." />
+            </Field>
+            <div className="grid-3">
+              <Field label="Matière recherchée">
+                <TextInput value={matiere} onChange={(e) => setMatiere(e.target.value)} placeholder="Ex. Mathématiques" />
+              </Field>
+              <Field label="Rémunération min.">
+                <TextInput type="number" value={remunerationMin} onChange={(e) => setRemunerationMin(e.target.value)} />
+              </Field>
+              <Field label="Rémunération max. (optionnel)">
+                <TextInput type="number" value={remunerationMax} onChange={(e) => setRemunerationMax(e.target.value)} />
+              </Field>
+            </div>
+            <div className="space-y-3">
+              <span className="text-eyebrow">Formulaire de candidature (optionnel)</span>
+              <p className="text-sm" style={{ color: "var(--ink-soft)", margin: 0 }}>
+                Champs supplémentaires demandés au candidat, en plus des documents notés par l'IA ci-dessous.
+              </p>
+              <FormulaireBuilder champs={schemaFormulaire} onChange={setSchemaFormulaire} />
+            </div>
             <div className="space-y-3">
               <span className="text-eyebrow">Critères de document</span>
               {criteres.map((c, i) => (
@@ -295,6 +338,15 @@ export function RecrutementPage() {
                                   </Btn>
                                 ))}
                               </div>
+                              {c.reponses_formulaire && Object.keys(c.reponses_formulaire).length > 0 && (
+                                <div style={{ marginBottom: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>
+                                  {Object.entries(c.reponses_formulaire).map(([champ, valeur]) => (
+                                    <div key={champ}>
+                                      <strong>{champ}</strong> : {Array.isArray(valeur) ? valeur.join(", ") : String(valeur)}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                               {c.statut === "en_evaluation" && c.score !== null && (
                                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "var(--space-2)" }}>
                                   <Field label="Syllabus">

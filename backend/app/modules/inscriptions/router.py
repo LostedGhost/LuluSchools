@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles, verifier_portee_etablissement
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
+from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.security import generate_temporary_password, hash_password
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement, TypeEtablissement
 from app.modules.identite.models import RoleUtilisateur, Tuteur, Utilisateur
@@ -373,4 +374,5 @@ def mon_profil_eleve(
         "classe_id": classe.id if classe else None,
         "niveau": classe.niveau if classe else None,
         "etablissement_id": classe.etablissement_id if classe else None,
+        "est_etudiant": est_etudiant_fn(db, eleve.id),
     }

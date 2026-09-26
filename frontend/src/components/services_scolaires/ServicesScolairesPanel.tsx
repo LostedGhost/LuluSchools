@@ -10,12 +10,15 @@ import {
   mesTicketsTransport,
   rembourserTicketCantine,
   rembourserTicketTransport,
+  telechargerPdfTicketCantine,
+  telechargerPdfTicketTransport,
 } from "../../api/services_scolaires";
 import { messageErreur } from "../../api/client";
+import { ouvrirBlobPdf } from "../../utils/telechargerBlob";
 import type { LigneTransportOut, StatutTicket, TicketCantineOut, TicketTransportOut, TypeRepasCantineOut } from "../../types/api";
 import { Badge, Btn, Card, EmptyState, ErrorBanner, Field, SectionHead, Select, SkeletonCard, SuccessBanner, TextInput } from "../../components/ui";
 import { KkiapayButton } from "../../components/KkiapayButton";
-import { Bus, RefreshCw, Utensils } from "lucide-react";
+import { Bus, Download, RefreshCw, Utensils } from "lucide-react";
 
 const STATUT_TONE: Record<StatutTicket, "pending" | "success" | "neutral" | "error"> = {
   achete: "pending",
@@ -170,6 +173,32 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
     }
   };
 
+  const telechargerTransport = async (ticketId: string) => {
+    setActionTicketId(ticketId);
+    setErreur(null);
+    try {
+      const res = await telechargerPdfTicketTransport(ticketId);
+      ouvrirBlobPdf(res.data, `ticket-transport-${ticketId}.pdf`);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de télécharger ce ticket."));
+    } finally {
+      setActionTicketId(null);
+    }
+  };
+
+  const telechargerCantine = async (ticketId: string) => {
+    setActionTicketId(ticketId);
+    setErreur(null);
+    try {
+      const res = await telechargerPdfTicketCantine(ticketId);
+      ouvrirBlobPdf(res.data, `ticket-cantine-${ticketId}.pdf`);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de télécharger ce ticket."));
+    } finally {
+      setActionTicketId(null);
+    }
+  };
+
   if (chargement) {
     return <div className="space-y-4"><SkeletonCard /><SkeletonCard /></div>;
   }
@@ -225,6 +254,11 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     {t.statut === "achete" && !t.paiement_confirme && (
                       <KkiapayButton montant={t.prix_paye} reference={t.id} onSucces={(txId) => payerTransport(t.id, txId)} disabled={actionTicketId === t.id} />
+                    )}
+                    {t.paiement_confirme && (
+                      <Btn variant="ghost" size="sm" loading={actionTicketId === t.id} onClick={() => telechargerTransport(t.id)} leftIcon={<Download size={14} />}>
+                        PDF
+                      </Btn>
                     )}
                     {t.statut === "achete" && (
                       <Btn variant="outline" size="sm" loading={actionTicketId === t.id} onClick={() => rembourserTransport(t.id)}>
@@ -283,6 +317,11 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     {t.statut === "achete" && !t.paiement_confirme && (
                       <KkiapayButton montant={t.prix_paye} reference={t.id} onSucces={(txId) => payerCantine(t.id, txId)} disabled={actionTicketId === t.id} />
+                    )}
+                    {t.paiement_confirme && (
+                      <Btn variant="ghost" size="sm" loading={actionTicketId === t.id} onClick={() => telechargerCantine(t.id)} leftIcon={<Download size={14} />}>
+                        PDF
+                      </Btn>
                     )}
                     {t.statut === "achete" && (
                       <Btn variant="outline" size="sm" loading={actionTicketId === t.id} onClick={() => rembourserCantine(t.id)}>

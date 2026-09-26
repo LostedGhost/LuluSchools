@@ -37,6 +37,37 @@ API backend sous préfixe `/api/v1` — contrat complet et à jour dans `docs/co
 **Phase 2/3** — étapes 1 à 6 validées (voir `SUIVI-PROJET.md`) : cas d'utilisation, diagrammes UML, contrat d'API, **backend complet** pour les 9 UC (UC-11 à UC-19) — tickets transport/cantine, contrôle d'accès, billetterie, messagerie, assistant El Professor, cours vidéo, cours en direct, visites 3D/drone, micro-jobs+séquestre — et **validation de bout en bout** (`backend/tests/test_e2e_parcours_phase2_3.py`, même principe que `test_e2e_parcours_complet.py` : un seul établissement/classe/enseignant/élève/tuteur réutilisés à travers les 9 UC dans l'ordre réel, paiement Kkiapay réellement bouclé à chaque étape payante). 8 nouveaux modules, 8 migrations (0013-0020) appliquées en réel, 124 tests au total (aucune régression). Étape 6 (frontend) : **8 des 9 UC ont une interface complète** — messagerie, El Professor, cours en direct, transport/cantine, billetterie, micro-jobs — pour les 5 rôles concernés, réutilisant le design system institutionnel (ADR-007/009) ; seul UC-19 (visites 3D/drone) reste un teaser « Bientôt disponible », par décision explicite de l'utilisateur (le choix technique de la visite 3D elle-même n'a pas encore été arbitré). Détail par module dans `backend/PROJECT_MAP.md` et `frontend/PROJECT_MAP.md`. Prochaine étape : 7 (intégration/correction des écarts) puis 8 (déploiement) pour ce lot Phase 2/3.
 
 ## Dernière synchronisation
+2026-09-26 (Phase 6, frontend) — Étape 6 du lot Phase 6 (UC-39 à UC-70, refonte admin
+établissement) : 4 nouvelles pages (`RentreePage`, `VieScolairePage`, `ConsoleEtablissementPage`,
+et `ClassesPage` réécrite), un moteur de formulaire dynamique partagé
+(`FormulaireBuilder`/`FormulaireDynamique`, réutilisé recrutement + actes académiques), le
+téléchargement PDF+QR sur les tickets transport/cantine/billetterie, et un mode « scanner un
+QR code » (API navigateur `BarcodeDetector`, sans nouvelle dépendance) sur `ValiderAccesPage`.
+En vérifiant la concordance des rôles micro-jobs/marketplace avec la nouvelle règle
+étudiant-only (UC-57/58), révélé et corrigé un vrai bug frontend antérieur à cette phase :
+`MicroJobsPage.tsx` gate `estEleve` bloquait TOUS les élèves (y compris les futurs étudiants
+seuls éligibles) et laissait TOUS les adultes accepter des offres — l'exact inverse de la
+règle validée par l'utilisateur pour ce lot. Corrigé en exposant `est_etudiant` (calculé une
+seule fois côté backend, `app.core.etudiant.est_etudiant`) sur `GET /me` et `GET /eleves/me`,
+plutôt que de dupliquer un calcul de rôle/âge côté client. Un deuxième bug (introduit puis
+corrigé dans la même session) : ajouter `est_etudiant` à `MeOut` sans construire le dict de
+retour dans les DEUX endpoints qui répondent avec ce schéma (`/me` et
+`/auth/change-password`, qui renvoyait l'objet ORM brut) cassait `change-password` en
+`ResponseValidationError` — corrigé en factorisant `_construire_me_out()`, détecté par la
+suite pytest avant tout commit. 175 tests toujours passants. Vérifié par `tsc -b` + `vite
+build` (aucune erreur) après chaque lot. Détail complet dans `frontend/PROJECT_MAP.md`.
+Prochaine étape : 7 (intégration et correction des écarts).
+
+2026-09-26 (Phase 6, backend) — Étape 4 du lot Phase 6 : backend complet endpoint par
+endpoint pour les 6 sous-lots (rentrée/vie scolaire, classes/console, recrutement dynamique,
+actes dynamique, ticketerie QR, restriction étudiants) — voir détail dans
+`backend/PROJECT_MAP.md`. 175 tests passants (31 nouveaux/réécrits), migration `0007`
+appliquée et vérifiée (upgrade+downgrade) contre un vrai Postgres local. Correction UC-57
+en cours de route sur arbitrage explicite de l'utilisateur : les adultes gardent l'accès
+CLIENT (publier/payer un micro-job) mais perdent l'accès PRESTATAIRE (accepter/être payé),
+désormais réservé aux étudiants — reverse une partie d'ADR-008 sans l'annuler entièrement
+(les adultes restent clients). Prochaine étape : 6 (frontend).
+
 2026-09-26 (Phase 6, ideation) — Nouveau lot proposé (pas encore validé) :
 `docs/cahier-des-charges-refonte-admin-etablissement.md`, en réponse à une demande de
 refonte du profil A+ (admin établissement) en 6 points : rentrée scolaire + « vie

@@ -43,3 +43,7 @@ export function rembourserBillet(billetId: string) {
 export function mesBillets() {
   return api.get<BilletEvenementOut[]>("/mes-billets");
 }
+
+export function telechargerPdfBillet(billetId: string) {
+  return api.get(`/billets/${billetId}/pdf`, { responseType: "blob" });
+}

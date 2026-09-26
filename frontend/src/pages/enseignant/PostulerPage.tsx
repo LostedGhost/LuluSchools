@@ -4,6 +4,7 @@ import { obtenirPoste, postuler } from "../../api/recrutement";
 import { listerEtablissements } from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
 import type { EtablissementOut, PosteOut } from "../../types/api";
+import { FormulaireDynamique } from "../../components/FormulaireDynamique";
 import {
   Badge,
   Btn,
@@ -37,6 +38,7 @@ export function PostulerPage() {
   const [casierJudiciaire, setCasierJudiciaire] = useState<File | null>(null);
   const [lettreMotivation, setLettreMotivation] = useState("");
   const [lienPortfolio, setLienPortfolio] = useState("");
+  const [reponsesFormulaire, setReponsesFormulaire] = useState<Record<string, string | string[]>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [chargement, setChargement] = useState(true);
@@ -76,7 +78,8 @@ export function PostulerPage() {
         posteId,
         types,
         types.map((t) => fichiers[t]),
-        casierJudiciaire
+        casierJudiciaire,
+        Object.keys(reponsesFormulaire).length > 0 ? reponsesFormulaire : undefined
       );
       navigate("/enseignant/candidatures", { replace: true });
     } catch (err) {
@@ -183,11 +186,26 @@ export function PostulerPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 font-medium">
-                <BookOpen size={16} style={{ color: "var(--reward-deep)" }} />
-                <span>Matière / Discipline associée</span>
-              </div>
+              {poste.matiere && (
+                <div className="flex items-center gap-1.5 font-medium">
+                  <BookOpen size={16} style={{ color: "var(--reward-deep)" }} />
+                  <span>{poste.matiere}</span>
+                </div>
+              )}
+              {(poste.remuneration_min !== null || poste.remuneration_max !== null) && (
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span>
+                    {poste.remuneration_min?.toLocaleString("fr-FR")}
+                    {poste.remuneration_max ? ` – ${poste.remuneration_max.toLocaleString("fr-FR")}` : ""} FCFA
+                  </span>
+                </div>
+              )}
             </div>
+            {poste.description && (
+              <p className="text-sm" style={{ color: "var(--ink-soft)", margin: "var(--space-2) 0 0" }}>
+                {poste.description}
+              </p>
+            )}
           </div>
 
           <Badge tone={poste.statut === "ouvert" ? "success" : "neutral"}>
@@ -323,6 +341,21 @@ export function PostulerPage() {
             </Field>
           </div>
         </Card>
+
+        {poste.schema_formulaire && poste.schema_formulaire.length > 0 && (
+          <Card>
+            <SectionHead
+              eyebrow="Questions de l'établissement"
+              title="Informations complémentaires"
+              desc="Champs spécifiques demandés par l'établissement pour ce poste."
+            />
+            <FormulaireDynamique
+              champs={poste.schema_formulaire}
+              valeurs={reponsesFormulaire}
+              onChange={(id, valeur) => setReponsesFormulaire((prev) => ({ ...prev, [id]: valeur }))}
+            />
+          </Card>
+        )}
 
         {/* Étape 2 : Justificatifs demandés par le poste */}
         <Card>

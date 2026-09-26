@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { listerEtablissements } from "../../api/etablissements";
-import { acheterBillet, amorcerPaiementBillet, listerEvenements, mesBillets, rembourserBillet } from "../../api/billetterie";
+import { acheterBillet, amorcerPaiementBillet, listerEvenements, mesBillets, rembourserBillet, telechargerPdfBillet } from "../../api/billetterie";
 import { messageErreur } from "../../api/client";
+import { ouvrirBlobPdf } from "../../utils/telechargerBlob";
 import type { BilletEvenementOut, EtablissementOut, EvenementOut } from "../../types/api";
 import { Badge, Btn, Card, EmptyState, ErrorBanner, Field, Select, SectionHead, SkeletonCard, SuccessBanner } from "../../components/ui";
 import { KkiapayButton } from "../../components/KkiapayButton";
-import { CalendarDays, Ticket } from "lucide-react";
+import { CalendarDays, Download, Ticket } from "lucide-react";
 
 const STATUT_TONE: Record<BilletEvenementOut["statut"], "pending" | "success" | "neutral"> = {
   achete: "pending",
@@ -98,6 +99,19 @@ export function BilletteriePage() {
     }
   };
 
+  const telecharger = async (billetId: string) => {
+    setActionEnCoursId(billetId);
+    setErreur(null);
+    try {
+      const res = await telechargerPdfBillet(billetId);
+      ouvrirBlobPdf(res.data, `billet-${billetId}.pdf`);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de télécharger ce billet."));
+    } finally {
+      setActionEnCoursId(null);
+    }
+  };
+
   const evenementDuBillet = (billet: BilletEvenementOut) => evenements.find((e) => e.id === billet.evenement_id);
 
   return (
@@ -124,6 +138,11 @@ export function BilletteriePage() {
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       {b.statut === "achete" && !b.paiement_confirme && b.prix_paye > 0 && (
                         <KkiapayButton montant={b.prix_paye} reference={b.id} onSucces={(txId) => payer(b.id, txId)} disabled={actionEnCoursId === b.id} />
+                      )}
+                      {(b.paiement_confirme || b.prix_paye === 0) && (
+                        <Btn variant="ghost" size="sm" loading={actionEnCoursId === b.id} onClick={() => telecharger(b.id)} leftIcon={<Download size={14} />}>
+                          PDF
+                        </Btn>
                       )}
                       {b.statut === "achete" && (
                         <Btn variant="outline" size="sm" loading={actionEnCoursId === b.id} onClick={() => rembourser(b.id)}>

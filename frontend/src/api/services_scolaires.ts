@@ -40,6 +40,10 @@ export function mesTicketsTransport() {
   return api.get<TicketTransportOut[]>("/mes-tickets-transport");
 }
 
+export function telechargerPdfTicketTransport(ticketId: string) {
+  return api.get(`/tickets-transport/${ticketId}/pdf`, { responseType: "blob" });
+}
+
 // --- Cantine (UC-12) ---
 
 export function listerTypesRepasCantine(etablissementId: string) {
@@ -77,4 +81,8 @@ export function rembourserTicketCantine(ticketId: string) {
 
 export function mesTicketsCantine() {
   return api.get<TicketCantineOut[]>("/mes-tickets-cantine");
+}
+
+export function telechargerPdfTicketCantine(ticketId: string) {
+  return api.get(`/tickets-cantine/${ticketId}/pdf`, { responseType: "blob" });
 }
