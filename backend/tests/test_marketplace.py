@@ -12,10 +12,15 @@ def kkiapay_secret(monkeypatch):
     return "secret-de-test"
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     return client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
 
@@ -275,7 +280,7 @@ def test_parcours_complet_vente_avec_sequestre(marketplace_ctx, client, kkiapay_
         json={"transaction_id": f"tx-{transaction['id']}"},
         headers=ctx["acheteur_headers"],
     )
-    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret, 7500)
 
     remise = client.post(
         f"/api/v1/marketplace/transactions/{transaction['id']}/declarer-remise", headers=ctx["vendeur_headers"]
@@ -338,7 +343,7 @@ def test_contestations_en_attente_liste_pour_l_admin(marketplace_ctx, client, kk
         json={"transaction_id": f"tx-{transaction['id']}"},
         headers=ctx["acheteur_headers"],
     )
-    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret, 5000)
     client.post(
         f"/api/v1/marketplace/transactions/{transaction['id']}/declarer-remise", headers=ctx["vendeur_headers"]
     )
@@ -380,7 +385,7 @@ def test_contestation_acceptee_rembourse_et_reannonce_disponible(marketplace_ctx
         json={"transaction_id": f"tx-{transaction['id']}"},
         headers=ctx["acheteur_headers"],
     )
-    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret, 5000)
     client.post(
         f"/api/v1/marketplace/transactions/{transaction['id']}/declarer-remise", headers=ctx["vendeur_headers"]
     )
@@ -428,7 +433,7 @@ def test_confirmation_tacite_apres_le_delai(marketplace_ctx, client, kkiapay_sec
         json={"transaction_id": f"tx-{transaction['id']}"},
         headers=ctx["acheteur_headers"],
     )
-    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret, 5000)
     client.post(
         f"/api/v1/marketplace/transactions/{transaction['id']}/declarer-remise", headers=ctx["vendeur_headers"]
     )
@@ -495,7 +500,7 @@ def test_retrait_par_admin_rembourse_la_transaction_en_cours(marketplace_ctx, cl
         json={"transaction_id": f"tx-{transaction['id']}"},
         headers=ctx["acheteur_headers"],
     )
-    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret, 5000)
 
     retrait = client.post(
         f"/api/v1/marketplace/annonces/{annonce['id']}/retirer",
@@ -532,7 +537,7 @@ def test_tuteur_peut_consulter_en_lecture_seule_le_marketplace_de_son_enfant(
         json={"transaction_id": f"tx-{transaction['id']}"},
         headers=ctx["acheteur_headers"],
     )
-    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{transaction['id']}", kkiapay_secret, 5000)
 
     transactions = client.get(
         f"/api/v1/mes-enfants/{vendeur_utilisateur_id}/marketplace/transactions", headers=vendeur_tuteur_headers

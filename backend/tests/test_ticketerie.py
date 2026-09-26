@@ -11,10 +11,15 @@ def kkiapay_secret(monkeypatch):
     return "secret-de-test"
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     return client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
 

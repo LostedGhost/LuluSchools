@@ -35,10 +35,15 @@ def _changer_mot_de_passe(client, headers, ancien, nouveau="NouveauMdp1"):
     assert reponse.status_code == 200
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     reponse = client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
     assert reponse.status_code == 200
@@ -252,7 +257,7 @@ def test_parcours_complet_des_phases_2_et_3(
         json={"transaction_id": "tx-e2e-transport"},
         headers=eleve_headers,
     )
-    _payer_via_webhook(client, "tx-e2e-transport", secret)
+    _payer_via_webhook(client, "tx-e2e-transport", secret, 300)
     validation_transport = client.post(
         f"/api/v1/tickets-transport/{ticket_transport['id']}/valider", headers=enseignant_headers
     )
@@ -272,7 +277,7 @@ def test_parcours_complet_des_phases_2_et_3(
         json={"transaction_id": "tx-e2e-cantine"},
         headers=eleve_headers,
     )
-    _payer_via_webhook(client, "tx-e2e-cantine", secret)
+    _payer_via_webhook(client, "tx-e2e-cantine", secret, 500)
     validation_cantine = client.post(
         f"/api/v1/tickets-cantine/{ticket_cantine['id']}/valider", headers=enseignant_headers
     )
@@ -300,7 +305,7 @@ def test_parcours_complet_des_phases_2_et_3(
     client.post(
         f"/api/v1/billets/{billet['id']}/paiement/amorcer", json={"transaction_id": "tx-e2e-billet"}, headers=tuteur_headers
     )
-    _payer_via_webhook(client, "tx-e2e-billet", secret)
+    _payer_via_webhook(client, "tx-e2e-billet", secret, 1000)
     validation_billet = client.post(f"/api/v1/billets/{billet['id']}/valider", headers=enseignant_headers)
     assert validation_billet.status_code == 200
     assert validation_billet.json()["statut"] == "valide"
@@ -333,7 +338,7 @@ def test_parcours_complet_des_phases_2_et_3(
         json={"transaction_id": "tx-e2e-microjob"},
         headers=tuteur_headers,
     )
-    _payer_via_webhook(client, "tx-e2e-microjob", secret)
+    _payer_via_webhook(client, "tx-e2e-microjob", secret, 8000)
     mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers).json()
     assert mission["paiement_confirme"] is True
     fin_mission = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)

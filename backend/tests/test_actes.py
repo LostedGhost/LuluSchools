@@ -51,14 +51,24 @@ def test_acte_payant_attend_le_paiement_avant_traitement(client, classe_avec_ens
 
     webhook_mauvais_secret = client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": "kkiapay-tx-1", "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": "kkiapay-tx-1",
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": 1000,
+        },
         headers={"x-kkiapay-secret": "mauvais-secret"},
     )
     assert webhook_mauvais_secret.status_code == 401
 
     webhook = client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": "kkiapay-tx-1", "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": "kkiapay-tx-1",
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": 1000,
+        },
         headers={"x-kkiapay-secret": "secret-de-test"},
     )
     assert webhook.status_code == 200
@@ -74,6 +84,64 @@ def test_acte_payant_attend_le_paiement_avant_traitement(client, classe_avec_ens
     )
     assert traitement.status_code == 200
     assert traitement.json()["statut"] == "acceptee"
+
+
+def test_webhook_avec_montant_different_du_prix_ne_confirme_pas_le_paiement(
+    client, classe_avec_enseignant_et_eleve, monkeypatch
+):
+    """Bug reel corrige (audit securite, 2026-09-26) : le webhook Kkiapay ne verifiait
+    jamais que le montant reellement paye correspondait au prix de la ressource visee -
+    un appelant pouvait payer un montant derisoire chez Kkiapay puis rattacher ce
+    transactionId (via `.../paiement/amorcer`) a une demande d'acte bien plus chere."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "kkiapay_secret", "secret-de-test")
+    ctx = classe_avec_enseignant_et_eleve
+    type_acte = client.post(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/types-actes",
+        json={"nom": "Attestation de succes", "prix": 1000, "pieces_requises": "CIP, acte de naissance"},
+        headers=ctx["admin_headers"],
+    ).json()
+
+    demande = client.post(
+        "/api/v1/demandes-actes",
+        json={"type_acte_id": type_acte["id"]},
+        headers=ctx["eleve_headers"],
+    ).json()
+    assert demande["statut"] == "soumise"
+
+    client.post(
+        f"/api/v1/demandes-actes/{demande['id']}/paiement/amorcer",
+        json={"transaction_id": "kkiapay-tx-montant-truque"},
+        headers=ctx["eleve_headers"],
+    )
+
+    # Le transactionId correspond a un paiement Kkiapay reel mais d'un montant derisoire
+    # (10 FCFA) par rapport au prix de la demande (1000 FCFA) - le webhook doit renvoyer
+    # 200 (contrat Kkiapay : ne jamais faire echouer l'appel) mais NE DOIT PAS confirmer
+    # le paiement de la demande.
+    webhook = client.post(
+        "/api/v1/paiements/webhook/kkiapay",
+        json={
+            "transactionId": "kkiapay-tx-montant-truque",
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": 10,
+        },
+        headers={"x-kkiapay-secret": "secret-de-test"},
+    )
+    assert webhook.status_code == 200
+
+    demande_a_jour = client.get(f"/api/v1/demandes-actes/{demande['id']}", headers=ctx["admin_headers"])
+    assert demande_a_jour.json()["statut"] == "soumise"
+    assert demande_a_jour.json()["paiement_confirme"] is False
+
+    toujours_refuse = client.post(
+        f"/api/v1/demandes-actes/{demande['id']}/traiter",
+        json={"decision": "acceptee"},
+        headers=ctx["admin_headers"],
+    )
+    assert toujours_refuse.status_code == 409
 
 
 def test_type_acte_gratuit_va_directement_en_traitement(client, classe_avec_enseignant_et_eleve):

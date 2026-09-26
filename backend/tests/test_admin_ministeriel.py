@@ -11,10 +11,15 @@ def kkiapay_secret(monkeypatch):
     return "secret-de-test"
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     return client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
 
@@ -112,7 +117,7 @@ def _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers):
         json={"transaction_id": f"tx-{offre['id']}"},
         headers=ctx["tuteur_headers"],
     )
-    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret, 5000)
     mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers).json()
     return offre, mission
 

@@ -11,10 +11,15 @@ def kkiapay_secret(monkeypatch):
     return "secret-de-test"
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     return client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
 
@@ -51,7 +56,7 @@ def test_parcours_ticket_transport_achat_paiement_validation(client, classe_avec
         json={"transaction_id": "tx-transport-1"},
         headers=ctx["eleve_headers"],
     )
-    _payer_via_webhook(client, "tx-transport-1", kkiapay_secret)
+    _payer_via_webhook(client, "tx-transport-1", kkiapay_secret, 200)
 
     validation = client.post(f"/api/v1/tickets-transport/{ticket['id']}/valider", headers=ctx["enseignant_headers"])
     assert validation.status_code == 200
@@ -182,7 +187,7 @@ def test_parcours_ticket_cantine(client, classe_avec_enseignant_et_eleve, kkiapa
         json={"transaction_id": "tx-cantine-1"},
         headers=ctx["eleve_headers"],
     )
-    _payer_via_webhook(client, "tx-cantine-1", kkiapay_secret)
+    _payer_via_webhook(client, "tx-cantine-1", kkiapay_secret, 500)
 
     validation = client.post(f"/api/v1/tickets-cantine/{ticket['id']}/valider", headers=ctx["enseignant_headers"])
     assert validation.status_code == 200

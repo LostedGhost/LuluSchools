@@ -11,10 +11,15 @@ def kkiapay_secret(monkeypatch):
     return "secret-de-test"
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     return client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
 
@@ -34,7 +39,7 @@ def _publier_et_payer_offre(client, headers, kkiapay_secret, prix=5000):
         json={"transaction_id": f"tx-{offre['id']}"},
         headers=headers,
     )
-    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret, prix)
     return offre
 
 
@@ -90,6 +95,44 @@ def test_offre_non_payee_ni_visible_ni_acceptable(client, classe_avec_enseignant
 
     refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers)
     assert refus.status_code == 409
+
+
+def test_webhook_montant_insuffisant_ne_confirme_pas_l_offre(
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret
+):
+    """Bug reel corrige (audit securite, 2026-09-26) - reproduit l'exploit decrit :
+    un client amorce le paiement d'une offre chere (8000) avec un transactionId reel
+    de Kkiapay, mais dont le paiement effectif n'etait que de 10 FCFA. Avant le fix, le
+    webhook ne verifiait jamais `amount` et confirmait quand meme le paiement integral."""
+    ctx = classe_avec_enseignant_et_eleve
+    offre = client.post(
+        "/api/v1/micro-jobs/offres",
+        json={"titre": "Cours de soutien premium", "description": "10h de cours particuliers", "prix": 8000},
+        headers=ctx["tuteur_headers"],
+    ).json()
+    assert offre["statut"] == "en_attente_paiement"
+
+    client.post(
+        f"/api/v1/micro-jobs/offres/{offre['id']}/paiement/amorcer",
+        json={"transaction_id": f"tx-truque-{offre['id']}"},
+        headers=ctx["tuteur_headers"],
+    )
+
+    webhook = client.post(
+        "/api/v1/paiements/webhook/kkiapay",
+        json={
+            "transactionId": f"tx-truque-{offre['id']}",
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": 10,
+        },
+        headers={"x-kkiapay-secret": kkiapay_secret},
+    )
+    assert webhook.status_code == 200
+
+    offre_a_jour = client.get(f"/api/v1/micro-jobs/offres/{offre['id']}", headers=ctx["tuteur_headers"]).json()
+    assert offre_a_jour["statut"] == "en_attente_paiement"
+    assert offre_a_jour["paiement_confirme"] is False
 
 
 def test_eleve_ep_es_ne_peut_ni_publier_ni_accepter(client, classe_avec_enseignant_et_eleve, kkiapay_secret):

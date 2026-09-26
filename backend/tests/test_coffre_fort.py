@@ -9,10 +9,15 @@ def kkiapay_secret(monkeypatch):
     return "secret-de-test"
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     return client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
 
@@ -97,7 +102,7 @@ def test_seuil_de_validation_bloque_le_paiement_jusqu_a_decision_du_tuteur(
         headers=ctx["eleve_headers"],
     )
     assert amorcage_ok.status_code == 200
-    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret, 5000)
     offre_finale = client.get(f"/api/v1/micro-jobs/offres/{offre['id']}", headers=ctx["eleve_headers"]).json()
     assert offre_finale["statut"] == "ouverte"
 
@@ -194,7 +199,7 @@ def test_releve_financier_agrege_les_depenses_de_l_enfant(client, classe_avec_tu
         json={"transaction_id": f"tx-{offre['id']}"},
         headers=ctx["eleve_headers"],
     )
-    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret, 3000)
 
     releve = client.get(
         f"/api/v1/mes-enfants/{eleve_utilisateur_id}/coffre-fort/releve", headers=ctx["tuteur_headers"]

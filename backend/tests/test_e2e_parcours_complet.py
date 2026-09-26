@@ -395,7 +395,12 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
 
     webhook = client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": "kkiapay-tx-e2e-1", "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": "kkiapay-tx-e2e-1",
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": 1000,
+        },
         headers={"x-kkiapay-secret": _secret_de_test()},
     )
     assert webhook.status_code == 200

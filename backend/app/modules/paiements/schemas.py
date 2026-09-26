@@ -13,8 +13,15 @@ class AmorcerPaiementRequest(BaseModel):
 
 
 class KkiapayWebhookPayload(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Kkiapay envoie d'autres champs (amount, fees, method...)
+    """`amount` (montant reellement paye, en FCFA - voir docs.kkiapay.me/v1/tableau-de-bord/webhook)
+    est indispensable : sans verification cote serveur, un appelant peut amorcer un
+    paiement bon marche puis rattacher (via `.../paiement/amorcer`) ce transactionId a
+    une ressource bien plus chere - le webhook ne doit confirmer que si `amount`
+    correspond au prix reel de la ressource visee (voir chaque _confirmer_* de router.py)."""
+
+    model_config = ConfigDict(extra="ignore")  # Kkiapay envoie d'autres champs (fees, method...)
 
     transactionId: str
     isPaymentSucces: bool
     event: str
+    amount: float

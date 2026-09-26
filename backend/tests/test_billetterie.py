@@ -11,10 +11,15 @@ def kkiapay_secret(monkeypatch):
     return "secret-de-test"
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     return client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
 
@@ -58,7 +63,7 @@ def test_parcours_billet_payant_achat_paiement_validation(client, classe_avec_en
         json={"transaction_id": "tx-billet-1"},
         headers=ctx["eleve_headers"],
     )
-    _payer_via_webhook(client, "tx-billet-1", kkiapay_secret)
+    _payer_via_webhook(client, "tx-billet-1", kkiapay_secret, 1000)
 
     validation = client.post(f"/api/v1/billets/{billet['id']}/valider", headers=ctx["enseignant_headers"])
     assert validation.status_code == 200

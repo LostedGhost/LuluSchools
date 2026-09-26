@@ -59,10 +59,15 @@ def _inscrire_eleve_de_16_ans_ou_plus(client, fake_email_client, admin_headers, 
     return eleve_headers
 
 
-def _payer_via_webhook(client, transaction_id, secret):
+def _payer_via_webhook(client, transaction_id, secret, montant):
     reponse = client.post(
         "/api/v1/paiements/webhook/kkiapay",
-        json={"transactionId": transaction_id, "isPaymentSucces": True, "event": "transaction.success"},
+        json={
+            "transactionId": transaction_id,
+            "isPaymentSucces": True,
+            "event": "transaction.success",
+            "amount": montant,
+        },
         headers={"x-kkiapay-secret": secret},
     )
     assert reponse.status_code == 200
@@ -178,7 +183,7 @@ def test_parcours_complet_de_la_phase_4_marketplace(
         headers=acheteur_headers,
     )
     assert amorcer.status_code == 200
-    _payer_via_webhook(client, f"tx-e2e4-{transaction['id']}", secret)
+    _payer_via_webhook(client, f"tx-e2e4-{transaction['id']}", secret, 12000)
 
     # ---------------------------------------------------------------
     # 4. UC-21 : remise en main propre declaree par le vendeur, confirmee par l'acheteur
