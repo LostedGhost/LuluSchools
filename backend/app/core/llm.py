@@ -97,6 +97,49 @@ class FreeLLMClient:
 
         return max(0.0, min(points_max, float(correspondance.group())))
 
+    def corriger_copie_image(
+        self, consigne_globale: str, points_max_total: float, image_bytes: bytes, content_type: str, strict: bool
+    ) -> float:
+        """UC-26.4/26.5 : correction holistique d'une copie entierement imagee/scannee -
+        une seule note globale (pas de decoupage par question, contrairement a
+        corriger_reponse), a partir du/des bareme(s) fournis par l'enseignant
+        (bareme_reponse par question et/ou bareme_document du devoir, concatenes en
+        amont par l'appelant dans consigne_globale)."""
+        consigne_notation = (
+            f"Attribue soit {points_max_total} (travail globalement correct et complet) soit 0, "
+            "sans note intermediaire."
+            if strict
+            else f"Attribue une note entre 0 et {points_max_total}, avec credit partiel si le "
+            "raisonnement est correct mais incomplet ou partiellement illisible."
+        )
+        prompt = (
+            f"Bareme de correction attendu par l'enseignant : {consigne_globale}\n\n"
+            f"{consigne_notation} Reponds uniquement avec la note obtenue, sans aucun autre texte."
+        )
+        image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+        try:
+            response = self._client.chat.completions.create(
+                model="auto",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{image_b64}"}},
+                        ],
+                    }
+                ],
+            )
+        except OpenAIError as exc:
+            raise CorrectionError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        correspondance = re.search(r"\d+(\.\d+)?", texte)
+        if correspondance is None:
+            raise CorrectionError(f"Reponse FreeLLM non interpretable comme une note : {texte!r}")
+
+        return max(0.0, min(points_max_total, float(correspondance.group())))
+
     def generer_quiz(self, contenu_cours: str, nombre_questions: int = 5) -> list[dict]:
         """UC-07 : le quiz est genere par le LLM a partir du contenu du cours. Format
         impose : QCM a 4 choix, une seule bonne reponse par question."""
@@ -151,6 +194,42 @@ class FreeLLMClient:
             "d'un exercice note : tu expliques la notion pour que l'eleve trouve lui-meme.\n\n"
             f"Contenu du cours :\n{contenu_cours}"
         )
+        messages = [{"role": "system", "content": consigne}]
+        for tour in historique:
+            role = "assistant" if tour["role"] == "assistant" else "user"
+            messages.append({"role": role, "content": tour["contenu"]})
+        messages.append({"role": "user", "content": question})
+
+        try:
+            response = self._client.chat.completions.create(model="auto", messages=messages)
+        except OpenAIError as exc:
+            raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        if not texte:
+            raise ElProfessorError("Reponse FreeLLM vide.")
+        return texte
+
+    def conseiller_enseignant(self, contexte_eleve: str | None, historique: list[dict], question: str) -> str:
+        """UC-27 : El Professor cote enseignant - conseille sur des questions educatives,
+        morales, professionnelles ou humaines concernant ses eleves ou sa pratique.
+        Persona distincte de repondre_question_el_professor (cote eleve, ancre au contenu
+        d'un cours) : ici, un coach pedagogique, pas un tuteur de matiere. Le garde-fou de
+        securite (detection de signaux de danger -> escalade) est applique cote routeur
+        (voir pedagogie/router.py::_detecter_signal_alerte), pas ici - le prompt le
+        rappelle neanmoins pour renforcer la reponse elle-meme."""
+        consigne = (
+            "Tu es 'El Professor', un assistant qui conseille un enseignant sur des questions "
+            "educatives, morales, professionnelles ou humaines concernant ses eleves ou sa "
+            "propre pratique. Tu n'es ni un professionnel de sante mentale ni un juriste : pour "
+            "toute situation grave ou potentiellement dangereuse (maltraitance, violence, "
+            "detresse psychologique, urgence), tu recommandes explicitement et sans delai d'en "
+            "parler a l'administration de l'etablissement ou aux autorites competentes - tu ne "
+            "traites jamais seul ce genre de situation, meme si l'enseignant ne le demande pas."
+        )
+        if contexte_eleve:
+            consigne += f"\n\nContexte disponible sur l'eleve concerne (vie scolaire) :\n{contexte_eleve}"
+
         messages = [{"role": "system", "content": consigne}]
         for tour in historique:
             role = "assistant" if tour["role"] == "assistant" else "user"

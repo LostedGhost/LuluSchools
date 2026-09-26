@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { maSoumission, obtenirDevoir, soumettreDevoir } from "../../api/evaluations";
+import { maSoumission, obtenirDevoir, obtenirLienSujetDocument, soumettreDevoir, soumettreDevoirParCopieImage } from "../../api/evaluations";
 import { messageErreur } from "../../api/client";
 import type { DevoirOut, SoumissionOut } from "../../types/api";
 import {
@@ -13,7 +13,7 @@ import {
   Skeleton
 } from "../../components/ui";
 import { ScoreBurst, AIBadge, FloatingXPBadge } from "../../components/gamification";
-import { FileUp, Send } from "lucide-react";
+import { ExternalLink, FileUp, Send } from "lucide-react";
 
 const LIBELLES_STATUT: Record<string, { label: string; tone: "neutral" | "success" | "error" | "pending" }> = {
   en_correction: { label: "Correction en cours...", tone: "pending" },
@@ -30,6 +30,8 @@ export function DevoirDetailPage() {
   const [reponses, setReponses] = useState<Record<string, string>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [enCoursCopieImage, setEnCoursCopieImage] = useState(false);
+  const [lienSujet, setLienSujet] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const chargerSoumission = () => {
@@ -42,7 +44,14 @@ export function DevoirDetailPage() {
   useEffect(() => {
     if (!devoirId) return;
     obtenirDevoir(devoirId)
-      .then((res) => setDevoir(res.data))
+      .then((res) => {
+        setDevoir(res.data);
+        if (res.data.sujet_lulufiles_file_id) {
+          obtenirLienSujetDocument(devoirId)
+            .then((lien) => setLienSujet(lien.data.url))
+            .catch(() => undefined);
+        }
+      })
       .catch((err) => setErreur(messageErreur(err)));
     chargerSoumission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,6 +66,20 @@ export function DevoirDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soumission?.statut]);
+
+  const soumettreParPhoto = async (fichier: File | undefined) => {
+    if (!devoirId || !fichier) return;
+    setErreur(null);
+    setEnCoursCopieImage(true);
+    try {
+      const { data } = await soumettreDevoirParCopieImage(devoirId, fichier);
+      setSoumission(data);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de soumettre la photo de votre copie."));
+    } finally {
+      setEnCoursCopieImage(false);
+    }
+  };
 
   const soumettre = async () => {
     if (!devoir || !devoirId) return;
@@ -104,6 +127,11 @@ export function DevoirDetailPage() {
             <p className="text-label" style={{ color: 'var(--ink-soft)' }}>
               {devoir.matiere} — Échéance : {new Date(devoir.date_limite).toLocaleString("fr-FR")}
             </p>
+            {lienSujet && (
+              <a href={lienSujet} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "var(--text-sm)", marginTop: "6px" }}>
+                <ExternalLink size={14} /> Voir le sujet (document)
+              </a>
+            )}
           </div>
           <FloatingXPBadge amount={150} label="Récompense" />
         </div>
@@ -131,6 +159,11 @@ export function DevoirDetailPage() {
 
           <Card>
             <h3 className="text-title" style={{ marginBottom: 'var(--space-4)' }}>Historique & Réponses</h3>
+            {soumission.copie_image_lulufiles_file_id && (
+              <p className="text-sm text-ink-soft italic" style={{ marginBottom: 'var(--space-4)' }}>
+                Soumission par photo de copie - note globale, sans détail par question.
+              </p>
+            )}
             <div className="space-y-6">
               {questionsTriees.map((question, idx) => {
                 const reponse = soumission.reponses.find((r) => r.question_id === question.id);
@@ -176,8 +209,17 @@ export function DevoirDetailPage() {
               </Field>
             ))}
 
-            <Field label="Pièce jointe (Optionnel)">
-              <div style={{
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', margin: 'var(--space-6) 0' }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            <span className="text-sm" style={{ color: 'var(--ink-faint)' }}>ou</span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          </div>
+
+          <Field label="Soumettre une photo (ou un scan) de ta copie" helper="Alternative aux réponses ci-dessus : une seule note globale sera attribuée, sans détail par question.">
+            <label
+              style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -187,14 +229,21 @@ export function DevoirDetailPage() {
                 padding: 'var(--space-4)',
                 textAlign: 'center',
                 background: 'var(--surface-2)',
-                color: 'var(--ink-soft)'
-              }}>
-                <FileUp size={18} aria-hidden="true" />
-                Glisse ou clique pour ajouter un fichier (bientôt disponible)
-              </div>
-            </Field>
-
-          </div>
+                color: 'var(--ink-soft)',
+                cursor: enCoursCopieImage ? 'wait' : 'pointer',
+              }}
+            >
+              <FileUp size={18} aria-hidden="true" />
+              {enCoursCopieImage ? "Envoi en cours..." : "Choisir une photo ou un PDF de ta copie"}
+              <input
+                type="file"
+                accept="application/pdf,image/*"
+                style={{ display: 'none' }}
+                disabled={enCoursCopieImage}
+                onChange={(e) => soumettreParPhoto(e.target.files?.[0])}
+              />
+            </label>
+          </Field>
           
           <Btn 
             variant="action" 

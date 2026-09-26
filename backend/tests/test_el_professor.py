@@ -85,3 +85,116 @@ def test_publication_cours_video_refuse_au_dela_de_200_mo(client, classe_avec_en
         headers=ctx["enseignant_headers"],
     )
     assert reponse.status_code == 413
+
+
+# --- UC-27 : El Professor, volet enseignant ---
+
+
+def _eleve_utilisateur_id(ctx, client):
+    return client.get("/api/v1/me", headers=ctx["eleve_headers"]).json()["id"]
+
+
+def test_enseignant_ouvre_une_session_sur_un_eleve_de_sa_classe(
+    client, fake_llm_client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    eleve_id = _eleve_utilisateur_id(ctx, client)
+
+    session = client.post(
+        "/api/v1/el-professor-enseignant/sessions",
+        json={"eleve_utilisateur_id": eleve_id, "sujet": "Difficultes de concentration"},
+        headers=ctx["enseignant_headers"],
+    )
+    assert session.status_code == 201
+    session_id = session.json()["id"]
+
+    fake_llm_client.reponse_conseil_enseignant = "Essayez de fractionner les exercices en etapes courtes."
+    reponse = client.post(
+        f"/api/v1/el-professor-enseignant/sessions/{session_id}/messages",
+        json={"question": "Cet eleve decroche vite en cours, que faire ?"},
+        headers=ctx["enseignant_headers"],
+    )
+    assert reponse.status_code == 201
+    messages = reponse.json()["messages"]
+    assert len(messages) == 2
+    assert messages[0]["role"] == "enseignant"
+    assert "fractionner" in messages[1]["contenu"]
+    assert "⚠️" not in messages[1]["contenu"]
+
+
+def test_session_refusee_pour_un_eleve_hors_de_ses_classes(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    refus = client.post(
+        "/api/v1/el-professor-enseignant/sessions",
+        json={"eleve_utilisateur_id": "id-eleve-inexistant"},
+        headers=ctx["enseignant_headers"],
+    )
+    assert refus.status_code == 403
+
+
+def test_question_generale_sans_eleve_precis_est_acceptee(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    session = client.post(
+        "/api/v1/el-professor-enseignant/sessions",
+        json={"sujet": "Gestion de classe"},
+        headers=ctx["enseignant_headers"],
+    )
+    assert session.status_code == 201
+    assert session.json()["eleve_utilisateur_id"] is None
+
+
+def test_signal_de_danger_declenche_une_alerte_et_une_recommandation_d_escalade(
+    client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    eleve_id = _eleve_utilisateur_id(ctx, client)
+    session = client.post(
+        "/api/v1/el-professor-enseignant/sessions",
+        json={"eleve_utilisateur_id": eleve_id},
+        headers=ctx["enseignant_headers"],
+    ).json()
+
+    reponse = client.post(
+        f"/api/v1/el-professor-enseignant/sessions/{session['id']}/messages",
+        json={"question": "Je crains une situation de maltraitance a la maison pour cet eleve, que faire ?"},
+        headers=ctx["enseignant_headers"],
+    )
+    assert reponse.status_code == 201
+    assert "⚠️" in reponse.json()["messages"][1]["contenu"]
+
+    alertes = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/alertes-el-professor", headers=ctx["admin_headers"]
+    ).json()
+    assert len(alertes) == 1
+    assert alertes[0]["traite"] is False
+
+    traitement = client.post(
+        f"/api/v1/alertes-el-professor/{alertes[0]['id']}/traiter", headers=ctx["admin_headers"]
+    )
+    assert traitement.status_code == 200
+    assert traitement.json()["traite"] is True
+
+
+def test_enseignant_ne_voit_pas_les_alertes_ne_peut_pas_les_traiter(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    refus = client.get(
+        f"/api/v1/etablissements/{ctx['etablissement']['id']}/alertes-el-professor", headers=ctx["enseignant_headers"]
+    )
+    assert refus.status_code == 403
+
+
+def test_echec_freellm_conseiller_enseignant_renvoie_une_erreur_explicite(
+    client, fake_llm_client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    session = client.post(
+        "/api/v1/el-professor-enseignant/sessions", json={"sujet": "Test"}, headers=ctx["enseignant_headers"]
+    ).json()
+
+    fake_llm_client.echec_conseil_enseignant = True
+    reponse = client.post(
+        f"/api/v1/el-professor-enseignant/sessions/{session['id']}/messages",
+        json={"question": "..."},
+        headers=ctx["enseignant_headers"],
+    )
+    assert reponse.status_code == 502

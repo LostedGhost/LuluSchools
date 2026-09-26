@@ -59,12 +59,34 @@ export interface ClasseOut {
   niveau: string;
   capacite: number;
   politique_depassement: PolitiqueDepassement;
+  annee_academique: string;
 }
 
 export interface AffectationEnseignantOut {
   id: string;
   enseignant_id: string;
   classe_id: string;
+  est_professeur_principal: boolean;
+}
+
+/* UC-24 : vue enrichie d'une classe pour l'enseignant qui la consulte */
+export interface SalleEnseignantOut {
+  id: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  niveau: string;
+  capacite: number;
+  effectif: number;
+  annee_academique: string;
+  est_professeur_principal: boolean;
+}
+
+export interface EleveClasseOut {
+  eleve_id: string;
+  utilisateur_id: string | null;
+  nom: string;
+  prenom: string;
+  matricule: string | null;
 }
 
 export type Nationalite = "nationale" | "etrangere";
@@ -138,6 +160,7 @@ export interface TentativeQuizOut {
 }
 
 export type BaremeDevoir = "rigide" | "flexible";
+export type NatureEvaluation = "formative" | "sommative";
 
 export interface QuestionDevoirOut {
   id: string;
@@ -153,7 +176,13 @@ export interface DevoirOut {
   matiere: string;
   date_limite: string;
   bareme: BaremeDevoir;
+  nature: NatureEvaluation;
+  sujet_lulufiles_file_id: string | null;
   questions: QuestionDevoirOut[];
+}
+
+export interface DevoirProprietaireOut extends DevoirOut {
+  bareme_document_lulufiles_file_id: string | null;
 }
 
 export type StatutSoumission = "en_correction" | "corrigee" | "echec_correction";
@@ -169,6 +198,7 @@ export interface SoumissionOut {
   devoir_id: string;
   note: number | null;
   statut: StatutSoumission;
+  copie_image_lulufiles_file_id: string | null;
   reponses: ReponseOut[];
 }
 
@@ -565,3 +595,151 @@ export interface ContestationMarketplaceOut {
   statut: StatutContestationMarketplace;
   decision_motif: string | null;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-23 : vie scolaire
+   ═══════════════════════════════════════════════════════════════ */
+
+export type NatureEntreeVieScolaire = "absence" | "retard" | "appreciation" | "incident" | "felicitation";
+
+export interface EntreeVieScolaireOut {
+  id: string;
+  eleve_id: string;
+  classe_id: string;
+  auteur_id: string;
+  nature: NatureEntreeVieScolaire;
+  matiere: string | null;
+  description: string;
+  date_survenue: string;
+  created_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-28 : recherche d'utilisateur designable (controleur)
+   ═══════════════════════════════════════════════════════════════ */
+
+export interface UtilisateurDesignableOut {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string | null;
+  role: Role;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-27 : El Professor, volet enseignant
+   ═══════════════════════════════════════════════════════════════ */
+
+export type RoleMessageElProfessorEnseignant = "enseignant" | "assistant";
+
+export interface MessageElProfessorEnseignantOut {
+  id: string;
+  session_id: string;
+  role: RoleMessageElProfessorEnseignant;
+  contenu: string;
+  created_at: string;
+}
+
+export interface SessionElProfessorEnseignantOut {
+  id: string;
+  enseignant_id: string;
+  eleve_utilisateur_id: string | null;
+  sujet: string | null;
+  messages: MessageElProfessorEnseignantOut[];
+}
+
+export interface AlerteElProfessorOut {
+  id: string;
+  session_id: string;
+  etablissement_id: string | null;
+  motif: string;
+  traite: boolean;
+  created_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 5 — UC-25 : tableau collaboratif de session live
+   ═══════════════════════════════════════════════════════════════ */
+
+export type TypeTraitTableau = "trait_libre" | "texte" | "effacement";
+export type ModePermissionEcriture = "pretee" | "accordee";
+export type StatutDemandeCraie = "en_attente" | "accordee" | "refusee";
+
+export interface DonneesTraitLibre {
+  points: [number, number][];
+  epaisseur?: number;
+  couleur?: string;
+}
+
+export interface DonneesTraitTexte {
+  x: number;
+  y: number;
+  texte: string;
+  taille?: number;
+  couleur?: string;
+}
+
+export interface PanneauTableauOut {
+  id: string;
+  session_id: string;
+  ordre: number;
+}
+
+export interface TraitTableauOut {
+  id: string;
+  panneau_id: string;
+  auteur_id: string;
+  type: TypeTraitTableau;
+  donnees: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface PanneauAvecTraitsOut {
+  panneau: PanneauTableauOut;
+  traits: TraitTableauOut[];
+}
+
+export interface PermissionEcritureOut {
+  id: string;
+  session_id: string;
+  eleve_utilisateur_id: string;
+  mode: ModePermissionEcriture;
+}
+
+export interface DemandeCraieOut {
+  id: string;
+  session_id: string;
+  eleve_utilisateur_id: string;
+  statut: StatutDemandeCraie;
+}
+
+export interface EtatTableauOut {
+  panneaux: PanneauAvecTraitsOut[];
+  permissions: PermissionEcritureOut[];
+  demandes_en_attente: DemandeCraieOut[];
+}
+
+export interface CaptureTableauOut {
+  id: string;
+  session_id: string;
+  panneau_id: string;
+  lulufiles_file_id: string;
+  created_at: string;
+}
+
+export interface MessageSessionLiveOut {
+  id: string;
+  session_id: string;
+  auteur_id: string;
+  contenu: string;
+  created_at: string;
+}
+
+export type EvenementTempsReelSessionLive =
+  | { type: "trait"; panneau_id: string; trait: TraitTableauOut }
+  | { type: "demande_craie"; demande: DemandeCraieOut }
+  | { type: "demande_craie_tranchee"; demande: DemandeCraieOut }
+  | { type: "permission_accordee"; eleve_utilisateur_id: string }
+  | { type: "permission_revoquee"; eleve_utilisateur_id: string }
+  | { type: "message"; message: MessageSessionLiveOut }
+  | { type: "webrtc_signal"; from: string; payload: unknown };

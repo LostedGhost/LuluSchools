@@ -222,6 +222,19 @@ export function AdminEtabDashboard() {
       badgeLabel: "Modérer",
       urgent: false,
     },
+    {
+      to: "/admin-etablissement/alertes-el-professor",
+      label: "Alertes El Professor",
+      desc: "Signaux de sécurité détectés dans les conversations des enseignants avec l'assistant IA - à traiter sans délai.",
+      icon: AlertTriangle,
+      tone: "action" as const,
+      accentVar: "var(--action)",
+      tintVar: "var(--action-tint)",
+      deepVar: "var(--action-deep)",
+      count: null,
+      badgeLabel: "Vérifier",
+      urgent: false,
+    },
   ];
 
   return (

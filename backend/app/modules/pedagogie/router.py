@@ -1,33 +1,49 @@
+import unicodedata
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import api_error, get_current_active_user, get_current_user, require_roles
+from app.core.deps import (
+    api_error,
+    get_current_active_user,
+    get_current_user,
+    require_roles,
+    verifier_portee_etablissement,
+)
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import ElProfessorError, FreeLLMClient, QuizGenerationError, get_llm_client
 from app.modules.etablissements.models import AffectationEnseignant, Classe
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.pedagogie.models import (
+    AlerteElProfessor,
     Cours,
     FormatCours,
     MessageElProfessor,
+    MessageElProfessorEnseignant,
     QuestionQuiz,
     Quiz,
     RoleMessageElProfessor,
+    RoleMessageElProfessorEnseignant,
     SessionElProfessor,
+    SessionElProfessorEnseignant,
     TentativeQuiz,
 )
 from app.modules.pedagogie.schemas import (
+    AlerteElProfessorOut,
     CoursOut,
     LienFichierOut,
     QuestionElProfessorCreate,
     QuizCreate,
     QuizOut,
+    SessionElProfessorEnseignantCreate,
+    SessionElProfessorEnseignantOut,
     SessionElProfessorOut,
     TentativeQuizCreate,
     TentativeQuizOut,
 )
+from app.modules.vie_scolaire.models import EntreeVieScolaire
 
 MAX_TAILLE_COURS_OCTETS = 50 * 1024 * 1024
 MAX_TAILLE_COURS_VIDEO_OCTETS = 200 * 1024 * 1024  # UC-15 (Phase 3), delegue - la duree (15 min) n'est pas
@@ -373,3 +389,230 @@ def poser_question_el_professor(
     db.commit()
     db.refresh(session)
     return session
+
+
+# --- UC-27 : El Professor, volet enseignant (conseil educatif/moral/professionnel) ---
+
+_MOTS_CLES_ALERTE = (
+    "maltraitance", "violence", "abus", "viol", "suicide", "se tuer", "se faire du mal",
+    "automutilation", "scarification", "en danger", "urgence", "menace", "frappe", "battu",
+    "battue", "harcelement sexuel", "attouchement", "abandon",
+)
+
+
+def _sans_accents(texte: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", texte) if not unicodedata.combining(c))
+
+
+def _detecter_signal_alerte(texte: str) -> bool:
+    """UC-27.3 : garde-fou de securite - heuristique volontairement simple (mots-cles) et
+    permissive (mieux vaut un faux positif occasionnel qu'un vrai signal manque). Ne
+    remplace jamais un jugement humain, se contente de forcer une recommandation
+    d'escalade explicite et de preparer une alerte pour l'administration."""
+    normalise = _sans_accents(texte.lower())
+    return any(mot in normalise for mot in _MOTS_CLES_ALERTE)
+
+
+def _classes_communes(db: Session, enseignant_id: str, eleve: Eleve) -> list[AffectationEnseignant]:
+    classes_eleve = {
+        i.classe_id
+        for i in db.query(Inscription).filter(
+            Inscription.eleve_id == eleve.id, Inscription.statut == StatutInscription.VALIDEE
+        )
+    }
+    if not classes_eleve:
+        return []
+    return (
+        db.query(AffectationEnseignant)
+        .filter(AffectationEnseignant.enseignant_id == enseignant_id, AffectationEnseignant.classe_id.in_(classes_eleve))
+        .all()
+    )
+
+
+def _construire_contexte_eleve(db: Session, enseignant_id: str, eleve_utilisateur_id: str) -> str | None:
+    """Ne donne a El Professor QUE ce que l'enseignant a lui-meme le droit de voir (meme
+    portee que vie_scolaire/router.py : tout pour le professeur principal, seulement ses
+    propres entrees pour un enseignant de matiere) - jamais plus."""
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
+    if eleve is None:
+        return None
+    affectations = _classes_communes(db, enseignant_id, eleve)
+    if not affectations:
+        return None
+
+    entrees: list[EntreeVieScolaire] = []
+    for affectation in affectations:
+        requete = db.query(EntreeVieScolaire).filter(
+            EntreeVieScolaire.classe_id == affectation.classe_id, EntreeVieScolaire.eleve_id == eleve.id
+        )
+        if not affectation.est_professeur_principal:
+            requete = requete.filter(EntreeVieScolaire.auteur_id == enseignant_id)
+        entrees.extend(requete.all())
+    if not entrees:
+        return None
+
+    lignes = [
+        f"- [{e.nature.value}]" + (f" ({e.matiere})" if e.matiere else "") + f" {e.date_survenue.isoformat()} : {e.description}"
+        for e in sorted(entrees, key=lambda e: e.date_survenue)
+    ]
+    return "\n".join(lignes)
+
+
+def _resoudre_etablissement_pour_alerte(db: Session, eleve_utilisateur_id: str | None) -> str | None:
+    if eleve_utilisateur_id is None:
+        return None
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
+    if eleve is None:
+        return None
+    inscription = (
+        db.query(Inscription)
+        .filter(Inscription.eleve_id == eleve.id, Inscription.statut == StatutInscription.VALIDEE)
+        .first()
+    )
+    if inscription is None:
+        return None
+    classe = db.get(Classe, inscription.classe_id)
+    return classe.etablissement_id if classe else None
+
+
+@router.post(
+    "/el-professor-enseignant/sessions",
+    response_model=SessionElProfessorEnseignantOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def ouvrir_session_el_professor_enseignant(
+    payload: SessionElProfessorEnseignantCreate,
+    db: Session = Depends(get_db),
+    enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
+) -> SessionElProfessorEnseignant:
+    if payload.eleve_utilisateur_id is not None:
+        eleve = db.query(Eleve).filter(Eleve.utilisateur_id == payload.eleve_utilisateur_id).first()
+        if eleve is None or not _classes_communes(db, enseignant.id, eleve):
+            raise api_error(
+                status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est dans aucune de vos classes."
+            )
+
+    session = SessionElProfessorEnseignant(
+        enseignant_id=enseignant.id, eleve_utilisateur_id=payload.eleve_utilisateur_id, sujet=payload.sujet
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.get("/el-professor-enseignant/sessions", response_model=list[SessionElProfessorEnseignantOut])
+def lister_mes_sessions_el_professor_enseignant(
+    db: Session = Depends(get_db), enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT))
+) -> list[SessionElProfessorEnseignant]:
+    return (
+        db.query(SessionElProfessorEnseignant)
+        .filter(SessionElProfessorEnseignant.enseignant_id == enseignant.id)
+        .order_by(SessionElProfessorEnseignant.created_at.desc())
+        .all()
+    )
+
+
+@router.get("/el-professor-enseignant/sessions/{session_id}", response_model=SessionElProfessorEnseignantOut)
+def obtenir_session_el_professor_enseignant(
+    session_id: str,
+    db: Session = Depends(get_db),
+    enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
+) -> SessionElProfessorEnseignant:
+    session = db.get(SessionElProfessorEnseignant, session_id)
+    if session is None or session.enseignant_id != enseignant.id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Session introuvable.")
+    return session
+
+
+@router.post(
+    "/el-professor-enseignant/sessions/{session_id}/messages",
+    response_model=SessionElProfessorEnseignantOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def poser_question_el_professor_enseignant(
+    session_id: str,
+    payload: QuestionElProfessorCreate,
+    db: Session = Depends(get_db),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
+    enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
+) -> SessionElProfessorEnseignant:
+    session = db.get(SessionElProfessorEnseignant, session_id)
+    if session is None or session.enseignant_id != enseignant.id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Session introuvable.")
+
+    contexte_eleve = (
+        _construire_contexte_eleve(db, enseignant.id, session.eleve_utilisateur_id)
+        if session.eleve_utilisateur_id
+        else None
+    )
+    historique = [{"role": m.role.value, "contenu": m.contenu} for m in session.messages]
+    try:
+        reponse = llm_client.conseiller_enseignant(contexte_eleve, historique, payload.question)
+    except ElProfessorError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une reponse, veuillez reessayer."
+        ) from exc
+
+    if _detecter_signal_alerte(payload.question) or _detecter_signal_alerte(reponse):
+        reponse = (
+            f"{reponse}\n\n⚠️ Cette situation semble sensible : parlez-en sans delai a "
+            "l'administration de votre etablissement (ou aux autorites competentes si "
+            "l'urgence l'exige). Une alerte a ete preparee pour l'administration."
+        )
+        db.add(
+            AlerteElProfessor(
+                session_id=session.id,
+                etablissement_id=_resoudre_etablissement_pour_alerte(db, session.eleve_utilisateur_id),
+                motif=payload.question[:1000],
+            )
+        )
+
+    db.add(
+        MessageElProfessorEnseignant(
+            session_id=session_id, role=RoleMessageElProfessorEnseignant.ENSEIGNANT, contenu=payload.question
+        )
+    )
+    db.add(
+        MessageElProfessorEnseignant(
+            session_id=session_id, role=RoleMessageElProfessorEnseignant.ASSISTANT, contenu=reponse
+        )
+    )
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.get("/etablissements/{etablissement_id}/alertes-el-professor", response_model=list[AlerteElProfessorOut])
+def lister_alertes_el_professor(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[AlerteElProfessor]:
+    verifier_portee_etablissement(db, admin, etablissement_id)
+    return (
+        db.query(AlerteElProfessor)
+        .filter(AlerteElProfessor.etablissement_id == etablissement_id)
+        .order_by(AlerteElProfessor.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/alertes-el-professor/{alerte_id}/traiter", response_model=AlerteElProfessorOut)
+def traiter_alerte_el_professor(
+    alerte_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> AlerteElProfessor:
+    alerte = db.get(AlerteElProfessor, alerte_id)
+    if alerte is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Alerte introuvable.")
+    if alerte.etablissement_id is None:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette alerte n'est rattachee a aucun etablissement.")
+    verifier_portee_etablissement(db, admin, alerte.etablissement_id)
+
+    alerte.traite = True
+    alerte.traite_par_id = admin.id
+    db.commit()
+    db.refresh(alerte)
+    return alerte

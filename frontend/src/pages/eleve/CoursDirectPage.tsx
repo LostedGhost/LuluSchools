@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { listerSessionsLive, rejoindreSessionLive } from "../../api/cours_direct";
 import { messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
@@ -12,7 +13,7 @@ import {
   SectionHead,
   SkeletonCard,
 } from "../../components/ui";
-import { AlertTriangle, Radio, Video, VideoOff } from "lucide-react";
+import { Radio, Video, VideoOff } from "lucide-react";
 
 const STATUT_TONE: Record<SessionLiveOut["statut"], "pending" | "success" | "neutral"> = {
   planifiee: "pending",
@@ -27,6 +28,7 @@ const STATUT_LABEL: Record<SessionLiveOut["statut"], string> = {
 };
 
 export function CoursDirectPage() {
+  const navigate = useNavigate();
   const profil = useEleveProfil();
   const [sessions, setSessions] = useState<SessionLiveOut[]>([]);
   const [participation, setParticipation] = useState<ParticipationLiveOut | null>(null);
@@ -48,12 +50,13 @@ export function CoursDirectPage() {
 
   useEffect(charger, [profil.classe_id]);
 
-  const rejoindre = async (sessionId: string) => {
-    setRejointEnCoursId(sessionId);
+  const rejoindre = async (session: SessionLiveOut) => {
+    setRejointEnCoursId(session.id);
     setErreur(null);
     try {
-      const res = await rejoindreSessionLive(sessionId);
+      const res = await rejoindreSessionLive(session.id);
       setParticipation(res.data);
+      navigate(`/salle-live/${session.id}`, { state: { session } });
     } catch (err) {
       setErreur(messageErreur(err, "Impossible de rejoindre cette session."));
     } finally {
@@ -101,13 +104,13 @@ export function CoursDirectPage() {
                   <Badge tone={STATUT_TONE[s.statut]}>{STATUT_LABEL[s.statut]}</Badge>
                 </div>
                 {s.statut === "en_cours" ? (
-                  <Btn variant="primary" size="sm" loading={rejointEnCoursId === s.id} onClick={() => rejoindre(s.id)} leftIcon={<Radio size={14} />}>
+                  <Btn variant="primary" size="sm" loading={rejointEnCoursId === s.id} onClick={() => rejoindre(s)} leftIcon={<Radio size={14} />}>
                     Rejoindre
                   </Btn>
                 ) : s.statut === "planifiee" ? (
-                  <span className="text-sm" style={{ color: "var(--ink-faint)", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <AlertTriangle size={14} /> Pas encore démarrée
-                  </span>
+                  <Btn variant="outline" size="sm" loading={rejointEnCoursId === s.id} onClick={() => rejoindre(s)}>
+                    Entrer dans la salle (avant le cours)
+                  </Btn>
                 ) : null}
               </div>
             </Card>

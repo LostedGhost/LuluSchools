@@ -222,3 +222,74 @@ def test_admin_etablissement_ne_peut_pas_mettre_a_jour_la_localisation_d_un_autr
         headers=headers_2,
     )
     assert refus.status_code == 403
+
+
+def test_classe_recoit_l_annee_academique_en_cours_par_defaut(client, etablissement_avec_classe):
+    assert "annee_academique" in etablissement_avec_classe["classe"]
+    assert "-" in etablissement_avec_classe["classe"]["annee_academique"]
+
+
+def test_mes_classes_affectees_renvoie_etablissement_effectif_et_filtre_par_annee(
+    client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    salles = client.get("/api/v1/mes-classes-affectees", headers=ctx["enseignant_headers"]).json()
+    assert len(salles) == 1
+    salle = salles[0]
+    assert salle["etablissement_id"] == ctx["etablissement"]["id"]
+    assert salle["etablissement_nom"] == ctx["etablissement"]["nom"]
+    assert salle["effectif"] == 1
+    assert salle["est_professeur_principal"] is False
+
+    # Une annee academique differente de la courante ne doit rien renvoyer (sans
+    # toutes_annees=true) - la classe de la fixture est creee avec l'annee en cours.
+    autre_annee = client.get(
+        "/api/v1/mes-classes-affectees", params={"annee_academique": "1999-2000"}, headers=ctx["enseignant_headers"]
+    ).json()
+    assert autre_annee == []
+
+    toutes = client.get(
+        "/api/v1/mes-classes-affectees", params={"toutes_annees": True}, headers=ctx["enseignant_headers"]
+    ).json()
+    assert len(toutes) == 1
+
+
+def test_lister_eleves_de_la_classe_reserve_a_l_enseignant_affecte_et_a_l_admin(
+    client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    classe_id = ctx["classe"]["id"]
+
+    reponse = client.get(f"/api/v1/classes/{classe_id}/eleves", headers=ctx["enseignant_headers"])
+    assert reponse.status_code == 200
+    eleves = reponse.json()
+    assert len(eleves) == 1
+    assert eleves[0]["nom"] == "Dossou"
+    assert eleves[0]["prenom"] == "Aisha"
+
+    admin_ok = client.get(f"/api/v1/classes/{classe_id}/eleves", headers=ctx["admin_headers"])
+    assert admin_ok.status_code == 200
+
+    refus_eleve = client.get(f"/api/v1/classes/{classe_id}/eleves", headers=ctx["eleve_headers"])
+    assert refus_eleve.status_code == 403
+
+
+def test_designation_professeur_principal_exige_une_affectation_prealable(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    classe_id = ctx["classe"]["id"]
+
+    refus = client.post(
+        f"/api/v1/classes/{classe_id}/professeur-principal",
+        json={"enseignant_utilisateur_id": "id-non-affecte"},
+        headers=ctx["admin_headers"],
+    )
+    assert refus.status_code == 409
+
+    enseignant_id = client.get("/api/v1/me", headers=ctx["enseignant_headers"]).json()["id"]
+    reussite = client.post(
+        f"/api/v1/classes/{classe_id}/professeur-principal",
+        json={"enseignant_utilisateur_id": enseignant_id},
+        headers=ctx["admin_headers"],
+    )
+    assert reussite.status_code == 200
+    assert reussite.json()["est_professeur_principal"] is True

@@ -39,6 +39,9 @@ import { MesContratsPage } from "./pages/enseignant/MesContratsPage";
 import { MesCoursPage } from "./pages/enseignant/MesCoursPage";
 import { MesDevoirsPage } from "./pages/enseignant/MesDevoirsPage";
 import { SessionsLivePage } from "./pages/enseignant/SessionsLivePage";
+import { MesSallesPage } from "./pages/enseignant/MesSallesPage";
+import { ElProfessorPage } from "./pages/enseignant/ElProfessorPage";
+import { SalleLivePage } from "./pages/cours_direct/SalleLivePage";
 
 import { AdminEtabDashboard } from "./pages/admin_etablissement/AdminEtabDashboard";
 import { ClassesPage } from "./pages/admin_etablissement/ClassesPage";
@@ -57,6 +60,7 @@ import { ReferentielsPage } from "./pages/admin_ministeriel/ReferentielsPage";
 import { MessagerieListPage } from "./pages/messagerie/MessagerieListPage";
 import { ConversationPage } from "./pages/messagerie/ConversationPage";
 import { SignalementsPage } from "./pages/admin_etablissement/SignalementsPage";
+import { AlertesElProfessorPage } from "./pages/admin_etablissement/AlertesElProfessorPage";
 import { BilletteriePage } from "./pages/billetterie/BilletteriePage";
 import { ValiderAccesPage } from "./pages/controle_acces/ValiderAccesPage";
 import { MicroJobsPage } from "./pages/micro_jobs/MicroJobsPage";
@@ -312,6 +316,30 @@ function App() {
                 </RequireAuth>
               }
             />
+            <Route
+              path="/enseignant/salles"
+              element={
+                <RequireAuth roles={["enseignant"]}>
+                  <MesSallesPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/enseignant/el-professor"
+              element={
+                <RequireAuth roles={["enseignant"]}>
+                  <ElProfessorPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/salle-live/:sessionId"
+              element={
+                <RequireAuth roles={["enseignant", "eleve"]}>
+                  <SalleLivePage />
+                </RequireAuth>
+              }
+            />
 
             {/* Admin etablissement (A+) */}
             <Route
@@ -478,6 +506,16 @@ function App() {
                 <RequireAuth roles={["admin_etablissement"]}>
                   <AdminEtabProvider>
                     <SignalementsPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/alertes-el-professor"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <AlertesElProfessorPage />
                   </AdminEtabProvider>
                 </RequireAuth>
               }

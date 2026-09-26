@@ -24,6 +24,7 @@ from app.modules.micro_jobs.router import router as micro_jobs_router
 from app.modules.paiements.router import router as kkiapay_webhook_router
 from app.modules.recrutement.router import router as recrutement_router
 from app.modules.services_scolaires.router import router as services_scolaires_router
+from app.modules.vie_scolaire.router import router as vie_scolaire_router
 from app.modules.visites_virtuelles.router import router as visites_virtuelles_router
 from app.system.router import router as system_router
 
@@ -77,6 +78,7 @@ app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")
 app.include_router(services_scolaires_router, prefix="/api/v1")
+app.include_router(vie_scolaire_router, prefix="/api/v1")
 app.include_router(billetterie_router, prefix="/api/v1")
 app.include_router(messagerie_router, prefix="/api/v1")
 app.include_router(cours_direct_router, prefix="/api/v1")

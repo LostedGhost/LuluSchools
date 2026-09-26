@@ -1,8 +1,8 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,6 +14,18 @@ def _new_uuid() -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def annee_academique_courante(reference: date | None = None) -> str:
+    """Annee scolaire au format 'YYYY-YYYY' - rentree fixee au 1er septembre (convention
+    Afrique de l'Ouest francophone). UC-24 : une Classe est une instance annuelle precise
+    (une '6eme A' en 2025-2026 n'est pas la meme instance qu'en 2026-2027), ce qui suffit a
+    scoper aussi les affectations enseignant et les inscriptions eleve sans toucher a leur
+    schema - elles pointent deja vers une Classe, donc vers une annee, via classe_id."""
+    aujourdhui = reference or datetime.now(timezone.utc).date()
+    if aujourdhui.month >= 9:
+        return f"{aujourdhui.year}-{aujourdhui.year + 1}"
+    return f"{aujourdhui.year - 1}-{aujourdhui.year}"
 
 
 class TypeEtablissement(str, enum.Enum):
@@ -68,6 +80,7 @@ class Classe(Base):
     niveau: Mapped[str] = mapped_column(String(100))
     capacite: Mapped[int] = mapped_column(Integer)
     politique_depassement: Mapped[PolitiqueDepassement] = mapped_column(Enum(PolitiqueDepassement))
+    annee_academique: Mapped[str] = mapped_column(String(9), default=annee_academique_courante, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     etablissement: Mapped[Etablissement] = relationship(back_populates="classes")
@@ -87,6 +100,11 @@ class AffectationEnseignant(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     enseignant_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
     classe_id: Mapped[str] = mapped_column(ForeignKey("classes.id"), index=True)
+    # UC-23 : au plus un professeur principal par classe (voir vie_scolaire) - il voit la
+    # vie scolaire complete de la classe, un enseignant de matiere ne voit que ses propres
+    # entrees. Invariant applique cote applicatif (POST .../professeur-principal), pas par
+    # une contrainte SQL - coherent avec le reste du module (ex. capacite de la classe).
+    est_professeur_principal: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     classe: Mapped["Classe"] = relationship()

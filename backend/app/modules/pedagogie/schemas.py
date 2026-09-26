@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.pedagogie.models import FormatCours, RoleMessageElProfessor
+from app.modules.pedagogie.models import FormatCours, RoleMessageElProfessor, RoleMessageElProfessorEnseignant
 
 
 class CoursCreate(BaseModel):
@@ -96,3 +96,41 @@ class QuestionElProfessorCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str
+
+
+class SessionElProfessorEnseignantCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_utilisateur_id: str | None = None
+    sujet: str | None = None
+
+
+class MessageElProfessorEnseignantOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    session_id: str
+    role: RoleMessageElProfessorEnseignant
+    contenu: str
+    created_at: datetime
+
+
+class SessionElProfessorEnseignantOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    enseignant_id: str
+    eleve_utilisateur_id: str | None
+    sujet: str | None
+    messages: list[MessageElProfessorEnseignantOut]
+
+
+class AlerteElProfessorOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    session_id: str
+    etablissement_id: str | None
+    motif: str
+    traite: bool
+    created_at: datetime

@@ -1,5 +1,11 @@
 import { api } from "./client";
-import type { DesignationControleurOut, ServiceControle } from "../types/api";
+import type { DesignationControleurOut, ServiceControle, UtilisateurDesignableOut } from "../types/api";
+
+export function rechercherUtilisateursDesignables(etablissementId: string, q?: string) {
+  return api.get<UtilisateurDesignableOut[]>(`/etablissements/${etablissementId}/utilisateurs-designables`, {
+    params: q ? { q } : undefined,
+  });
+}
 
 export function listerControleurs(etablissementId: string) {
   return api.get<DesignationControleurOut[]>(`/etablissements/${etablissementId}/controleurs`);

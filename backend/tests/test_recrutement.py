@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 import pymupdf
 
-from app.modules.recrutement.conversion import convertir_en_image
+from app.core.conversion import convertir_en_image
 
 
 def test_convertir_en_image_transforme_un_pdf_en_png():

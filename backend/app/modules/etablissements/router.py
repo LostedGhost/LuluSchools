@@ -20,6 +20,7 @@ from app.modules.etablissements.models import (
     Etablissement,
     EtablissementPhoto,
     TypeEtablissement,
+    annee_academique_courante,
 )
 from app.modules.etablissements.schemas import (
     AffectationEnseignantCreate,
@@ -27,6 +28,7 @@ from app.modules.etablissements.schemas import (
     AnnuairePubliqueOut,
     ClasseCreate,
     ClasseOut,
+    EleveClasseOut,
     EtablissementCreate,
     EtablissementOut,
     EtablissementPhotoOut,
@@ -34,10 +36,13 @@ from app.modules.etablissements.schemas import (
     EtablissementVitrineOut,
     LocalisationUpdate,
     PosteVitrineOut,
+    ProfesseurPrincipalCreate,
+    SalleEnseignantOut,
     VitrinePubliqueOut,
     VitrineTotauxOut,
 )
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.messagerie.models import Conversation, TypeConversation
 from app.modules.recrutement.models import Contrat, Poste, StatutContrat, StatutPoste
 
@@ -314,6 +319,7 @@ def creer_classe(
         niveau=payload.niveau,
         capacite=payload.capacite,
         politique_depassement=payload.politique_depassement,
+        annee_academique=payload.annee_academique or annee_academique_courante(),
     )
     db.add(classe)
     db.commit()
@@ -494,17 +500,130 @@ def revoquer_affectation(
     db.commit()
 
 
-@classes_router.get("/mes-classes-affectees", response_model=list[ClasseOut])
+def _effectif_classe(db: Session, classe_id: str) -> int:
+    return (
+        db.query(func.count(Inscription.id))
+        .filter(Inscription.classe_id == classe_id, Inscription.statut == StatutInscription.VALIDEE)
+        .scalar()
+        or 0
+    )
+
+
+@classes_router.get("/mes-classes-affectees", response_model=list[SalleEnseignantOut])
 def mes_classes_affectees(
+    annee_academique: str | None = None,
+    toutes_annees: bool = False,
     db: Session = Depends(get_db),
     enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
-) -> list[Classe]:
-    """Permet a un enseignant de decouvrir les classes qui lui sont affectees, sans
-    devoir deja connaitre leurs id (meme role que /etablissements/{id}/classes pour un
-    A+, mais filtre sur les affectations plutot que sur l'etablissement entier)."""
-    return (
-        db.query(Classe)
-        .join(AffectationEnseignant, AffectationEnseignant.classe_id == Classe.id)
+) -> list[SalleEnseignantOut]:
+    """UC-24 : permet a un enseignant de decouvrir les classes qui lui sont affectees,
+    sans devoir deja connaitre leurs id. Par defaut, ne montre que l'annee academique EN
+    COURS (une Classe est une instance annuelle, voir annee_academique_courante) ; passer
+    toutes_annees=true pour l'historique complet, ou annee_academique='2024-2025' pour une
+    annee precise."""
+    requete = (
+        db.query(AffectationEnseignant, Classe, Etablissement)
+        .join(Classe, Classe.id == AffectationEnseignant.classe_id)
+        .join(Etablissement, Etablissement.id == Classe.etablissement_id)
         .filter(AffectationEnseignant.enseignant_id == enseignant.id)
+    )
+    if not toutes_annees:
+        requete = requete.filter(Classe.annee_academique == (annee_academique or annee_academique_courante()))
+
+    return [
+        SalleEnseignantOut(
+            id=classe.id,
+            etablissement_id=etablissement.id,
+            etablissement_nom=etablissement.nom,
+            niveau=classe.niveau,
+            capacite=classe.capacite,
+            effectif=_effectif_classe(db, classe.id),
+            annee_academique=classe.annee_academique,
+            est_professeur_principal=affectation.est_professeur_principal,
+        )
+        for affectation, classe, etablissement in requete.all()
+    ]
+
+
+def _verifier_enseignant_ou_admin_de_la_classe(db: Session, utilisateur: Utilisateur, classe: Classe) -> None:
+    if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
+        affectation = (
+            db.query(AffectationEnseignant)
+            .filter(AffectationEnseignant.enseignant_id == utilisateur.id, AffectationEnseignant.classe_id == classe.id)
+            .first()
+        )
+        if affectation is None:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectee.")
+        return
+    verifier_portee_etablissement(db, utilisateur, classe.etablissement_id)
+
+
+@classes_router.get("/classes/{classe_id}/eleves", response_model=list[EleveClasseOut])
+def lister_eleves_de_la_classe(
+    classe_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ENSEIGNANT, RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
+    ),
+) -> list[EleveClasseOut]:
+    """UC-24.3 : un enseignant affecte a la classe (ou un A+/A++ dans sa portee) voit
+    l'effectif nominatif - base de la vue detaillee de salle demandee (etablissement, nom,
+    effectif, eleves)."""
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    _verifier_enseignant_ou_admin_de_la_classe(db, utilisateur, classe)
+
+    eleves = (
+        db.query(Eleve)
+        .join(Inscription, Inscription.eleve_id == Eleve.id)
+        .filter(Inscription.classe_id == classe_id, Inscription.statut == StatutInscription.VALIDEE)
         .all()
     )
+    return [
+        EleveClasseOut(eleve_id=e.id, utilisateur_id=e.utilisateur_id, nom=e.nom, prenom=e.prenom, matricule=e.matricule)
+        for e in eleves
+    ]
+
+
+@classes_router.post("/classes/{classe_id}/professeur-principal", response_model=AffectationEnseignantOut)
+def designer_professeur_principal(
+    classe_id: str,
+    payload: ProfesseurPrincipalCreate,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> AffectationEnseignant:
+    """UC-23/UC-24 : au plus un professeur principal par classe - voit la vie scolaire
+    complete (toutes matieres), contrairement a un enseignant de matiere qui ne voit que
+    ses propres entrees (voir vie_scolaire)."""
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    verifier_portee_etablissement(db, admin, classe.etablissement_id)
+
+    cible = (
+        db.query(AffectationEnseignant)
+        .filter(
+            AffectationEnseignant.classe_id == classe_id,
+            AffectationEnseignant.enseignant_id == payload.enseignant_utilisateur_id,
+        )
+        .first()
+    )
+    if cible is None:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "affectation_requise",
+            "Cet enseignant doit deja etre affecte a cette classe avant de pouvoir en etre professeur principal.",
+        )
+
+    autres = (
+        db.query(AffectationEnseignant)
+        .filter(AffectationEnseignant.classe_id == classe_id, AffectationEnseignant.id != cible.id)
+        .all()
+    )
+    for autre in autres:
+        autre.est_professeur_principal = False
+    cible.est_professeur_principal = True
+    db.commit()
+    db.refresh(cible)
+    return cible

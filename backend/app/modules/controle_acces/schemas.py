@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.modules.controle_acces.models import ServiceControle
+from app.modules.identite.models import RoleUtilisateur
 
 
 class DesignationControleurCreate(BaseModel):
@@ -27,3 +28,17 @@ class DesignationControleurOut(BaseModel):
     utilisateur_id: str
     service: ServiceControle
     evenement_id: str | None
+
+
+class UtilisateurDesignableOut(BaseModel):
+    """UC-28 : recherche par nom pour la designation de controleur, meme pattern que
+    EnseignantSigneOut (recrutement) pour l'affectation enseignant<->classe - remplace la
+    saisie d'un id brut (limite connue documentee dans PROJECT_MAP)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    nom: str
+    prenom: str
+    email: str | None
+    role: RoleUtilisateur

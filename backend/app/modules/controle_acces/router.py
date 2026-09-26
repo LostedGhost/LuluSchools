@@ -1,12 +1,18 @@
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles, verifier_portee_etablissement
 from app.modules.controle_acces.models import DesignationControleur, ServiceControle
-from app.modules.controle_acces.schemas import DesignationControleurCreate, DesignationControleurOut
+from app.modules.controle_acces.schemas import (
+    DesignationControleurCreate,
+    DesignationControleurOut,
+    UtilisateurDesignableOut,
+)
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+from app.modules.recrutement.models import Contrat, StatutContrat
 
 router = APIRouter(tags=["controle-acces"])
 
@@ -28,6 +34,50 @@ def est_controleur_designe(
     if service == ServiceControle.EVENEMENT:
         query = query.filter(DesignationControleur.evenement_id == evenement_id)
     return query.first() is not None
+
+
+@router.get(
+    "/etablissements/{etablissement_id}/utilisateurs-designables", response_model=list[UtilisateurDesignableOut]
+)
+def rechercher_utilisateurs_designables(
+    etablissement_id: str,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[Utilisateur]:
+    """UC-28 : recherche par nom pour la designation de controleur, meme pattern que la
+    recherche d'enseignant pour l'affectation enseignant<->classe (voir
+    recrutement/router.py::rechercher_enseignants_signes) - remplace la saisie d'un id
+    utilisateur brut. Un controleur n'est pas necessairement un enseignant : on propose
+    ici les enseignants sous contrat SIGNE avec cet etablissement et les admins de cet
+    etablissement (les profils plausibles pour ce role de confiance)."""
+    if db.get(Etablissement, etablissement_id) is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    verifier_portee_etablissement(db, admin, etablissement_id)
+
+    filtre_nom = (
+        or_(Utilisateur.nom.ilike(f"%{q.strip()}%"), Utilisateur.prenom.ilike(f"%{q.strip()}%"))
+        if q and q.strip()
+        else None
+    )
+
+    enseignants = (
+        db.query(Utilisateur)
+        .join(Contrat, Contrat.enseignant_id == Utilisateur.id)
+        .filter(Contrat.etablissement_id == etablissement_id, Contrat.statut == StatutContrat.SIGNE)
+    )
+    admins = (
+        db.query(Utilisateur)
+        .join(AdminEtablissement, AdminEtablissement.utilisateur_id == Utilisateur.id)
+        .filter(AdminEtablissement.etablissement_id == etablissement_id)
+    )
+    if filtre_nom is not None:
+        enseignants = enseignants.filter(filtre_nom)
+        admins = admins.filter(filtre_nom)
+
+    resultat = list({u.id: u for u in [*enseignants.all(), *admins.all()]}.values())
+    resultat.sort(key=lambda u: u.nom)
+    return resultat[:20]
 
 
 @router.post(

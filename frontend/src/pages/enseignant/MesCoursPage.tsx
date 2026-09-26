@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { mesClassesAffectees } from "../../api/etablissements";
 import { creerQuiz, listerCours, listerQuiz, obtenirLienFichierCours, publierCours } from "../../api/pedagogie";
 import { messageErreur } from "../../api/client";
-import type { ClasseOut, CoursOut, FormatCours, QuizOut } from "../../types/api";
+import type { CoursOut, FormatCours, QuizOut, SalleEnseignantOut } from "../../types/api";
 import {
   Btn,
   Field,
@@ -48,7 +48,7 @@ const MATIERES = [
 ];
 
 export function MesCoursPage() {
-  const [classes, setClasses] = useState<ClasseOut[]>([]);
+  const [classes, setClasses] = useState<SalleEnseignantOut[]>([]);
   const [classeId, setClasseId] = useState("");
   const [formClasseId, setFormClasseId] = useState("");
   const [cours, setCours] = useState<CoursOut[]>([]);

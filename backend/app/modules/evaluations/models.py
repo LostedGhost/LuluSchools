@@ -21,6 +21,16 @@ class BaremeDevoir(str, enum.Enum):
     FLEXIBLE = "flexible"
 
 
+class NatureEvaluation(str, enum.Enum):
+    """UC-26 : une evaluation FORMATIVE est exclue du calcul de la moyenne officielle du
+    bulletin (voir _calculer_et_enregistrer_bulletin) - c'est la seule difference de
+    traitement, tout le reste du cycle de vie (soumission, correction IA, revision
+    manuelle) est identique."""
+
+    FORMATIVE = "formative"
+    SOMMATIVE = "sommative"
+
+
 class StatutSoumission(str, enum.Enum):
     EN_CORRECTION = "en_correction"
     CORRIGEE = "corrigee"
@@ -43,6 +53,12 @@ class Devoir(Base):
     matiere: Mapped[str] = mapped_column(String(100))
     date_limite: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     bareme: Mapped[BaremeDevoir] = mapped_column(Enum(BaremeDevoir))
+    nature: Mapped[NatureEvaluation] = mapped_column(Enum(NatureEvaluation), default=NatureEvaluation.SOMMATIVE)
+    # UC-26 : sujet libre (image/PDF) en complement du formulaire de questions structure,
+    # et document de bareme GLOBAL (jamais expose a l'eleve, comme bareme_reponse) en
+    # complement du bareme par question - utile pour un sujet a consigne libre (redaction).
+    sujet_lulufiles_file_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    bareme_document_lulufiles_file_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     questions: Mapped[list["QuestionDevoir"]] = relationship(back_populates="devoir")
@@ -83,6 +99,10 @@ class Soumission(Base):
     eleve_id: Mapped[str] = mapped_column(ForeignKey("eleves.id"), index=True)
     note: Mapped[float | None] = mapped_column(Float, nullable=True)
     statut: Mapped[StatutSoumission] = mapped_column(Enum(StatutSoumission))
+    # UC-26.4 : soumission alternative, entierement imagee (copie scannee/photographiee) -
+    # correction IA holistique (une seule note globale, pas de decoupage par question, voir
+    # FreeLLMClient.corriger_copie_image) plutot que le formulaire question par question.
+    copie_image_lulufiles_file_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     reponses: Mapped[list["ReponseSoumission"]] = relationship(back_populates="soumission")

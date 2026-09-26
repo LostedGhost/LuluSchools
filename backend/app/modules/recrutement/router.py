@@ -14,11 +14,11 @@ from app.core.deps import (
     require_roles,
     verifier_portee_etablissement,
 )
+from app.core.conversion import convertir_en_image
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.core.llm import DocumentScoringError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
 from app.modules.identite.models import Enseignant, RoleUtilisateur, Utilisateur
-from app.modules.recrutement.conversion import convertir_en_image
 from app.modules.recrutement.models import (
     Candidature,
     Contestation,

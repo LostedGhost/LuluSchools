@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { mesClassesAffectees } from "../../api/etablissements";
 import { demarrerSessionLive, listerSessionsLive, planifierSessionLive, terminerSessionLive } from "../../api/cours_direct";
 import { messageErreur } from "../../api/client";
-import type { ClasseOut, SessionLiveDemarreeOut, SessionLiveOut } from "../../types/api";
+import type { SalleEnseignantOut, SessionLiveDemarreeOut, SessionLiveOut } from "../../types/api";
 import {
   Badge,
   Btn,
@@ -16,7 +17,7 @@ import {
   SkeletonCard,
   SuccessBanner,
 } from "../../components/ui";
-import { Radio, Video, School } from "lucide-react";
+import { DoorOpen, Radio, Video, School } from "lucide-react";
 
 const STATUT_TONE: Record<SessionLiveOut["statut"], "pending" | "success" | "neutral"> = {
   planifiee: "pending",
@@ -31,7 +32,8 @@ const STATUT_LABEL: Record<SessionLiveOut["statut"], string> = {
 };
 
 export function SessionsLivePage() {
-  const [classes, setClasses] = useState<ClasseOut[]>([]);
+  const navigate = useNavigate();
+  const [classes, setClasses] = useState<SalleEnseignantOut[]>([]);
   const [classeId, setClasseId] = useState("");
   const [sessions, setSessions] = useState<SessionLiveOut[]>([]);
   const [dateHeure, setDateHeure] = useState("");
@@ -139,6 +141,9 @@ export function SessionsLivePage() {
                 Vos élèves peuvent désormais rejoindre cette session depuis leur espace.
               </p>
             </div>
+            <Btn variant="outline" onClick={() => navigate(`/salle-live/${sessionActive.id}`, { state: { session: sessionActive } })} leftIcon={<DoorOpen size={14} />}>
+              Ouvrir la salle
+            </Btn>
             <Btn variant="action" loading={actionEnCoursId === sessionActive.id} onClick={() => terminer(sessionActive.id)}>
               Terminer la session
             </Btn>
@@ -194,6 +199,11 @@ export function SessionsLivePage() {
                   <Badge tone={STATUT_TONE[s.statut]}>{STATUT_LABEL[s.statut]}</Badge>
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
+                  {s.statut !== "terminee" && (
+                    <Btn variant="outline" size="sm" onClick={() => navigate(`/salle-live/${s.id}`, { state: { session: s } })} leftIcon={<DoorOpen size={14} />}>
+                      Ouvrir la salle
+                    </Btn>
+                  )}
                   {s.statut === "planifiee" && (
                     <Btn variant="primary" size="sm" loading={actionEnCoursId === s.id} onClick={() => demarrer(s.id)} leftIcon={<Radio size={14} />}>
                       Démarrer

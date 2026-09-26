@@ -92,6 +92,10 @@ class FakeLLMClient:
         self.echec_generation_quiz = False
         self.reponse_el_professor = "Voici l'explication demandee."
         self.echec_el_professor = False
+        self.note_copie_image_ratio = 1.0  # part de points_max_total accordee par defaut
+        self.echec_correction_copie_image = False
+        self.reponse_conseil_enseignant = "Voici mon conseil."
+        self.echec_conseil_enseignant = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -123,6 +127,18 @@ class FakeLLMClient:
         if self.echec_el_professor:
             raise ElProfessorError("echec simule")
         return self.reponse_el_professor
+
+    def corriger_copie_image(
+        self, consigne_globale: str, points_max_total: float, image_bytes: bytes, content_type: str, strict: bool
+    ) -> float:
+        if self.echec_correction_copie_image:
+            raise CorrectionError("echec simule")
+        return points_max_total * self.note_copie_image_ratio
+
+    def conseiller_enseignant(self, contexte_eleve: str | None, historique: list[dict], question: str) -> str:
+        if self.echec_conseil_enseignant:
+            raise ElProfessorError("echec simule")
+        return self.reponse_conseil_enseignant
 
 
 @pytest.fixture()
