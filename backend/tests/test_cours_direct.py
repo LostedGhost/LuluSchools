@@ -82,6 +82,51 @@ def test_seul_l_enseignant_organisateur_peut_demarrer_ou_terminer(client, classe
     assert refus_rejoindre.status_code == 409
 
 
+def test_tuteur_ne_voit_les_sessions_live_que_de_la_classe_de_son_enfant(
+    client, classe_avec_enseignant_et_eleve, admin_ministeriel_headers, fake_email_client
+):
+    """UC-29.2 : correction - lister_sessions_live acceptait TUTEUR sans jamais
+    verifier sa portee reelle (contrairement a ELEVE/ENSEIGNANT)."""
+    ctx = classe_avec_enseignant_et_eleve
+    _planifier_session(client, ctx)
+
+    autre_etablissement = client.post(
+        "/api/v1/etablissements",
+        json={
+            "nom": "Ecole Etrangere Live",
+            "type": "EP",
+            "statut": "public",
+            "admin": {"nom": "Adjovi", "prenom": "Rose", "email": "rose.adjovi.live@example.com"},
+            "latitude": 6.4969,
+            "longitude": 2.6289,
+        },
+        headers=admin_ministeriel_headers,
+    ).json()
+    mot_de_passe_temp = next(
+        m["mot_de_passe"] for m in fake_email_client.sent if m.get("to_email") == "rose.adjovi.live@example.com"
+    )
+    login_admin_etranger = client.post(
+        "/api/v1/auth/login", json={"identifiant": "rose.adjovi.live@example.com", "mot_de_passe": mot_de_passe_temp}
+    ).json()
+    admin_etranger_headers = {"Authorization": f"Bearer {login_admin_etranger['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=admin_etranger_headers,
+    )
+    autre_classe = client.post(
+        f"/api/v1/etablissements/{autre_etablissement['id']}/classes",
+        json={"niveau": "CE2", "capacite": 20, "politique_depassement": "ordre_arrivee"},
+        headers=admin_etranger_headers,
+    ).json()
+
+    accepte = client.get(f"/api/v1/classes/{ctx['classe']['id']}/sessions-live", headers=ctx["tuteur_headers"])
+    assert accepte.status_code == 200
+
+    refuse = client.get(f"/api/v1/classes/{autre_classe['id']}/sessions-live", headers=ctx["tuteur_headers"])
+    assert refuse.status_code == 403
+
+
 def test_eleve_peut_rejoindre_la_salle_sociale_avant_le_debut(client, classe_avec_enseignant_et_eleve):
     """UC-25.5 : la session n'a pas besoin d'etre demarree pour qu'un eleve la rejoigne
     (salle sociale pre-cours) - seul le tableau reste verrouille en ecriture."""
@@ -288,3 +333,38 @@ def test_canal_temps_reel_refuse_un_jeton_invalide(client, classe_avec_enseignan
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect(f"/api/v1/ws/sessions-live/{session['id']}?token=jeton-invalide"):
             pass
+
+
+def test_resume_asynchrone_disponible_au_tuteur_apres_cloture(client, classe_avec_enseignant_et_eleve):
+    """UC-33.1/33.2 : le tuteur ne rejoint jamais la session en direct, il consulte un
+    resume texte une fois la session terminee."""
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/rejoindre", headers=ctx["eleve_headers"])
+    client.post(
+        f"/api/v1/sessions-live/{session['id']}/messages",
+        json={"contenu": "Je n'ai pas compris la question 2."},
+        headers=ctx["eleve_headers"],
+    )
+
+    avant_cloture = client.get(f"/api/v1/sessions-live/{session['id']}/resume", headers=ctx["tuteur_headers"])
+    assert avant_cloture.status_code == 404
+
+    client.post(f"/api/v1/sessions-live/{session['id']}/terminer", headers=ctx["enseignant_headers"])
+
+    resume = client.get(f"/api/v1/sessions-live/{session['id']}/resume", headers=ctx["tuteur_headers"])
+    assert resume.status_code == 200
+    assert resume.json()["contenu"]
+
+
+def test_resume_de_session_refuse_a_un_tuteur_dont_l_enfant_n_a_pas_participe(
+    client, classe_avec_enseignant_et_eleve
+):
+    ctx = classe_avec_enseignant_et_eleve
+    session = _planifier_session(client, ctx)
+    client.post(f"/api/v1/sessions-live/{session['id']}/demarrer", headers=ctx["enseignant_headers"])
+    client.post(f"/api/v1/sessions-live/{session['id']}/terminer", headers=ctx["enseignant_headers"])
+
+    refus = client.get(f"/api/v1/sessions-live/{session['id']}/resume", headers=ctx["tuteur_headers"])
+    assert refus.status_code == 403

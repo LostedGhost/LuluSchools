@@ -10,7 +10,15 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db, get_session_factory
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
-from app.core.llm import CorrectionError, DocumentScoringError, ElProfessorError, QuizGenerationError, get_llm_client
+from app.core.llm import (
+    CorrectionError,
+    DigestFamilleError,
+    DocumentScoringError,
+    ElProfessorError,
+    QuizGenerationError,
+    ResumeSessionLiveError,
+    get_llm_client,
+)
 from app.core.security import create_access_token, decode_token, hash_password
 from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -96,6 +104,14 @@ class FakeLLMClient:
         self.echec_correction_copie_image = False
         self.reponse_conseil_enseignant = "Voici mon conseil."
         self.echec_conseil_enseignant = False
+        self.reponse_conseil_tuteur = "Voici mon conseil pour votre enfant."
+        self.echec_conseil_tuteur = False
+        self.reponse_resume_session_live = "Resume : la classe a revu les fractions."
+        self.echec_resume_session_live = False
+        self.reponse_conseil_famille = "Voici mon conseil pour vous deux."
+        self.echec_conseil_famille = False
+        self.reponse_digest_famille = "Cette semaine, votre enfant a bien avance."
+        self.echec_digest_famille = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -139,6 +155,28 @@ class FakeLLMClient:
         if self.echec_conseil_enseignant:
             raise ElProfessorError("echec simule")
         return self.reponse_conseil_enseignant
+
+    def conseiller_tuteur(self, contexte_eleve: str | None, historique: list[dict], question: str) -> str:
+        if self.echec_conseil_tuteur:
+            raise ElProfessorError("echec simule")
+        return self.reponse_conseil_tuteur
+
+    def resumer_session_live(self, messages_chat: list[str], contenu_tableau: str) -> str:
+        if self.echec_resume_session_live:
+            raise ResumeSessionLiveError("echec simule")
+        return self.reponse_resume_session_live
+
+    def conseiller_famille(
+        self, contexte_eleve: str | None, historique: list[dict], question: str, qui_parle: str
+    ) -> str:
+        if self.echec_conseil_famille:
+            raise ElProfessorError("echec simule")
+        return self.reponse_conseil_famille
+
+    def generer_digest_famille(self, eleve_nom: str, sources: list[str]) -> str:
+        if self.echec_digest_famille:
+            raise DigestFamilleError("echec simule")
+        return self.reponse_digest_famille
 
 
 @pytest.fixture()

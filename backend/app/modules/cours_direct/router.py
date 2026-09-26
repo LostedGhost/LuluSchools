@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.llm import FreeLLMClient, ResumeSessionLiveError, get_llm_client
 from app.core.security import decode_token
 from app.modules.cours_direct.models import (
     CaptureTableauSession,
@@ -17,6 +18,7 @@ from app.modules.cours_direct.models import (
     PanneauTableau,
     ParticipationLive,
     PermissionEcritureTableau,
+    ResumeSessionLive,
     SessionLive,
     StatutDemandeCraie,
     StatutSessionLive,
@@ -37,6 +39,7 @@ from app.modules.cours_direct.schemas import (
     ParticipationLiveOut,
     PermissionEcritureCreate,
     PermissionEcritureOut,
+    ResumeSessionLiveOut,
     SessionLiveCreate,
     SessionLiveDemarreeOut,
     SessionLiveOut,
@@ -95,6 +98,26 @@ def planifier_session_live(
     return session
 
 
+def _verifier_tuteur_a_un_enfant_dans_la_classe(db: Session, tuteur_id: str, classe_id: str) -> None:
+    """UC-29.2 : lister_sessions_live acceptait TUTEUR dans son require_roles sans
+    jamais verifier la portee reelle pour ce role (contrairement a ELEVE/ENSEIGNANT
+    juste en dessous) - un tuteur authentifie pouvait lister les sessions de N'IMPORTE
+    QUELLE classe. Corrige : au moins un de ses enfants doit y etre valide."""
+    a_un_enfant = (
+        db.query(Inscription)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .filter(
+            Eleve.tuteur_id == tuteur_id,
+            Inscription.classe_id == classe_id,
+            Inscription.statut == StatutInscription.VALIDEE,
+        )
+        .first()
+        is not None
+    )
+    if not a_un_enfant:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Aucun de vos enfants n'est inscrit dans cette classe.")
+
+
 @router.get("/classes/{classe_id}/sessions-live", response_model=list[SessionLiveOut])
 def lister_sessions_live(
     classe_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(
@@ -110,6 +133,8 @@ def lister_sessions_live(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
+    elif utilisateur.role == RoleUtilisateur.TUTEUR:
+        _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, classe_id)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     return db.query(SessionLive).filter(SessionLive.classe_id == classe_id).all()
@@ -138,6 +163,7 @@ def terminer_session_live(
     session_id: str,
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
     enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
 ) -> SessionLive:
     session = db.get(SessionLive, session_id)
@@ -150,9 +176,71 @@ def terminer_session_live(
 
     session.statut = StatutSessionLive.TERMINEE
     _capturer_tous_les_panneaux(db, session_id, files_client)
+    _generer_resume_session_live(db, session_id, llm_client)
     db.commit()
     db.refresh(session)
     return session
+
+
+def _generer_resume_session_live(db: Session, session_id: str, llm_client: FreeLLMClient) -> None:
+    """UC-33.1 : resume texte factuel a la cloture, a partir du chat + du contenu
+    textuel du tableau (les blocs TEXTE uniquement - un trait libre n'a pas de
+    representation textuelle exploitable). Best-effort comme _capturer_tous_les_panneaux :
+    un echec FreeLLM ne bloque jamais la cloture, deja actee."""
+    messages = (
+        db.query(MessageSessionLive)
+        .filter(MessageSessionLive.session_id == session_id)
+        .order_by(MessageSessionLive.created_at.asc())
+        .all()
+    )
+    panneaux = db.query(PanneauTableau).filter(PanneauTableau.session_id == session_id).all()
+    textes_tableau = []
+    for panneau in panneaux:
+        traits_texte = (
+            db.query(TraitTableau)
+            .filter(TraitTableau.panneau_id == panneau.id, TraitTableau.type == TypeTraitTableau.TEXTE)
+            .all()
+        )
+        textes_tableau.extend(t.donnees.get("texte", "") for t in traits_texte if t.donnees.get("texte"))
+
+    if not messages and not textes_tableau:
+        return
+
+    try:
+        contenu = llm_client.resumer_session_live(
+            [m.contenu for m in messages], "\n".join(textes_tableau)
+        )
+    except ResumeSessionLiveError:
+        return
+
+    db.add(ResumeSessionLive(session_id=session_id, contenu=contenu))
+
+
+@router.get("/sessions-live/{session_id}/resume", response_model=ResumeSessionLiveOut)
+def obtenir_resume_session_live(
+    session_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+) -> ResumeSessionLive:
+    """UC-33.1/33.2 : observation asynchrone - le tuteur ne rejoint jamais la session en
+    direct, il consulte ce resume une fois la session terminee et cloturee."""
+    a_un_enfant_participant = (
+        db.query(ParticipationLive)
+        .join(Eleve, Eleve.utilisateur_id == ParticipationLive.eleve_utilisateur_id)
+        .filter(ParticipationLive.session_id == session_id, Eleve.tuteur_id == utilisateur.id)
+        .first()
+        is not None
+    )
+    if not a_un_enfant_participant:
+        raise api_error(
+            status.HTTP_403_FORBIDDEN, "acces_refuse", "Aucun de vos enfants n'a participe a cette session."
+        )
+    resume = db.query(ResumeSessionLive).filter(ResumeSessionLive.session_id == session_id).first()
+    if resume is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "introuvable", "Aucun resume n'est disponible pour cette session."
+        )
+    return resume
 
 
 def _capturer_tous_les_panneaux(db: Session, session_id: str, files_client: LuluFilesClient) -> None:

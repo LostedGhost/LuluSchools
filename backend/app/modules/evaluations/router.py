@@ -209,6 +209,26 @@ def obtenir_lien_bareme_document(
     return LienFichierOut(url=url)
 
 
+def _verifier_tuteur_a_un_enfant_dans_la_classe(db: Session, tuteur_id: str, classe_id: str) -> None:
+    """UC-31 : un tuteur suit les devoirs de SON enfant, jamais d'une classe au hasard -
+    meme garde-fou que cours_direct._verifier_tuteur_a_un_enfant_dans_la_classe."""
+    from app.modules.inscriptions.models import Inscription, StatutInscription
+
+    a_un_enfant = (
+        db.query(Inscription)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .filter(
+            Eleve.tuteur_id == tuteur_id,
+            Inscription.classe_id == classe_id,
+            Inscription.statut == StatutInscription.VALIDEE,
+        )
+        .first()
+        is not None
+    )
+    if not a_un_enfant:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Aucun de vos enfants n'est inscrit dans cette classe.")
+
+
 @router.get("/devoirs/{devoir_id}", response_model=DevoirOut)
 def obtenir_devoir(
     devoir_id: str,
@@ -217,6 +237,7 @@ def obtenir_devoir(
         require_roles(
             RoleUtilisateur.ENSEIGNANT,
             RoleUtilisateur.ELEVE,
+            RoleUtilisateur.TUTEUR,
             RoleUtilisateur.ADMIN_ETABLISSEMENT,
             RoleUtilisateur.ADMIN_MINISTERIEL,
         )
@@ -234,6 +255,8 @@ def obtenir_devoir(
     classe = db.get(Classe, devoir.classe_id)
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, devoir.classe_id)
+    elif utilisateur.role == RoleUtilisateur.TUTEUR:
+        _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, devoir.classe_id)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     else:
@@ -250,6 +273,7 @@ def lister_devoirs(
     utilisateur: Utilisateur = Depends(
         require_roles(
             RoleUtilisateur.ELEVE,
+            RoleUtilisateur.TUTEUR,
             RoleUtilisateur.ENSEIGNANT,
             RoleUtilisateur.ADMIN_ETABLISSEMENT,
             RoleUtilisateur.ADMIN_MINISTERIEL,
@@ -261,6 +285,8 @@ def lister_devoirs(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
+    elif utilisateur.role == RoleUtilisateur.TUTEUR:
+        _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, classe_id)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     elif utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
@@ -505,23 +531,29 @@ def obtenir_soumission(
     utilisateur: Utilisateur = Depends(
         require_roles(
             RoleUtilisateur.ELEVE,
+            RoleUtilisateur.TUTEUR,
             RoleUtilisateur.ENSEIGNANT,
             RoleUtilisateur.ADMIN_ETABLISSEMENT,
             RoleUtilisateur.ADMIN_MINISTERIEL,
         )
     ),
 ) -> Soumission:
-    """Permet a l'eleve de suivre l'avancement de la correction (statut=en_correction
-    tant que le traitement en arriere-plan n'est pas termine)."""
+    """Permet a l'eleve (et depuis UC-31, a son tuteur) de suivre l'avancement de la
+    correction (statut=en_correction tant que le traitement en arriere-plan n'est pas
+    termine) - jusqu'ici le tuteur ne voyait que le bulletin final, jamais une
+    soumission en cours."""
     soumission = db.get(Soumission, soumission_id)
     if soumission is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Soumission introuvable.")
     devoir = db.get(Devoir, soumission.devoir_id)
+    eleve_de_la_soumission = db.get(Eleve, soumission.eleve_id)
 
     if utilisateur.role == RoleUtilisateur.ELEVE:
-        eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
-        if eleve is None or soumission.eleve_id != eleve.id:
+        if eleve_de_la_soumission is None or eleve_de_la_soumission.utilisateur_id != utilisateur.id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette soumission ne vous appartient pas.")
+    elif utilisateur.role == RoleUtilisateur.TUTEUR:
+        if eleve_de_la_soumission is None or eleve_de_la_soumission.tuteur_id != utilisateur.id:
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette soumission ne concerne pas votre enfant.")
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         if devoir.enseignant_id != utilisateur.id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
@@ -531,6 +563,29 @@ def obtenir_soumission(
         if lien is None or lien.etablissement_id != classe.etablissement_id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
 
+    return soumission
+
+
+@router.get("/devoirs/{devoir_id}/soumission-de/{eleve_utilisateur_id}", response_model=SoumissionOut)
+def obtenir_soumission_de_mon_enfant(
+    devoir_id: str,
+    eleve_utilisateur_id: str,
+    db: Session = Depends(get_db),
+    tuteur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+) -> Soumission:
+    """UC-31.2 : equivalent de GET /devoirs/{id}/ma-soumission (reserve a ELEVE) pour un
+    tuteur qui n'a pas encore l'id de la soumission - lui permet de decouvrir l'etat
+    d'un devoir de son enfant sans devoir d'abord passer par obtenir_soumission."""
+    devoir = db.get(Devoir, devoir_id)
+    if devoir is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
+    if eleve is None or eleve.tuteur_id != tuteur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+
+    soumission = db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first()
+    if soumission is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucune soumission pour ce devoir.")
     return soumission
 
 

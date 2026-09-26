@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
+from app.modules.coffre_fort.service import evaluer_depense
 from app.modules.controle_acces.router import verifier_admin_de_l_etablissement
 from app.modules.etablissements.models import Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -420,6 +422,23 @@ def amorcer_paiement_transaction(
     if transaction.statut != StatutTransactionMarketplace.EN_ATTENTE_PAIEMENT:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction n'attend pas de paiement.")
 
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+    if eleve is not None and eleve.tuteur_id is not None:
+        validation = evaluer_depense(
+            db,
+            tuteur_id=eleve.tuteur_id,
+            eleve_utilisateur_id=utilisateur.id,
+            module=ModuleDepenseCoffreFort.MARKETPLACE,
+            reference_id=transaction.id,
+            montant=transaction.prix_paye,
+        )
+        if validation is not None:
+            raise api_error(
+                status.HTTP_409_CONFLICT,
+                "en_attente_validation_parentale",
+                "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+            )
+
     transaction.kkiapay_transaction_id = payload.transaction_id
     db.commit()
     db.refresh(transaction)
@@ -593,6 +612,52 @@ def mes_transactions(
     query = db.query(TransactionMarketplace).filter(
         or_(
             TransactionMarketplace.acheteur_id == utilisateur.id,
+            TransactionMarketplace.annonce_id.in_(mes_annonce_ids or [""]),
+        )
+    )
+    return query.order_by(TransactionMarketplace.created_at.desc()).all()
+
+
+def _verifier_tuteur_de_l_eleve(db: Session, tuteur: Utilisateur, eleve_utilisateur_id: str) -> None:
+    """UC-34 : droit de regard en lecture seule du tuteur sur le marketplace de son enfant."""
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
+    if eleve is None or eleve.tuteur_id != tuteur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte tuteur.")
+
+
+@router.get(
+    "/mes-enfants/{eleve_utilisateur_id}/marketplace/annonces", response_model=list[AnnonceMarketplaceOut]
+)
+def annonces_de_mon_enfant(
+    eleve_utilisateur_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+) -> list[AnnonceMarketplace]:
+    _verifier_tuteur_de_l_eleve(db, utilisateur, eleve_utilisateur_id)
+    return (
+        db.query(AnnonceMarketplace)
+        .filter(AnnonceMarketplace.vendeur_id == eleve_utilisateur_id)
+        .order_by(AnnonceMarketplace.created_at.desc())
+        .all()
+    )
+
+
+@router.get(
+    "/mes-enfants/{eleve_utilisateur_id}/marketplace/transactions", response_model=list[TransactionMarketplaceOut]
+)
+def transactions_de_mon_enfant(
+    eleve_utilisateur_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+) -> list[TransactionMarketplace]:
+    _verifier_tuteur_de_l_eleve(db, utilisateur, eleve_utilisateur_id)
+    mes_annonce_ids = [
+        a.id
+        for a in db.query(AnnonceMarketplace).filter(AnnonceMarketplace.vendeur_id == eleve_utilisateur_id).all()
+    ]
+    query = db.query(TransactionMarketplace).filter(
+        or_(
+            TransactionMarketplace.acheteur_id == eleve_utilisateur_id,
             TransactionMarketplace.annonce_id.in_(mes_annonce_ids or [""]),
         )
     )

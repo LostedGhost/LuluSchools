@@ -153,6 +153,21 @@ class CaptureTableauSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class ResumeSessionLive(Base):
+    """UC-33.1 : observation asynchrone du tuteur - resume texte genere par FreeLLM a la
+    cloture de la session, a partir du chat + du contenu textuel du tableau. Un seul
+    resume par session (partage entre tous les tuteurs des eleves ayant participe -
+    voir router.py::obtenir_resume_session_live_pour_tuteur), jamais un flux video/audio
+    enregistre (UC-33.2 : le tuteur ne rejoint jamais la session en direct)."""
+
+    __tablename__ = "resumes_session_live"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions_live.id"), unique=True, index=True)
+    contenu: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class MessageSessionLive(Base):
     """Discussion textuelle de la session (salle sociale avant l'heure incluse, voir
     cahier des charges §3.2) - immuable, comme la messagerie generale (jamais de

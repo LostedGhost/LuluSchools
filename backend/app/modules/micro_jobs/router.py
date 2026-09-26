@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles
+from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
+from app.modules.coffre_fort.service import evaluer_depense
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+from app.modules.inscriptions.models import Eleve
 from app.modules.micro_jobs.models import (
     ContestationMicroJob,
     MissionMicroJob,
@@ -98,6 +101,24 @@ def amorcer_paiement_offre(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette offre ne vous appartient pas.")
     if offre.statut != StatutOffreMicroJob.EN_ATTENTE_PAIEMENT:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette offre n'attend pas de paiement.")
+
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+        if eleve is not None and eleve.tuteur_id is not None:
+            validation = evaluer_depense(
+                db,
+                tuteur_id=eleve.tuteur_id,
+                eleve_utilisateur_id=utilisateur.id,
+                module=ModuleDepenseCoffreFort.MICRO_JOB,
+                reference_id=offre.id,
+                montant=offre.prix,
+            )
+            if validation is not None:
+                raise api_error(
+                    status.HTTP_409_CONFLICT,
+                    "en_attente_validation_parentale",
+                    "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+                )
 
     offre.kkiapay_transaction_id = payload.transaction_id
     db.commit()

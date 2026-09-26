@@ -37,6 +37,17 @@ class DesignerParrainRequest(BaseModel):
     utilisateur_id: str
 
 
+class BilletAchatRequest(BaseModel):
+    """UC-29.1 : optionnel - permet a un tuteur d'acheter un billet POUR SON ENFANT
+    (beneficiaire distinct de l'acheteur), meme pattern que
+    services_scolaires.TicketTransportCreate/TicketCantineCreate. Omis, le billet reste
+    attribue a l'appelant lui-meme (comportement inchange pour un achat pour soi)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_utilisateur_id: str | None = None
+
+
 class BilletEvenementOut(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 

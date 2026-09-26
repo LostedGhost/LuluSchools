@@ -41,6 +41,10 @@ class InscriptionAvecEleveOut(InscriptionOut):
     eleve_prenom: str
     eleve_matricule: str | None
     eleve_utilisateur_id: str | None
+    # UC-30.3 : None tant que l'inscription n'est pas VALIDEE ou si aucun professeur
+    # principal n'est encore designe pour cette classe.
+    professeur_principal_nom: str | None = None
+    professeur_principal_prenom: str | None = None
 
 
 class EleveMeOut(BaseModel):
@@ -54,3 +58,5 @@ class EleveMeOut(BaseModel):
     classe_id: str | None = None
     niveau: str | None = None
     etablissement_id: str | None = None
+    professeur_principal_nom: str | None = None
+    professeur_principal_prenom: str | None = None

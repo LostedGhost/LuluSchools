@@ -2,7 +2,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.pedagogie.models import FormatCours, RoleMessageElProfessor, RoleMessageElProfessorEnseignant
+from app.modules.pedagogie.models import (
+    FormatCours,
+    OrigineAlerteElProfessor,
+    RoleMessageElProfessor,
+    RoleMessageElProfessorEnseignant,
+    RoleMessageElProfessorFamille,
+    RoleMessageElProfessorTuteur,
+)
 
 
 class CoursCreate(BaseModel):
@@ -129,8 +136,65 @@ class AlerteElProfessorOut(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: str
+    origine: OrigineAlerteElProfessor
     session_id: str
     etablissement_id: str | None
+    eleve_utilisateur_id: str | None
     motif: str
     traite: bool
     created_at: datetime
+
+
+class SessionElProfessorTuteurCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_utilisateur_id: str
+    sujet: str | None = None
+
+
+class MessageElProfessorTuteurOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    session_id: str
+    role: RoleMessageElProfessorTuteur
+    contenu: str
+    created_at: datetime
+
+
+class SessionElProfessorTuteurOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    tuteur_id: str
+    eleve_utilisateur_id: str
+    sujet: str | None
+    messages: list[MessageElProfessorTuteurOut]
+
+
+class SessionElProfessorFamilleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_utilisateur_id: str
+    sujet: str | None = None
+
+
+class MessageElProfessorFamilleOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    session_id: str
+    role: RoleMessageElProfessorFamille
+    contenu: str
+    created_at: datetime
+
+
+class SessionElProfessorFamilleOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    tuteur_id: str
+    eleve_utilisateur_id: str
+    sujet: str | None
+    rejointe_le: datetime | None
+    messages: list[MessageElProfessorFamilleOut]

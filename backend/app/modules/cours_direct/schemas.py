@@ -142,3 +142,12 @@ class MessageSessionLiveOut(BaseModel):
     auteur_id: str
     contenu: str
     created_at: datetime
+
+
+class ResumeSessionLiveOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    session_id: str
+    contenu: str
+    created_at: datetime

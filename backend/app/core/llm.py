@@ -24,6 +24,14 @@ class ElProfessorError(Exception):
     """Levee quand FreeLLM ne peut pas repondre a une question de l'assistant El Professor."""
 
 
+class ResumeSessionLiveError(Exception):
+    """Levee quand FreeLLM ne peut pas generer le resume d'une session live (UC-33)."""
+
+
+class DigestFamilleError(Exception):
+    """Levee quand FreeLLM ne peut pas generer le digest hebdomadaire du Radar familial (UC-36)."""
+
+
 class FreeLLMClient:
     """Tous les appels LLM du projet passent par FreeLLM (ADR-002), jamais l'API Anthropic
     en direct. FreeLLM n'accepte que des images en vision : les PDF sont convertis en
@@ -210,6 +218,40 @@ class FreeLLMClient:
             raise ElProfessorError("Reponse FreeLLM vide.")
         return texte
 
+    def conseiller_tuteur(self, contexte_eleve: str | None, historique: list[dict], question: str) -> str:
+        """UC-32 : El Professor cote tuteur - conseille un parent/tuteur sur son enfant
+        (scolarite, comportement, orientation, tensions familiales). Persona distincte de
+        conseiller_enseignant (parent, pas professionnel de l'education) mais meme
+        garde-fou de securite applique cote routeur."""
+        consigne = (
+            "Tu es 'El Professor', un assistant qui conseille un tuteur/parent sur la "
+            "scolarite, le comportement ou l'orientation de son enfant. Tu paries sur la "
+            "bienveillance et le dialogue plutot que la sanction. Tu n'es ni un "
+            "professionnel de sante mentale ni un juriste : pour toute situation grave ou "
+            "potentiellement dangereuse (maltraitance, violence, detresse psychologique, "
+            "urgence), tu recommandes explicitement et sans delai d'en parler a "
+            "l'administration de l'etablissement ou aux autorites competentes - tu ne "
+            "traites jamais seul ce genre de situation."
+        )
+        if contexte_eleve:
+            consigne += f"\n\nContexte disponible sur l'enfant (vie scolaire) :\n{contexte_eleve}"
+
+        messages = [{"role": "system", "content": consigne}]
+        for tour in historique:
+            role = "assistant" if tour["role"] == "assistant" else "user"
+            messages.append({"role": role, "content": tour["contenu"]})
+        messages.append({"role": "user", "content": question})
+
+        try:
+            response = self._client.chat.completions.create(model="auto", messages=messages)
+        except OpenAIError as exc:
+            raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        if not texte:
+            raise ElProfessorError("Reponse FreeLLM vide.")
+        return texte
+
     def conseiller_enseignant(self, contexte_eleve: str | None, historique: list[dict], question: str) -> str:
         """UC-27 : El Professor cote enseignant - conseille sur des questions educatives,
         morales, professionnelles ou humaines concernant ses eleves ou sa pratique.
@@ -244,6 +286,114 @@ class FreeLLMClient:
         texte = (response.choices[0].message.content or "").strip()
         if not texte:
             raise ElProfessorError("Reponse FreeLLM vide.")
+        return texte
+
+
+    def conseiller_famille(
+        self, contexte_eleve: str | None, historique: list[dict], question: str, qui_parle: str
+    ) -> str:
+        """UC-37 : El Professor Famille - fil partage entre un tuteur et son enfant, les
+        deux posant des questions dans le meme fil. Contrairement a conseiller_tuteur/
+        conseiller_enseignant (un seul interlocuteur), l'historique melange des tours
+        'tuteur' et 'eleve' : le prompt precise systematiquement `qui_parle` pour que la
+        reponse s'adresse explicitement au bon interlocuteur plutot que de rester
+        generique."""
+        consigne = (
+            "Tu es 'El Professor', un assistant qui conseille CONJOINTEMENT un tuteur/"
+            "parent et son enfant dans un meme fil de discussion sur la scolarite, le "
+            "comportement ou l'orientation de l'enfant. Chaque message precise qui parle "
+            "('tuteur' ou 'eleve') : adresse-toi explicitement et nommement a cette "
+            "personne dans ta reponse (par exemple 'Pour vous, [tuteur]...' ou "
+            "'De ton cote, [eleve]...'), sans jamais ignorer l'autre partie presente dans "
+            "la conversation. Tu n'es ni un professionnel de sante mentale ni un juriste : "
+            "pour toute situation grave ou potentiellement dangereuse (maltraitance, "
+            "violence, detresse psychologique, urgence), tu recommandes explicitement et "
+            "sans delai d'en parler a l'administration de l'etablissement ou aux autorites "
+            "competentes - tu ne traites jamais seul ce genre de situation."
+        )
+        if contexte_eleve:
+            consigne += f"\n\nContexte disponible sur l'enfant (vie scolaire) :\n{contexte_eleve}"
+
+        messages = [{"role": "system", "content": consigne}]
+        for tour in historique:
+            role = "assistant" if tour["role"] == "assistant" else "user"
+            prefixe = "" if role == "assistant" else f"[{tour['role']}] "
+            messages.append({"role": role, "content": f"{prefixe}{tour['contenu']}"})
+        messages.append({"role": "user", "content": f"[{qui_parle}] {question}"})
+
+        try:
+            response = self._client.chat.completions.create(model="auto", messages=messages)
+        except OpenAIError as exc:
+            raise ElProfessorError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        if not texte:
+            raise ElProfessorError("Reponse FreeLLM vide.")
+        return texte
+
+    def generer_digest_famille(self, eleve_nom: str, sources: list[str]) -> str:
+        """UC-36 : Radar familial - digest hebdomadaire narratif genere UNIQUEMENT a
+        partir des faits deja factuellement etablis ailleurs sur la plateforme (vie
+        scolaire, devoirs corriges, sessions live suivies, activite financiere si le
+        Coffre-fort est actif), fournis ici sous forme de lignes de citation
+        pre-formatees (voir radar_familial/service.py). UC-36.2 : le resume doit citer
+        ces sources textuellement (dates, matieres) plutot que rester dans le vague, et
+        ne jamais affirmer un fait absent de la liste fournie."""
+        consigne = (
+            f"Tu rediges pour un tuteur/parent un resume hebdomadaire narratif et "
+            f"bienveillant de la semaine ecoulee de son enfant {eleve_nom}, en 5 phrases "
+            "maximum. Tu ne disposes QUE des faits ci-dessous (chacun deja date et "
+            "source) : tu dois t'appuyer explicitement dessus (cite la date et le sujet), "
+            "et tu n'as strictement rien d'autre a ta disposition - n'invente et n'suppose "
+            "jamais un fait qui n'y figure pas. Si la liste est courte, dis-le simplement "
+            "plutot que de meubler."
+        )
+        faits = "\n".join(f"- {source}" for source in sources) if sources else "(aucun fait cette semaine)"
+        messages = [
+            {"role": "system", "content": consigne},
+            {"role": "user", "content": f"Faits de la semaine :\n{faits}"},
+        ]
+
+        try:
+            response = self._client.chat.completions.create(model="auto", messages=messages)
+        except OpenAIError as exc:
+            raise DigestFamilleError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        if not texte:
+            raise DigestFamilleError("Reponse FreeLLM vide.")
+        return texte
+
+    def resumer_session_live(self, messages_chat: list[str], contenu_tableau: str) -> str:
+        """UC-33.1 : observation asynchrone du tuteur - un resume texte factuel de ce qui
+        s'est passe pendant une session live, genere UNIQUEMENT a partir du chat texte et
+        du contenu final du tableau (jamais d'un flux video/audio, qui n'existe pas cote
+        serveur - voir realtime.py, le WebRTC est un relais pair-a-pair non enregistre)."""
+        consigne = (
+            "Tu resumes pour un parent/tuteur ce qui s'est passe pendant une session de "
+            "cours en direct, a partir uniquement du chat texte de la session et du contenu "
+            "final du tableau ci-dessous. Reste factuel et concis (5 phrases maximum), cite "
+            "les elements precis dont tu disposes (sujets abordes, questions posees), et "
+            "n'invente jamais de detail que ces sources ne contiennent pas."
+        )
+        chat = "\n".join(messages_chat) if messages_chat else "(aucun message dans le chat)"
+        contenu = (
+            f"Messages du chat de la session :\n{chat}\n\n"
+            f"Contenu final du tableau :\n{contenu_tableau or '(tableau vide)'}"
+        )
+        messages = [
+            {"role": "system", "content": consigne},
+            {"role": "user", "content": contenu},
+        ]
+
+        try:
+            response = self._client.chat.completions.create(model="auto", messages=messages)
+        except OpenAIError as exc:
+            raise ResumeSessionLiveError("FreeLLM indisponible ou a refuse la requete.") from exc
+
+        texte = (response.choices[0].message.content or "").strip()
+        if not texte:
+            raise ResumeSessionLiveError("Reponse FreeLLM vide.")
         return texte
 
 
