@@ -104,21 +104,22 @@ Même structure qu'UC-11, entités et endpoints renommés :
 
 ## Micro-jobs et séquestre (UC-18)
 
-Rôles autorisés à publier une offre (prestataire) ou l'accepter (client) : Enseignant, Tuteur, A+, A++ — le rôle Élève est structurellement exclu (délégué UC-18), aucune vérification d'âge dynamique n'est nécessaire.
+**Révision (2026-09-26, voir ADR-008 addendum)** : modèle "demande payée d'avance". Publier une offre = se déclarer **client** et payer le montant **à la publication**, avant même qu'un prestataire ne soit trouvé — plus à l'acceptation comme dans le premier jet. Rôle **client** (publier, payer, valider/contester) : **tous les rôles authentifiés, Élève inclus** — payer pour un service ne pose pas la question d'âge minimum de travail. Rôle **prestataire** (accepter une offre, être rémunéré) : Enseignant, Tuteur, A+, A++ — Élève structurellement exclu, c'est cette rémunération d'un mineur qui reste hors périmètre légal.
 
 | Méthode | Chemin | Rôle | Notes |
 |---|---|---|---|
-| POST | `/micro-jobs/offres` | Enseignant, Tuteur, A+, A++ | `titre`, `description`, `prix` ; statut initial `ouverte` |
-| GET | `/micro-jobs/offres` | Enseignant, Tuteur, A+, A++ | Liste des offres `ouverte` |
-| GET | `/micro-jobs/offres/{id}` | Enseignant, Tuteur, A+, A++ | Lecture |
-| POST | `/micro-jobs/offres/{id}/accepter` | Enseignant, Tuteur, A+, A++ (autre que le prestataire) | Refusé (`409`) si l'offre n'est plus `ouverte` ; crée la `MissionMicroJob` (statut `en_cours`), offre passe `fermee` |
-| POST | `/missions-micro-job/{id}/paiement/amorcer` | client de la mission | Même mécanique `paiement/amorcer` que UC-10/UC-11/UC-17 : le compte Kkiapay unique de LuluSchools encaisse le prix. Le "séquestre" est purement un statut suivi par LuluSchools (Option A, ADR-008) — Kkiapay ne sait pas qu'il s'agit d'un séquestre |
-| POST | `/missions-micro-job/{id}/declarer-fin` | prestataire de la mission | `en_cours` → `terminee_declaree`, fixe `date_limite_validation` = +5 jours |
-| POST | `/missions-micro-job/{id}/valider` | client de la mission | `terminee_declaree` → `validee` (validation explicite) ; passé `date_limite_validation` sans action, un job périodique (ou calcul à la volée en lecture) considère la mission `validee` tacitement (délégué UC-18) |
-| POST | `/missions-micro-job/{id}/contester` | client de la mission | Uniquement avant `date_limite_validation`, `terminee_declaree` → `contestee` |
+| POST | `/micro-jobs/offres` | Tout rôle authentifié (client) | `titre`, `description`, `prix` ; statut initial `en_attente_paiement` |
+| POST | `/micro-jobs/offres/{id}/paiement/amorcer` | client (propriétaire de l'offre) | Même mécanique `paiement/amorcer` que UC-10/UC-11/UC-17 : le compte Kkiapay unique de LuluSchools encaisse le prix. Le "séquestre" est purement un statut suivi par LuluSchools (Option A, ADR-008) |
+| POST | `/micro-jobs/offres/{id}/annuler` | client (propriétaire de l'offre) | Uniquement tant que `en_attente_paiement` (pas encore payée) → `annulee` |
+| GET | `/micro-jobs/offres` | Tout rôle authentifié (client) | Liste des offres `ouverte` (paiement confirmé, pas encore acceptée) |
+| GET | `/micro-jobs/offres/{id}` | Tout rôle authentifié (client) | Lecture |
+| POST | `/micro-jobs/offres/{id}/accepter` | Enseignant, Tuteur, A+, A++ (prestataire, autre que le client) | Refusé (`409`) si l'offre n'est pas `ouverte` (paiement non confirmé) ; crée la `MissionMicroJob` (statut `en_cours`, `paiement_confirme=true` d'emblée), offre passe `fermee` |
+| POST | `/missions-micro-job/{id}/declarer-fin` | prestataire de la mission | `en_cours` → `terminee_declaree`, fixe `date_limite_validation` = +5 jours. Plus de vérification `paiement_confirme` : le paiement est garanti dès la création de la mission |
+| POST | `/missions-micro-job/{id}/valider` | client (propriétaire de l'offre liée) | `terminee_declaree` → `validee` (validation explicite) ; passé `date_limite_validation` sans action, un job périodique (ou calcul à la volée en lecture) considère la mission `validee` tacitement (délégué UC-18) |
+| POST | `/missions-micro-job/{id}/contester` | client (propriétaire de l'offre liée) | Uniquement avant `date_limite_validation`, `terminee_declaree` → `contestee` |
 | POST | `/contestations-micro-job/{id}/decision` | A++ | `acceptee` (mission → `remboursee`, paiement rendu au client) ou `rejetee` (motif obligatoire, mission → `validee`) — même schéma que UC-04b. **Correction du premier jet du contrat** : arbitré par l'A++ (ministériel), pas "l'A+ de l'établissement du prestataire" comme écrit initialement — un micro-job n'est rattaché à aucun établissement (marketplace plateforme entière, voir `docs/diagrammes-uml-phase2-3.md`) et un Tuteur prestataire n'a de toute façon aucun établissement à résoudre |
 | POST | `/missions-micro-job/{id}/reverser-prestataire` | A++ | Autorisé seulement si `statut=validee` (cohérent avec l'arbitrage A++ ci-dessus, plutôt qu'un rôle d'exploitation distinct non spécifié). Reversement manuel hors Kkiapay (mobile money direct vers le prestataire) ; `reference_paiement` (texte libre, preuve) obligatoire pour passer `validee` → `payee`. Point d'automatisation potentiel une fois `setup_payout` confirmé auprès du support Kkiapay (voir ADR-008) |
-| GET | `/mes-missions-micro-job` | Enseignant, Tuteur, A+, A++ | Historique, comme prestataire et comme client |
+| GET | `/mes-missions-micro-job` | Tout rôle authentifié | Historique, comme prestataire et comme client |
 
 ---
 

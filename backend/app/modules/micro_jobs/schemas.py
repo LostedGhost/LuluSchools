@@ -17,11 +17,12 @@ class OffreMicroJobOut(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: str
-    prestataire_id: str
+    client_id: str
     titre: str
     description: str
     prix: float
     statut: StatutOffreMicroJob
+    paiement_confirme: bool
 
 
 class MissionMicroJobOut(BaseModel):
@@ -29,7 +30,7 @@ class MissionMicroJobOut(BaseModel):
 
     id: str
     offre_id: str
-    client_id: str
+    prestataire_id: str
     statut: StatutMissionMicroJob
     prix_paye: float
     paiement_confirme: bool

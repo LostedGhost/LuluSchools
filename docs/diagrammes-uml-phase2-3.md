@@ -314,16 +314,16 @@ classDiagram
     +statut : string
   }
 
-  Utilisateur "1" --> "0..*" OffreMicroJob : publie comme prestataire
+  Utilisateur "1" --> "0..*" OffreMicroJob : publie et paie comme client
   OffreMicroJob "1" --> "0..1" MissionMicroJob : donne lieu à
-  Utilisateur "1" --> "0..*" MissionMicroJob : accepte comme client
+  Utilisateur "1" --> "0..*" MissionMicroJob : accepte comme prestataire
   MissionMicroJob "1" --> "0..1" ContestationMicroJob : peut faire l'objet de
   Utilisateur "1" --> "0..*" ContestationMicroJob : décide (A+)
   MissionMicroJob "1" --> "1" PaiementKkiapay : séquestré par
 ```
 
 Notes :
-- `Utilisateur.publie comme prestataire` et `.accepte comme client` sont restreints par une règle applicative (pas une nouvelle sous-classe) aux rôles Enseignant/Tuteur/A+/A++ — le rôle Élève en est exclu en V1 (décision déléguée d'UC-18, en attendant la confirmation légale sur l'âge minimum de rémunération d'un mineur).
+- **Révision (2026-09-26, voir ADR-008 addendum)** : `Utilisateur.publie et paie comme client` est ouvert à **tous les rôles**, Élève inclus — payer pour un service ne pose pas de question d'âge minimum de travail. `Utilisateur.accepte comme prestataire` reste restreint par une règle applicative aux rôles Enseignant/Tuteur/A+/A++ — l'Élève en est exclu, cette fois parce que c'est le fait d'être **rémunéré** pour un travail qui pose la question légale (hors périmètre de la loi n° 2017-20), pas le fait de payer.
 - `MissionMicroJob.statut` reprend le cycle délégué d'UC-18 : `en_cours` → `terminee_declaree` (le prestataire déclare la fin) → `validee` (tacite après 5 jours, ou explicite par le client) ou `contestee` → (si contestée) tranchée par un A+ via `ContestationMicroJob` → `payee`/`remboursee`.
 - `PaiementKkiapay` réutilise la même entité que le diagramme billetterie (paiement partagé, un seul compte Kkiapay pour toute la plateforme) — le mécanisme exact de rétention (Kkiapay natif vs délai modélisé côté LuluSchools) reste à trancher à l'étape 3 une fois la documentation Kkiapay consultée, ce n'est pas une décision de modélisation mais un détail d'intégration technique.
 

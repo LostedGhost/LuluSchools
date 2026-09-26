@@ -29,7 +29,19 @@ from app.modules.paiements.schemas import AmorcerPaiementRequest
 router = APIRouter(tags=["micro-jobs"])
 
 _DELAI_VALIDATION_TACITE = timedelta(days=5)
-_ROLES_MICRO_JOB = (
+
+# Cote CLIENT (publier une offre, la payer, valider/contester le travail rendu) :
+# ouvert a tous les roles authentifies, Eleve inclus - payer pour un service ne pose
+# pas de question d'age minimum de travail (voir OffreMicroJob docstring, ADR-008 addendum).
+_ROLES_CLIENT = (
+    RoleUtilisateur.ENSEIGNANT,
+    RoleUtilisateur.TUTEUR,
+    RoleUtilisateur.ADMIN_ETABLISSEMENT,
+    RoleUtilisateur.ADMIN_MINISTERIEL,
+    RoleUtilisateur.ELEVE,
+)
+# Cote PRESTATAIRE (accepter une offre, etre remunere pour le travail) : Eleve exclu.
+_ROLES_PRESTATAIRE = (
     RoleUtilisateur.ENSEIGNANT,
     RoleUtilisateur.TUTEUR,
     RoleUtilisateur.ADMIN_ETABLISSEMENT,
@@ -58,10 +70,13 @@ def _appliquer_validation_tacite(db: Session, mission: MissionMicroJob) -> Missi
 def creer_offre(
     payload: OffreMicroJobCreate,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB)),
+    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT)),
 ) -> OffreMicroJob:
+    """UC-18 : publier une offre = se declarer CLIENT et s'engager a payer. L'offre
+    n'est visible des prestataires qu'une fois le paiement confirme (voir
+    amorcer_paiement_offre / webhook Kkiapay)."""
     offre = OffreMicroJob(
-        prestataire_id=utilisateur.id, titre=payload.titre, description=payload.description, prix=payload.prix
+        client_id=utilisateur.id, titre=payload.titre, description=payload.description, prix=payload.prix
     )
     db.add(offre)
     db.commit()
@@ -69,16 +84,57 @@ def creer_offre(
     return offre
 
 
+@router.post("/micro-jobs/offres/{offre_id}/paiement/amorcer", response_model=OffreMicroJobOut)
+def amorcer_paiement_offre(
+    offre_id: str,
+    payload: AmorcerPaiementRequest,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT)),
+) -> OffreMicroJob:
+    offre = db.get(OffreMicroJob, offre_id)
+    if offre is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Offre introuvable.")
+    if offre.client_id != utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette offre ne vous appartient pas.")
+    if offre.statut != StatutOffreMicroJob.EN_ATTENTE_PAIEMENT:
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette offre n'attend pas de paiement.")
+
+    offre.kkiapay_transaction_id = payload.transaction_id
+    db.commit()
+    db.refresh(offre)
+    return offre
+
+
+@router.post("/micro-jobs/offres/{offre_id}/annuler", response_model=OffreMicroJobOut)
+def annuler_offre(
+    offre_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
+) -> OffreMicroJob:
+    """Annulation reservee a une offre pas encore payee - une fois le paiement
+    confirme (OUVERTE), l'offre suit le circuit normal (acceptation ou reste ouverte)."""
+    offre = db.get(OffreMicroJob, offre_id)
+    if offre is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Offre introuvable.")
+    if offre.client_id != utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette offre ne vous appartient pas.")
+    if offre.statut != StatutOffreMicroJob.EN_ATTENTE_PAIEMENT:
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette offre ne peut plus etre annulee.")
+
+    offre.statut = StatutOffreMicroJob.ANNULEE
+    db.commit()
+    db.refresh(offre)
+    return offre
+
+
 @router.get("/micro-jobs/offres", response_model=list[OffreMicroJobOut])
 def lister_offres(
-    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB))
+    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
 ) -> list[OffreMicroJob]:
     return db.query(OffreMicroJob).filter(OffreMicroJob.statut == StatutOffreMicroJob.OUVERTE).all()
 
 
 @router.get("/micro-jobs/offres/{offre_id}", response_model=OffreMicroJobOut)
 def obtenir_offre(
-    offre_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB))
+    offre_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
 ) -> OffreMicroJob:
     offre = db.get(OffreMicroJob, offre_id)
     if offre is None:
@@ -90,40 +146,28 @@ def obtenir_offre(
     "/micro-jobs/offres/{offre_id}/accepter", response_model=MissionMicroJobOut, status_code=status.HTTP_201_CREATED
 )
 def accepter_offre(
-    offre_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB))
+    offre_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_PRESTATAIRE))
 ) -> MissionMicroJob:
+    """Accepter = devenir le PRESTATAIRE remunere. Reserve aux roles majeurs (Eleve
+    exclu, voir ADR-008). Le paiement est deja confirme depuis la publication de
+    l'offre : la mission demarre directement EN_COURS, sans etape de paiement propre."""
     offre = db.get(OffreMicroJob, offre_id)
     if offre is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Offre introuvable.")
-    if offre.prestataire_id == utilisateur.id:
+    if offre.client_id == utilisateur.id:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Vous ne pouvez pas accepter votre propre offre.")
     if offre.statut != StatutOffreMicroJob.OUVERTE:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette offre n'est plus ouverte.")
 
     offre.statut = StatutOffreMicroJob.FERMEE
-    mission = MissionMicroJob(offre_id=offre_id, client_id=utilisateur.id, prix_paye=offre.prix)
+    mission = MissionMicroJob(
+        offre_id=offre_id,
+        prestataire_id=utilisateur.id,
+        prix_paye=offre.prix,
+        paiement_confirme=True,
+        kkiapay_transaction_id=offre.kkiapay_transaction_id,
+    )
     db.add(mission)
-    db.commit()
-    db.refresh(mission)
-    return mission
-
-
-@router.post("/missions-micro-job/{mission_id}/paiement/amorcer", response_model=MissionMicroJobOut)
-def amorcer_paiement_mission(
-    mission_id: str,
-    payload: AmorcerPaiementRequest,
-    db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB)),
-) -> MissionMicroJob:
-    mission = db.get(MissionMicroJob, mission_id)
-    if mission is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Mission introuvable.")
-    if mission.client_id != utilisateur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette mission ne vous appartient pas.")
-    if mission.paiement_confirme:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission est deja payee.")
-
-    mission.kkiapay_transaction_id = payload.transaction_id
     db.commit()
     db.refresh(mission)
     return mission
@@ -131,16 +175,13 @@ def amorcer_paiement_mission(
 
 @router.post("/missions-micro-job/{mission_id}/declarer-fin", response_model=MissionMicroJobOut)
 def declarer_fin_mission(
-    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB))
+    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_PRESTATAIRE))
 ) -> MissionMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
     if mission is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Mission introuvable.")
-    offre = db.get(OffreMicroJob, mission.offre_id)
-    if offre.prestataire_id != utilisateur.id:
+    if mission.prestataire_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette mission ne vous appartient pas.")
-    if not mission.paiement_confirme:
-        raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de cette mission n'est pas confirme.")
     if mission.statut != StatutMissionMicroJob.EN_COURS:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission ne peut pas etre declaree terminee.")
 
@@ -154,12 +195,13 @@ def declarer_fin_mission(
 
 @router.post("/missions-micro-job/{mission_id}/valider", response_model=MissionMicroJobOut)
 def valider_mission(
-    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB))
+    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
 ) -> MissionMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
     if mission is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Mission introuvable.")
-    if mission.client_id != utilisateur.id:
+    offre = db.get(OffreMicroJob, mission.offre_id)
+    if offre.client_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette mission ne vous appartient pas.")
     mission = _appliquer_validation_tacite(db, mission)
     if mission.statut != StatutMissionMicroJob.TERMINEE_DECLAREE:
@@ -176,12 +218,13 @@ def contester_mission(
     mission_id: str,
     payload: ContesterMissionRequest,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB)),
+    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT)),
 ) -> ContestationMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
     if mission is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Mission introuvable.")
-    if mission.client_id != utilisateur.id:
+    offre = db.get(OffreMicroJob, mission.offre_id)
+    if offre.client_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette mission ne vous appartient pas.")
     mission = _appliquer_validation_tacite(db, mission)
     if mission.statut != StatutMissionMicroJob.TERMINEE_DECLAREE:
@@ -251,10 +294,10 @@ def reverser_prestataire(
 
 @router.get("/mes-missions-micro-job", response_model=list[MissionMicroJobOut])
 def mes_missions(
-    db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_MICRO_JOB))
+    db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
 ) -> list[MissionMicroJob]:
-    mes_offre_ids = [o.id for o in db.query(OffreMicroJob).filter(OffreMicroJob.prestataire_id == utilisateur.id).all()]
+    mes_offre_ids = [o.id for o in db.query(OffreMicroJob).filter(OffreMicroJob.client_id == utilisateur.id).all()]
     query = db.query(MissionMicroJob).filter(
-        or_(MissionMicroJob.client_id == utilisateur.id, MissionMicroJob.offre_id.in_(mes_offre_ids or [""]))
+        or_(MissionMicroJob.prestataire_id == utilisateur.id, MissionMicroJob.offre_id.in_(mes_offre_ids or [""]))
     )
     return query.order_by(MissionMicroJob.created_at.desc()).all()

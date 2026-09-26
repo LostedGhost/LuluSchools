@@ -308,20 +308,23 @@ def test_parcours_complet_des_phases_2_et_3(
     assert visite.status_code == 201
 
     # ---------------------------------------------------------------
-    # 7. UC-18 : micro-job - l'enseignant propose, le tuteur accepte, sequestre puis reversement
+    # 7. UC-18 : micro-job - le tuteur publie et paie (client), l'enseignant accepte
+    # (prestataire remunere) - le paiement est confirme des la publication, pas a
+    # l'acceptation (voir ADR-008 addendum, tout role peut publier s'il paie).
     # ---------------------------------------------------------------
     offre = client.post(
         "/api/v1/micro-jobs/offres",
         json={"titre": "Cours de soutien en histoire", "description": "2h de soutien pour un eleve de 6eme", "prix": 8000},
-        headers=enseignant_headers,
+        headers=tuteur_headers,
     ).json()
-    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=tuteur_headers).json()
     client.post(
-        f"/api/v1/missions-micro-job/{mission['id']}/paiement/amorcer",
+        f"/api/v1/micro-jobs/offres/{offre['id']}/paiement/amorcer",
         json={"transaction_id": "tx-e2e-microjob"},
         headers=tuteur_headers,
     )
     _payer_via_webhook(client, "tx-e2e-microjob", secret)
+    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=enseignant_headers).json()
+    assert mission["paiement_confirme"] is True
     fin_mission = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=enseignant_headers)
     assert fin_mission.status_code == 200
     assert fin_mission.json()["statut"] == "terminee_declaree"

@@ -19,19 +19,29 @@ def _payer_via_webhook(client, transaction_id, secret):
     )
 
 
-def _offre_acceptee(client, ctx, kkiapay_secret):
+def _publier_et_payer_offre(client, headers, kkiapay_secret, prix=5000):
+    """UC-18 : publier une offre = se declarer CLIENT et payer immediatement -
+    l'offre ne devient OUVERTE (acceptable par un prestataire) qu'une fois le
+    paiement confirme par le webhook."""
     offre = client.post(
         "/api/v1/micro-jobs/offres",
-        json={"titre": "Cours de soutien", "description": "Aide aux devoirs de maths", "prix": 5000},
-        headers=ctx["enseignant_headers"],
+        json={"titre": "Cours de soutien", "description": "Aide aux devoirs de maths", "prix": prix},
+        headers=headers,
     ).json()
-    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["tuteur_headers"]).json()
+    assert offre["statut"] == "en_attente_paiement"
     client.post(
-        f"/api/v1/missions-micro-job/{mission['id']}/paiement/amorcer",
-        json={"transaction_id": f"tx-{mission['id']}"},
-        headers=ctx["tuteur_headers"],
+        f"/api/v1/micro-jobs/offres/{offre['id']}/paiement/amorcer",
+        json={"transaction_id": f"tx-{offre['id']}"},
+        headers=headers,
     )
-    _payer_via_webhook(client, f"tx-{mission['id']}", kkiapay_secret)
+    _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret)
+    return offre
+
+
+def _offre_acceptee(client, ctx, kkiapay_secret):
+    """Tuteur publie et paie (client), enseignant accepte (prestataire remunere)."""
+    offre = _publier_et_payer_offre(client, ctx["tuteur_headers"], kkiapay_secret)
+    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"]).json()
     return offre, mission
 
 
@@ -40,6 +50,8 @@ def test_parcours_complet_mission_validee_et_reversee(
 ):
     ctx = classe_avec_enseignant_et_eleve
     offre, mission = _offre_acceptee(client, ctx, kkiapay_secret)
+    assert mission["statut"] == "en_cours"
+    assert mission["paiement_confirme"] is True
 
     fin = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
     assert fin.status_code == 200
@@ -63,39 +75,51 @@ def test_parcours_complet_mission_validee_et_reversee(
     assert len(historique_client.json()) == 1
 
 
-def test_declarer_fin_refuse_avant_paiement_confirme(client, classe_avec_enseignant_et_eleve):
+def test_offre_non_payee_ni_visible_ni_acceptable(client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve
     offre = client.post(
         "/api/v1/micro-jobs/offres",
         json={"titre": "Reparation", "description": "Petit bricolage", "prix": 2000},
-        headers=ctx["enseignant_headers"],
+        headers=ctx["tuteur_headers"],
     ).json()
-    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["tuteur_headers"]).json()
 
-    refus = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
+    liste = client.get("/api/v1/micro-jobs/offres", headers=ctx["enseignant_headers"])
+    assert offre["id"] not in [o["id"] for o in liste.json()]
+
+    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"])
     assert refus.status_code == 409
-    assert refus.json()["error"]["code"] == "paiement_non_confirme"
 
 
-def test_eleve_exclu_du_dispositif(client, classe_avec_enseignant_et_eleve):
+def test_eleve_peut_publier_et_payer_mais_pas_accepter(client, classe_avec_enseignant_et_eleve, kkiapay_secret):
     ctx = classe_avec_enseignant_et_eleve
-    refus = client.post(
-        "/api/v1/micro-jobs/offres",
-        json={"titre": "Cours", "description": "Test", "prix": 1000},
-        headers=ctx["eleve_headers"],
-    )
+    offre = _publier_et_payer_offre(client, ctx["eleve_headers"], kkiapay_secret)
+    assert offre["statut"] == "en_attente_paiement"
+
+    offre_payee = client.get(f"/api/v1/micro-jobs/offres/{offre['id']}", headers=ctx["eleve_headers"]).json()
+    assert offre_payee["statut"] == "ouverte"
+    assert offre_payee["paiement_confirme"] is True
+
+    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["eleve_headers"])
     assert refus.status_code == 403
 
 
-def test_impossible_d_accepter_sa_propre_offre(client, classe_avec_enseignant_et_eleve):
+def test_impossible_d_accepter_sa_propre_offre(client, classe_avec_enseignant_et_eleve, kkiapay_secret):
+    ctx = classe_avec_enseignant_et_eleve
+    offre = _publier_et_payer_offre(client, ctx["enseignant_headers"], kkiapay_secret, prix=1000)
+    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"])
+    assert refus.status_code == 409
+
+
+def test_annuler_offre_non_payee(client, classe_avec_enseignant_et_eleve):
     ctx = classe_avec_enseignant_et_eleve
     offre = client.post(
         "/api/v1/micro-jobs/offres",
         json={"titre": "Cours", "description": "Test", "prix": 1000},
-        headers=ctx["enseignant_headers"],
+        headers=ctx["tuteur_headers"],
     ).json()
-    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"])
-    assert refus.status_code == 409
+    annulation = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/annuler", headers=ctx["tuteur_headers"])
+    assert annulation.status_code == 200
+    assert annulation.json()["statut"] == "annulee"
 
 
 def test_contestation_rejetee_exige_un_motif_et_valide_la_mission(
