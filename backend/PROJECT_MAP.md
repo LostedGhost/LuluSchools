@@ -52,12 +52,13 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `schemas.py` — schémas Pydantic stricts (`extra="forbid"`, anti mass-assignment), validateur de force de mot de passe partagé création/changement.
 
 ### app/modules/etablissements/
-- `models.py` — `Etablissement`, `AdminEtablissement` (lien 1-1 vers `Utilisateur`), `Classe`, `EtablissementPhoto` (ADR-009, migration `0021` — ne stocke que `lulufiles_file_id` + `ordre`, jamais d'URL brute), enums `TypeEtablissement`/`StatutEtablissement`/`PolitiqueDepassement`.
+- `models.py` — `Etablissement`, `AdminEtablissement` (lien 1-1 vers `Utilisateur`), `Classe`, `AffectationEnseignant` (migration `0005`, lien enseignant↔classe précise — voir la synchro du 2026-09-26 ci-dessous, `Contrat` seul ne suffisait plus), `EtablissementPhoto` (ADR-009, migration `0021` — ne stocke que `lulufiles_file_id` + `ordre`, jamais d'URL brute), enums `TypeEtablissement`/`StatutEtablissement`/`PolitiqueDepassement`.
 - `router.py` — `POST/GET /etablissements` (A++ seul pour créer, provisionne aussi le premier compte A+ avec mot de passe temporaire), `GET /etablissements/mon-etablissement` (point d'entrée du frontend A+ — sans lui, un A+ n'a aucun moyen de savoir quel établissement il administre, ce n'est pas exposé sur `MeOut` ; **attention à l'ordre des routes** : déclaré avant `GET /{etablissement_id}` sinon ce dernier capturerait `mon-etablissement` comme un id), `POST/GET /etablissements/{id}/classes` (A+, avec vérification stricte que l'admin administre bien CET établissement — anti-IDOR).
 - **Endpoints publics (sans authentification)** — avec `GET /health` (`app/system/router.py`), les seuls de tout le backend ; tous déclarés avant `GET /{etablissement_id}` pour l'ordre des routes (ADR-009) :
   - `GET /etablissements/vitrine-publique` — teaser léger pour la landing page (3 établissements en avant, quelques postes ouverts, totaux globaux). N'expose que des champs non sensibles (`EtablissementVitrineOut`/`PosteVitrineOut`/`VitrinePubliqueOut`, jamais `code_etablissement` ni d'email d'admin). Importe `Poste`/`StatutPoste` depuis `modules/recrutement/models.py` (couplage en lecture seule, cohérent avec l'import déjà existant de `modules/messagerie/models`).
   - `GET /etablissements/annuaire-public?type=&q=&limit=&offset=` — annuaire complet paginé, pour la page dédiée `/etablissements` du frontend (jamais la landing page — la plateforme a vocation nationale). **`limit` plafonné cote serveur a 60 quel que soit ce qui est demandé**, ne jamais faire confiance a un client pour borner sa propre requête.
-  - `GET /etablissements/{id}/photos-publiques` — résout les liens signés LuluFiles à la demande, **appelé uniquement pour un établissement précis** (jamais en boucle sur toute une page d'annuaire, pour ne pas multiplier les appels vers LuluFiles — voir le risque de quota déjà signalé sur ce service). `POST`/`DELETE /etablissements/{id}/photos` (A+ de l'établissement, `_verifier_admin_de_l_etablissement`, max 8 photos) gèrent l'upload/suppression réelle.
+  - `GET /etablissements/{id}/photos-publiques` — résout les liens signés LuluFiles à la demande, **appelé uniquement pour un établissement précis** (jamais en boucle sur toute une page d'annuaire, pour ne pas multiplier les appels vers LuluFiles — voir le risque de quota déjà signalé sur ce service). `POST`/`DELETE /etablissements/{id}/photos` (A+ de l'établissement ou A++ sans restriction, via `verifier_portee_etablissement` — voir `core/deps.py` et la synchro du 2026-09-26, max 8 photos) gèrent l'upload/suppression réelle.
+- `classes_router` (sans préfixe, monté séparément dans `main.py`) : `POST/GET /classes/{id}/affectations` et `DELETE /affectations/{id}` (A+/A++, gère `AffectationEnseignant` — exige un `Contrat` SIGNE préalable avec l'établissement de la classe), `GET /mes-classes-affectees` (Enseignant — ses classes assignées, remplace la découverte via un `Contrat` établissement-large).
 
 ### app/modules/inscriptions/
 - `models.py` — `Eleve` (identité de l'élève, `nationalite` enum NATIONALE/ETRANGERE, `utilisateur_id` nullable tant que non validée), `Inscription` (`statut` : en_attente_consentement_parental/soumise/validee/rejetee), enums `StatutInscription`, `Nationalite`.
@@ -95,7 +96,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 
 ### app/modules/controle_acces/ (UC-11/UC-12/UC-17)
 - `models.py` — `DesignationControleur` (établissement, utilisateur, `service` transport/cantine/evenement, `evenement_id` en string simple — pas une vraie FK, la table `evenements` n'existe pas encore à cette migration).
-- `router.py` — `POST/GET /etablissements/{id}/controleurs`, `DELETE /controleurs/{id}` (A+ seul). Expose `verifier_admin_de_l_etablissement()` et `est_controleur_designe()`, réutilisées par `services_scolaires`, `billetterie`, `messagerie`, `visites_virtuelles`.
+- `router.py` — `POST/GET /etablissements/{id}/controleurs`, `DELETE /controleurs/{id}` (A+ de l'établissement ou A++). Expose `verifier_admin_de_l_etablissement()` (délègue désormais à `core/deps.py::verifier_portee_etablissement`, seule source de vérité — voir la synchro du 2026-09-26) et `est_controleur_designe()`, réutilisées par `services_scolaires`, `billetterie`, `messagerie`, `visites_virtuelles`.
 
 ### app/modules/services_scolaires/ (UC-11, UC-12)
 - `models.py` — `LigneTransport`/`TicketTransport`, `TypeRepasCantine`/`TicketCantine` (même `StatutTicket` partagé : acheté/validé/expiré/remboursé, `paiement_confirme` distinct du statut).
@@ -237,6 +238,25 @@ volontairement court-circuité, son absence est l'état normal en régime établ
 PDF/vidéo (`LULUFILES_ID_PLACEHOLDER`), jamais un vrai envoi.
 
 ## Dernière synchronisation
+2026-09-26 (encore plus tard, refonte RBAC) — Audit complet des 5 rôles sur les 14 modules
+backend (demandé explicitement, pas préventif) a révélé 3 trous : (1) A++ bloqué (403) sur
+~30 endpoints dans 9 modules à cause de 4 copies indépendantes d'un helper
+`_verifier_admin_de_l_etablissement` codées en `if role != ADMIN_ETABLISSEMENT: refuse`, qui
+ne laissaient jamais passer A++ — centralisées en une seule fonction partagée
+(`core/deps.py::verifier_portee_etablissement`) ; (2) deux endpoints sans AUCUNE vérification
+de portée (`evaluations.obtenir_devoir`, `evaluations.valider_passage`) et
+`lister_referentiels` qui exposait les propositions de coefficient d'un établissement
+concurrent à un A+ — corrigés ; (3) aucune table ne liait un enseignant à ses classes
+précises (seul `Contrat`, à l'échelle de l'établissement entier, existait) — nouvelle table
+`AffectationEnseignant` (migration `0005`) + endpoints de gestion (voir section
+`app/modules/etablissements/` ci-dessus), devenue le vrai filtre pour créer/gérer
+cours/quiz/devoirs/sessions live (remplace `_verifier_enseignant_rattache` établissement-large
+dans `pedagogie`/`cours_direct`/`evaluations`, désormais centralisée dans `pedagogie/router.py`
+et importée par les deux autres). `scripts/seed_mega.py` crée désormais une
+`AffectationEnseignant` par classe peuplée. Nouveau fichier `tests/test_rbac_portee.py`
+verrouillant les 3 chantiers ; fixtures/tests e2e existants mis à jour en conséquence.
+**151 tests passants**, aucune régression.
+
 2026-09-26 (encore plus tard, marketplace, seed) — `scripts/seed_mega.py` étendu pour peupler la Phase 4 (marketplace étudiante) : `creer_marketplace_pour_etablissement`, appelée pour chaque établissement juste après `creer_visite_virtuelle`. Génère annonces + photo (placeholder LuluFiles) + signalements occasionnels + transactions couvrant tout le cycle de séquestre (y compris contestations acceptées/rejetées), avec le statut de l'annonce toujours recalculé en cohérence avec sa transaction. Vérifié isolément sur 80 graines aléatoires (SQLite en mémoire) avant intégration, aucune erreur, les 8 statuts de transaction et les 3 décisions de contestation tous atteints.
 
 2026-09-26 (encore plus tard, marketplace, e2e) — Étape 5 (validation de bout en bout) close pour la Phase 4 : `tests/test_e2e_parcours_phase4_marketplace.py` rejoue UC-20 → UC-21 → UC-22 dans l'ordre réel (annonce → signalement traité → réservation → paiement séquestré via webhook → remise → confirmation → reversement au vendeur par l'A+), un seul jeu d'établissement/classe/vendeur/acheteur — passé du premier coup. Scan de sécurité de la méthode `lucio-dev` exécuté (`bandit`+`pip-audit` installés pour l'occasion) : bandit 0 problème sur le nouveau module ; pip-audit signale 2 CVE sur `ecdsa` 0.19.2 (`PYSEC-2026-1325`, dépendance transitive de `python-jose`, sans fix disponible) — non bloquant, HS256 utilisé partout sur cette plateforme (jamais le chemin ECDSA vulnérable), dépendance antérieure à ce lot. Relecture manuelle de la checklist sécurité (IDOR, montants côté serveur, non-contournement du séquestre) sans anomalie trouvée. **143 tests passants au total**, aucune régression. Migration `0004` toujours pas vérifiée contre un vrai Postgres (aucune instance disponible dans cet environnement de dev) — à faire avant le déploiement.
