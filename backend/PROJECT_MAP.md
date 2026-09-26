@@ -28,7 +28,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 
 **Commun**
 - `alembic/` — migrations (une par évolution de schéma, jamais réécrites une fois appliquées)
-- `scripts/` — outils one-shot serveur (seed du tout premier compte A++)
+- `scripts/` — outils one-shot serveur (seed du tout premier compte A++) et `seed_mega.py` (voir section dédiée ci-dessous)
 - `tests/` — pytest, SQLite en mémoire (`StaticPool` pour partager la connexion entre threads), tous les services externes mockés (Brevo/FreeLLM/LuluFiles) — aucun appel réseau réel dans la suite. `test_e2e_parcours_complet.py` rejoue tout le parcours UC-01 à UC-10 dans l'ordre réel (Phase 1), `test_e2e_parcours_phase2_3.py` fait de même pour UC-11 à UC-19 (Phase 2/3), en plus des tests unitaires par module
 
 ## Fichiers clés
@@ -143,6 +143,7 @@ Toutes appliquées en réel sur la base configurée dans `.env` (upgrade **et** 
 
 ### scripts/
 - `seed_admin_ministeriel.py` — crée le tout premier compte A++ (aucune route API ne le fait, choix de sécurité assumé). À exécuter une fois au déploiement, directement sur le serveur.
+- `seed_mega.py` — seed de développement « grandeur nature » : peuple **toutes** les tables applicatives (35+ tables, Phase 1 + Phase 2/3) avec un volume représentatif du système éducatif béninois. Voir section dédiée ci-dessous.
 
 ## Modèle de données (résumé)
 `Utilisateur` (1) → (0..1) `Tuteur` | `Enseignant` | `AdminEtablissement`. `AdminEtablissement` (N) → (1) `Etablissement` (1) → (N) `Classe`. `Poste` (1) → (N) `CritereDocumentPoste`, (1) → (N) `Candidature` (1) → (N) `DocumentCandidature`, (1) → (0..1) `VerificationCasierJudiciaire`, (1) → (0..1) `Contestation`, (1) → (0..1) `Contrat`.
@@ -179,5 +180,55 @@ Implémenté endpoint par endpoint après validation des cas d'utilisation (`../
 
 **Étape 5 (validation de bout en bout) close** : `tests/test_e2e_parcours_phase2_3.py` — même principe que `test_e2e_parcours_complet.py` (Phase 1), un seul jeu d'objets réutilisé à travers tous les modules plutôt que des fixtures isolées par test. Ordre rejoué : messagerie (groupe de classe auto-créé, DM tuteur→enfant, DM adulte→élève refusé, signalement traité) → El Professor + cours vidéo → cours en direct (consentement caméra, démarrage, participation, fin) → tickets transport et cantine (même enseignant cumulant les deux désignations de Contrôleur) → billetterie → visite virtuelle 3D → micro-job (offre → paiement → déclaration → validation → reversement A++). N'a pas révélé de bug d'intégration (contrairement à la Phase 1, qui en avait révélé plusieurs) — les modules Phase 2/3 réutilisent systématiquement les mêmes helpers RBAC (`verifier_admin_de_l_etablissement`, `est_controleur_designe`) que les tests unitaires exerçaient déjà.
 
+## Seed de développement grandeur nature (`scripts/seed_mega.py`)
+
+Créé sur demande explicite de l'utilisateur (« tests grandeur nature »), pour disposer d'un
+jeu de données réaliste couvrant les 18 UC implémentés sans passer par des dizaines de
+comptes créés manuellement. Usage : `cd backend && python scripts/seed_mega.py --yes`
+(`--scale` ajuste tous les volumes, `--seed` change le tirage aléatoire — reproductible).
+
+**Ce qu'il fait** : réinitialise entièrement le schéma (`Base.metadata.drop_all` puis
+`create_all` — même technique que `tests/conftest.py` sur SQLite, appliquée ici à Postgres)
+puis insère directement via SQLAlchemy (sans passer par les endpoints HTTP, pour la vitesse)
+~30 établissements (10 EP, 10 ES moitié général/moitié technique, 10 UP moitié
+public/moitié privé), avec la vraie taxonomie béninoise : niveaux Maternelle→CM2, séries
+générales A1/A2/B/C/D et techniques F2-F4/G1-G3 encodées directement dans `Classe.niveau`
+(pas de colonne `filiere` dédiée — le modèle n'en a pas, volontairement non modifié pour
+un simple seed), filières universitaires réalistes (Droit, Génie Civil, Informatique de
+Gestion, etc.) avec leurs propres matières. Résultat typique (`--scale 1.0`) : 370 classes,
+~4400 élèves/inscriptions, ~6200 utilisateurs, et un volume cohérent sur les 35 tables
+restantes (recrutement, pédagogie, évaluations, actes, messagerie, cours en direct,
+transport/cantine, billetterie, micro-jobs, visites virtuelles) — recensement exact dans le
+récapitulatif imprimé en fin d'exécution. Tous les comptes partagent le mot de passe
+`Password1!` (mot de passe permanent, flux OTP volontairement court-circuité).
+
+**Piège réel rencontré et corrigé** : un premier jet faisait un seul `db.add()` par ligne
+puis un unique `commit()` final, en supposant que SQLAlchemy trierait automatiquement les
+INSERT par dépendance de clé étrangère (comportement bien réel... mais seulement quand des
+`relationship()` relient les mappers). Aucun modèle de ce projet n'utilise `relationship()`
+pour ses clés étrangères (que des colonnes id brutes) : sans elles, l'ordre d'insertion
+n'est pas garanti, ce qui provoquait des `ForeignKeyViolation` aléatoires (reproduit dans un
+cas minimal à 2 tables sans aucune complexité annexe). Corrigé en remplaçant tout `db.add`
+par un helper `add()` qui `flush()` immédiatement après chaque ajout — chaque ligne devient
+réelle dans la transaction en cours avant que la suivante ne puisse la référencer, sans rien
+perdre de l'atomicité globale (un seul `commit()` final).
+
+**Second piège** : `Base.metadata.drop_all`/`create_all` ne touchent jamais la table
+`alembic_version` (hors de `Base.metadata`) — après un seed, `alembic upgrade head`
+croirait la base vierge et rejouerait toutes les migrations sur des tables déjà présentes.
+Le script aligne donc `alembic_version` sur `head` via `alembic.command.stamp(..., purge=True)`
+juste après le reset (`purge=True` efface la table plutôt que de calculer un delta depuis
+son contenu courant — nécessaire ici car l'historique de migrations de ce projet a été
+squashé en une seule révision (`0001_schema_initial`), rendant tout ancien contenu de
+`alembic_version` incompatible).
+
+**Limites assumées** : `etablissement_photos` reste vide (nécessiterait de vrais envois
+LuluFiles, hors périmètre d'un seed hors-ligne) ; `otp_verifications` reste vide (flux OTP
+volontairement court-circuité, son absence est l'état normal en régime établi).
+
 ## Dernière synchronisation
+2026-09-26 (plus tard) — Ajout de `scripts/seed_mega.py`, seed de développement peuplant
+toutes les tables applicatives à volume « grandeur nature » (voir section dédiée
+ci-dessus). Aucun changement du schéma ni des routers — outil de développement pur.
+
 2026-09-25 — Phase 2/3 : backend complet pour les 9 UC (tickets transport/cantine, contrôle d'accès, billetterie, messagerie, El Professor, cours vidéo, cours en direct, visites 3D/drone, micro-jobs+séquestre), 8 migrations appliquées en réel, **et validation de bout en bout** : `tests/test_e2e_parcours_phase2_3.py` rejoue les 9 UC dans un ordre d'usage réel avec les mêmes établissement/classe/enseignant/élève/tuteur, paiement Kkiapay réellement bouclé (amorcer + webhook) à chaque étape payante — passé du premier coup après deux ajustements mineurs. **120 tests passants** (75 Phase 1 + 45 Phase 2/3), aucune régression. Webhook Kkiapay extrait de `actes/` vers un module `paiements/` partagé.
