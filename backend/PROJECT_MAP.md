@@ -16,6 +16,9 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/evaluations/` — devoirs, soumissions, référentiels de coefficients (UC-09), bulletins
 - `app/modules/actes/` — catalogue d'actes académiques par établissement, demandes (réclamation ou acte payant)
 
+**Phase 4** (voir `../docs/cas-utilisation-phase-4-marketplace.md`)
+- `app/modules/marketplace/` — annonces, photos, signalements, transactions et séquestre, contestations (UC-20/21/22)
+
 **Phase 2/3** (voir `../docs/cas-utilisation-phase-2-3.md`)
 - `app/modules/controle_acces/` — désignation du Contrôleur/Ticketeur, partagée par tickets/billetterie
 - `app/modules/services_scolaires/` — tickets transport (UC-11) et cantine (UC-12)
@@ -118,6 +121,11 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `models.py` — `OffreMicroJob`, `MissionMicroJob` (séquestre "Option A" — voir ADR-008 : le paiement transite par le compte Kkiapay unique de LuluSchools, le séquestre n'est qu'un statut suivi ici, pas un mécanisme Kkiapay natif), `ContestationMicroJob`.
 - `router.py` — rôles autorisés (prestataire ou client) : Enseignant/Tuteur/A+/A++, **Élève structurellement exclu** (âge minimum légal de rémunération d'un mineur hors périmètre loi n° 2017-20, ADR-008). Validation tacite après 5 jours appliquée paresseusement (`_appliquer_validation_tacite`, pas de tâche planifiée). Arbitrage des contestations et reversement au prestataire réservés à l'**A++** (pas d'établissement résoluble pour une mission — un Tuteur prestataire n'en a aucun — correction du premier jet du contrat).
 
+### app/modules/marketplace/ (UC-20/21/22, Phase 4)
+- `models.py` — `AnnonceMarketplace` (`etablissement_id` denormalisé, fixé à la publication à partir de l'établissement du vendeur — pas recalculé dynamiquement comme le groupe de classe de messagerie), `PhotoAnnonceMarketplace`, `SignalementAnnonceMarketplace`, `TransactionMarketplace` (séquestre "Option A", même modèle qu'UC-18/ADR-008 ; `annonce_id` **pas** unique — une transaction annulée/remboursée ne doit jamais bloquer une réservation ultérieure de la même annonce), `ContestationMarketplace`.
+- `router.py` — réservé aux élèves ≥16 ans (réutilise `AGE_MAJORITE_NUMERIQUE`/`_age_a` d'`inscriptions/router.py`, pas dupliqué) inscrits et validés dans l'établissement concerné (`_verifier_eleve_de_l_etablissement`, calcul dynamique via `Eleve`/`Inscription VALIDEE`/`Classe`, même esprit que `messagerie/router.py`). Upload multipart de 1..n photos à la création (`Form`+`File`, même pattern que `recrutement.postuler`), au moins une obligatoire (`422` sinon). Arbitrage des contestations et reversement au vendeur réservés à l'**A+ de l'établissement** (pas l'A++ comme les micro-jobs, UC-18) — non ambigu ici car vendeur et acheteur sont toujours du même établissement. Retrait d'une annonce par l'A+ rembourse/annule automatiquement la transaction en cours si l'annonce était `réservée`. Validation tacite de la réception après 5 jours appliquée paresseusement (`_appliquer_confirmation_tacite`, même technique que UC-18), pas de tâche planifiée.
+- Webhook Kkiapay (`app/modules/paiements/router.py`) étendu avec `_confirmer_transaction_marketplace`, même séquence d'essais que les autres ressources payantes.
+
 ### alembic/versions/
 **Squashées en une seule migration le 2026-09-26** : `0001_schema_initial.py`, générée par `alembic revision --autogenerate` contre une base vide (donc directement depuis l'état actuel des modèles SQLAlchemy, pas depuis l'historique des 22 migrations précédentes, supprimées). Déclenché par un vrai bug de déploiement Render (l'ancienne `0010_formulaires_llm.py` faisait `DROP TYPE statutsoumission` puis recréait aussitôt une table l'utilisant, ce qui échouait avec `UndefinedObject: type "statutsoumission" does not exist`) — voir le docstring de `0001_schema_initial.py` pour le détail complet, et la section `seed_mega.py` ci-dessous pour l'impact sur `alembic_version`.
 
@@ -211,6 +219,8 @@ LuluFiles, hors périmètre d'un seed hors-ligne) ; `otp_verifications` reste vi
 volontairement court-circuité, son absence est l'état normal en régime établi).
 
 ## Dernière synchronisation
+2026-09-26 (encore plus tard, marketplace) — Backend complet pour la Phase 4 (marketplace étudiante, UC-20/21/22) : module `app/modules/marketplace/` (annonces + photos LuluFiles + signalements + transactions/séquestre + contestations), migration `0004_marketplace.py`, webhook Kkiapay étendu (`_confirmer_transaction_marketplace`). Réutilise systématiquement des helpers déjà existants plutôt que d'en dupliquer : `AGE_MAJORITE_NUMERIQUE`/`_age_a` (inscriptions), `verifier_admin_de_l_etablissement` (contrôle d'accès), le pattern séquestre/validation tacite d'UC-18 et le pattern upload multipart de `recrutement.postuler`. Arbitrage et reversement confiés à l'A+ de l'établissement (pas l'A++, contrairement aux micro-jobs) car vendeur et acheteur sont toujours du même établissement. **11 nouveaux tests** (`tests/test_marketplace.py`), **141 tests passants au total**, aucune régression. Migration vérifiée par `alembic heads`/`history` (chaîne cohérente depuis `0003`) ; pas encore appliquée contre un Postgres réel dans cet environnement (aucune instance locale disponible ici) — à faire avant l'étape 5 (validation de bout en bout) ou le déploiement.
+
 2026-09-26 (encore plus tard) — Squash des 22 migrations Alembic en une seule
 (`0001_schema_initial.py`), déclenché par un vrai échec de déploiement Render
 (`UndefinedObject: type "statutsoumission" does not exist`, causé par l'ancienne

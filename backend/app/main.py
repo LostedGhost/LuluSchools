@@ -17,6 +17,7 @@ from app.modules.identite.router import auth_router, enseignant_router, me_route
 from app.modules.identite.router import router as identite_router
 from app.modules.inscriptions.router import mon_espace_router as inscriptions_mon_espace_router
 from app.modules.inscriptions.router import router as inscriptions_router
+from app.modules.marketplace.router import router as marketplace_router
 from app.modules.messagerie.router import router as messagerie_router
 from app.modules.micro_jobs.router import router as micro_jobs_router
 from app.modules.paiements.router import router as kkiapay_webhook_router
@@ -79,4 +80,5 @@ app.include_router(messagerie_router, prefix="/api/v1")
 app.include_router(cours_direct_router, prefix="/api/v1")
 app.include_router(visites_virtuelles_router, prefix="/api/v1")
 app.include_router(micro_jobs_router, prefix="/api/v1")
+app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(kkiapay_webhook_router, prefix="/api/v1")
