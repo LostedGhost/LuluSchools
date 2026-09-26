@@ -1569,14 +1569,10 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Ignore la vérification ENVIRONMENT=development.")
     args = parser.parse_args()
 
-    if settings.environment != "development" and not args.force:
-        print(
-            f"ENVIRONMENT={settings.environment!r} (pas 'development') : ce script REINITIALISE et REMPLACE "
-            "tout le contenu de la base configuree dans DATABASE_URL. Relancez avec --force si vous etes "
-            "absolument certain de la base ciblee."
-        )
-        raise SystemExit(1)
-
+    # L'aperçu (cible, volumes, avertissement) s'affiche TOUJOURS avant toute
+    # verification de garde-fou, y compris quand --force/--yes manquent encore :
+    # sur une base distante (Render), c'est souvent le seul moment ou on peut
+    # relire "Base ciblee" avant de decider de continuer.
     cfg = Config(scale=args.scale)
     n_total_etabs = cfg.n_ep + cfg.n_es + cfg.n_up
 
@@ -1589,6 +1585,13 @@ def main() -> None:
     )
     print("\nCE SCRIPT VA SUPPRIMER PUIS RECREER TOUTES LES TABLES DE L'APPLICATION (DROP + CREATE).")
     print("Toute donnee actuellement en base sera DEFINITIVEMENT PERDUE.\n")
+
+    if settings.environment != "development" and not args.force:
+        print(
+            f"ENVIRONMENT={settings.environment!r} (pas 'development') : relancez avec --force si vous etes "
+            "absolument certain de la base ciblee ci-dessus."
+        )
+        raise SystemExit(1)
 
     if not args.yes:
         print("Relancez avec --yes pour confirmer l'execution.")
