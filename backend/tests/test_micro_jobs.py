@@ -38,22 +38,24 @@ def _publier_et_payer_offre(client, headers, kkiapay_secret, prix=5000):
     return offre
 
 
-def _offre_acceptee(client, ctx, kkiapay_secret):
-    """Tuteur publie et paie (client), enseignant accepte (prestataire remunere)."""
+def _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers):
+    """Tuteur publie et paie (client), etudiant accepte (prestataire remunere) - UC-57 :
+    seul un etudiant peut desormais etre prestataire, un enseignant/tuteur/admin ne le
+    peut plus (revise par rapport au comportement pre-Phase-6)."""
     offre = _publier_et_payer_offre(client, ctx["tuteur_headers"], kkiapay_secret)
-    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"]).json()
+    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers).json()
     return offre, mission
 
 
 def test_parcours_complet_mission_validee_et_reversee(
-    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers, etudiant_headers
 ):
     ctx = classe_avec_enseignant_et_eleve
-    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret)
+    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers)
     assert mission["statut"] == "en_cours"
     assert mission["paiement_confirme"] is True
 
-    fin = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
+    fin = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
     assert fin.status_code == 200
     assert fin.json()["statut"] == "terminee_declaree"
 
@@ -69,13 +71,13 @@ def test_parcours_complet_mission_validee_et_reversee(
     assert reversement.status_code == 200
     assert reversement.json()["statut"] == "payee"
 
-    historique_prestataire = client.get("/api/v1/mes-missions-micro-job", headers=ctx["enseignant_headers"])
+    historique_prestataire = client.get("/api/v1/mes-missions-micro-job", headers=etudiant_headers)
     assert len(historique_prestataire.json()) == 1
     historique_client = client.get("/api/v1/mes-missions-micro-job", headers=ctx["tuteur_headers"])
     assert len(historique_client.json()) == 1
 
 
-def test_offre_non_payee_ni_visible_ni_acceptable(client, classe_avec_enseignant_et_eleve):
+def test_offre_non_payee_ni_visible_ni_acceptable(client, classe_avec_enseignant_et_eleve, etudiant_headers):
     ctx = classe_avec_enseignant_et_eleve
     offre = client.post(
         "/api/v1/micro-jobs/offres",
@@ -83,30 +85,54 @@ def test_offre_non_payee_ni_visible_ni_acceptable(client, classe_avec_enseignant
         headers=ctx["tuteur_headers"],
     ).json()
 
-    liste = client.get("/api/v1/micro-jobs/offres", headers=ctx["enseignant_headers"])
+    liste = client.get("/api/v1/micro-jobs/offres", headers=etudiant_headers)
     assert offre["id"] not in [o["id"] for o in liste.json()]
 
-    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"])
+    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers)
     assert refus.status_code == 409
 
 
-def test_eleve_peut_publier_et_payer_mais_pas_accepter(client, classe_avec_enseignant_et_eleve, kkiapay_secret):
+def test_eleve_ep_es_ne_peut_ni_publier_ni_accepter(client, classe_avec_enseignant_et_eleve, kkiapay_secret):
+    """UC-57 : un eleve EP/ES (pas etudiant) est desormais exclu des DEUX cotes -
+    l'ancien comportement (client ouvert a tout Eleve) ne distinguait pas etudiant/eleve."""
     ctx = classe_avec_enseignant_et_eleve
-    offre = _publier_et_payer_offre(client, ctx["eleve_headers"], kkiapay_secret)
+    refus_publication = client.post(
+        "/api/v1/micro-jobs/offres",
+        json={"titre": "Cours", "description": "Test", "prix": 1000},
+        headers=ctx["eleve_headers"],
+    )
+    assert refus_publication.status_code == 403
+
+
+def test_adulte_peut_publier_et_payer_mais_pas_accepter(
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, etudiant_headers
+):
+    """UC-57 (arbitrage utilisateur du 2026-09-26) : un adulte (enseignant/tuteur/A+/A++)
+    garde l'acces CLIENT (publier/payer) mais perd desormais l'acces PRESTATAIRE (repondre
+    a une offre, etre remunere) - les micro-jobs sont un revenu d'appoint etudiant."""
+    ctx = classe_avec_enseignant_et_eleve
+    offre = _publier_et_payer_offre(client, ctx["enseignant_headers"], kkiapay_secret)
     assert offre["statut"] == "en_attente_paiement"
 
-    offre_payee = client.get(f"/api/v1/micro-jobs/offres/{offre['id']}", headers=ctx["eleve_headers"]).json()
+    offre_payee = client.get(f"/api/v1/micro-jobs/offres/{offre['id']}", headers=ctx["enseignant_headers"]).json()
     assert offre_payee["statut"] == "ouverte"
     assert offre_payee["paiement_confirme"] is True
 
-    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["eleve_headers"])
-    assert refus.status_code == 403
+    refus_soi_meme = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"])
+    assert refus_soi_meme.status_code == 403
+
+    autre_offre = _publier_et_payer_offre(client, ctx["tuteur_headers"], kkiapay_secret, prix=1500)
+    refus_autre = client.post(f"/api/v1/micro-jobs/offres/{autre_offre['id']}/accepter", headers=ctx["enseignant_headers"])
+    assert refus_autre.status_code == 403
+
+    # Un etudiant, lui, peut toujours accepter cette meme offre.
+    accepte = client.post(f"/api/v1/micro-jobs/offres/{autre_offre['id']}/accepter", headers=etudiant_headers)
+    assert accepte.status_code == 201
 
 
-def test_impossible_d_accepter_sa_propre_offre(client, classe_avec_enseignant_et_eleve, kkiapay_secret):
-    ctx = classe_avec_enseignant_et_eleve
-    offre = _publier_et_payer_offre(client, ctx["enseignant_headers"], kkiapay_secret, prix=1000)
-    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"])
+def test_impossible_d_accepter_sa_propre_offre(client, etudiant_headers, kkiapay_secret):
+    offre = _publier_et_payer_offre(client, etudiant_headers, kkiapay_secret, prix=1000)
+    refus = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers)
     assert refus.status_code == 409
 
 
@@ -123,11 +149,11 @@ def test_annuler_offre_non_payee(client, classe_avec_enseignant_et_eleve):
 
 
 def test_contestation_rejetee_exige_un_motif_et_valide_la_mission(
-    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers, etudiant_headers
 ):
     ctx = classe_avec_enseignant_et_eleve
-    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret)
-    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
+    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers)
+    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
 
     contestation = client.post(
         f"/api/v1/missions-micro-job/{mission['id']}/contester",
@@ -156,11 +182,11 @@ def test_contestation_rejetee_exige_un_motif_et_valide_la_mission(
 
 
 def test_contestation_acceptee_rembourse_le_client(
-    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers, etudiant_headers
 ):
     ctx = classe_avec_enseignant_et_eleve
-    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret)
-    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
+    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers)
+    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
     contestation = client.post(
         f"/api/v1/missions-micro-job/{mission['id']}/contester",
         json={"motif": "Travail non conforme"},
@@ -179,13 +205,13 @@ def test_contestation_acceptee_rembourse_le_client(
 
 
 def test_validation_tacite_apres_le_delai(
-    client, classe_avec_enseignant_et_eleve, kkiapay_secret, db_session
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, db_session, etudiant_headers
 ):
     from app.modules.micro_jobs.models import MissionMicroJob
 
     ctx = classe_avec_enseignant_et_eleve
-    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret)
-    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
+    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers)
+    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
 
     mission_db = db_session.get(MissionMicroJob, mission["id"])
     mission_db.date_limite_validation = datetime.now(timezone.utc) - timedelta(days=1)

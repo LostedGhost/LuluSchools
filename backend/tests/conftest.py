@@ -57,6 +57,11 @@ class FakeEmailClient:
             }
         )
 
+    def send_notification_email(self, to_email: str, to_name: str, subject: str, message: str) -> None:
+        if self.should_fail:
+            raise EmailDeliveryError("echec simule")
+        self.sent.append({"to_email": to_email, "to_name": to_name, "subject": subject, "message": message})
+
 
 @pytest.fixture()
 def fake_email_client() -> FakeEmailClient:
@@ -187,6 +192,79 @@ def admin_ministeriel(db_session):
 @pytest.fixture()
 def admin_ministeriel_headers(admin_ministeriel):
     return {"Authorization": f"Bearer {token_pour(admin_ministeriel)}"}
+
+
+@pytest.fixture()
+def etudiant_headers(client, fake_email_client, admin_ministeriel_headers):
+    """UC-57/58 (lot admin etablissement, arbitrage utilisateur du 2026-09-26) : un
+    ETUDIANT (eleve inscrit et valide dans un etablissement de type UP) - seul role
+    autorise cote PRESTATAIRE des micro-jobs (micro_jobs/router.py::
+    _exiger_prestataire_micro_job) et seul role autorise sur la marketplace
+    (marketplace/router.py::_verifier_eleve_de_l_etablissement)."""
+    etablissement = client.post(
+        "/api/v1/etablissements",
+        json={
+            "nom": "Universite Test Fixture",
+            "type": "UP",
+            "statut": "public",
+            "admin": {"nom": "Dossou", "prenom": "Universite", "email": "admin.universite.fixture@example.com"},
+            "latitude": 6.4,
+            "longitude": 2.4,
+        },
+        headers=admin_ministeriel_headers,
+    ).json()
+    mot_de_passe_temp = next(
+        m["mot_de_passe"] for m in fake_email_client.sent if m.get("to_email") == "admin.universite.fixture@example.com"
+    )
+    login_admin = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": "admin.universite.fixture@example.com", "mot_de_passe": mot_de_passe_temp},
+    ).json()
+    admin_headers = {"Authorization": f"Bearer {login_admin['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=admin_headers,
+    )
+
+    classe = client.post(
+        f"/api/v1/etablissements/{etablissement['id']}/classes",
+        json={"niveau": "1ère année de Licence", "capacite": 3, "politique_depassement": "ordre_arrivee"},
+        headers=admin_headers,
+    ).json()
+
+    tuteur_payload = {
+        "nom": "Zannou", "prenom": "Parent", "email": "parent.etudiant.fixture@example.com", "mot_de_passe": "Password1",
+    }
+    client.post("/api/v1/auth/tuteurs", json=tuteur_payload)
+    code = next(m["code"] for m in reversed(fake_email_client.sent) if m.get("to_email") == tuteur_payload["email"])
+    client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": tuteur_payload["email"], "code": code})
+    login_tuteur = client.post(
+        "/api/v1/auth/login", json={"identifiant": tuteur_payload["email"], "mot_de_passe": tuteur_payload["mot_de_passe"]}
+    ).json()
+    tuteur_headers = {"Authorization": f"Bearer {login_tuteur['access_token']}"}
+
+    inscription = client.post(
+        "/api/v1/inscriptions",
+        json={
+            "nom": "Etudiant", "prenom": "Test", "date_naissance": "2003-01-01", "classe_id": classe["id"],
+            "consentement_parental_donne": True,
+        },
+        headers=tuteur_headers,
+    ).json()
+    client.post(f"/api/v1/inscriptions/{inscription['id']}/valider", headers=admin_headers)
+    identifiants = next(m for m in fake_email_client.sent if "login_id" in m and m["to_email"] == tuteur_payload["email"])
+    login_etudiant = client.post(
+        "/api/v1/auth/login",
+        json={"identifiant": identifiants["login_id"], "mot_de_passe": identifiants["mot_de_passe"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login_etudiant['access_token']}"}
+    client.post(
+        "/api/v1/auth/change-password",
+        json={"ancien_mot_de_passe": identifiants["mot_de_passe"], "nouveau_mot_de_passe": "NouveauMdp1"},
+        headers=headers,
+    )
+    return headers
 
 
 @pytest.fixture()

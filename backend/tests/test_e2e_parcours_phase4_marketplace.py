@@ -77,14 +77,17 @@ def test_parcours_complet_de_la_phase_4_marketplace(
     secret = "secret-de-test-e2e-marketplace"
 
     # ---------------------------------------------------------------
-    # 0. Socle : etablissement, classe, deux eleves >=16 ans inscrits et valides
-    #    (vendeur et acheteur du meme etablissement, condition posee par UC-20).
+    # 0. Socle : etablissement UP, classe, deux eleves (etudiants) inscrits et valides
+    #    (vendeur et acheteur du meme etablissement, condition posee par UC-20). UC-58
+    #    (lot admin etablissement, arbitrage utilisateur du 2026-09-26) : la marketplace
+    #    est reservee aux ETUDIANTS (etablissement de type UP), plus au seul critere
+    #    d'age >=16 ans - l'etablissement de ce parcours est donc UP, pas ES.
     # ---------------------------------------------------------------
     etablissement = client.post(
         "/api/v1/etablissements",
         json={
-            "nom": "Lycee Toffa 1er",
-            "type": "ES",
+            "nom": "Universite Toffa 1er",
+            "type": "UP",
             "statut": "public",
             "admin": {"nom": "Sagbo", "prenom": "Colette", "email": "colette.sagbo.e2e4@example.com"},
             "latitude": 6.3654,
@@ -103,7 +106,7 @@ def test_parcours_complet_de_la_phase_4_marketplace(
 
     classe = client.post(
         f"/api/v1/etablissements/{etablissement['id']}/classes",
-        json={"niveau": "Terminale D", "capacite": 5, "politique_depassement": "ordre_arrivee"},
+        json={"niveau": "1ère année de Licence", "capacite": 5, "politique_depassement": "ordre_arrivee"},
         headers=admin_headers,
     ).json()
 

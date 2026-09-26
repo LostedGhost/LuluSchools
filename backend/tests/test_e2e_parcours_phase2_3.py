@@ -45,7 +45,7 @@ def _payer_via_webhook(client, transaction_id, secret):
 
 
 def test_parcours_complet_des_phases_2_et_3(
-    client, fake_email_client, fake_llm_client, admin_ministeriel_headers, monkeypatch
+    client, fake_email_client, fake_llm_client, admin_ministeriel_headers, etudiant_headers, monkeypatch
 ):
     from app.core.config import settings
 
@@ -316,9 +316,12 @@ def test_parcours_complet_des_phases_2_et_3(
     assert visite.status_code == 201
 
     # ---------------------------------------------------------------
-    # 7. UC-18 : micro-job - le tuteur publie et paie (client), l'enseignant accepte
+    # 7. UC-18 : micro-job - le tuteur publie et paie (client), un ETUDIANT accepte
     # (prestataire remunere) - le paiement est confirme des la publication, pas a
-    # l'acceptation (voir ADR-008 addendum, tout role peut publier s'il paie).
+    # l'acceptation (voir ADR-008 addendum, tout role peut publier s'il paie). UC-57
+    # (lot admin etablissement, arbitrage utilisateur du 2026-09-26) : seul un etudiant
+    # peut desormais etre prestataire, plus un enseignant (revise par rapport au
+    # comportement pre-Phase-6).
     # ---------------------------------------------------------------
     offre = client.post(
         "/api/v1/micro-jobs/offres",
@@ -331,9 +334,9 @@ def test_parcours_complet_des_phases_2_et_3(
         headers=tuteur_headers,
     )
     _payer_via_webhook(client, "tx-e2e-microjob", secret)
-    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=enseignant_headers).json()
+    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers).json()
     assert mission["paiement_confirme"] is True
-    fin_mission = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=enseignant_headers)
+    fin_mission = client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
     assert fin_mission.status_code == 200
     assert fin_mission.json()["statut"] == "terminee_declaree"
     validation_mission = client.post(f"/api/v1/missions-micro-job/{mission['id']}/valider", headers=tuteur_headers)
@@ -354,5 +357,5 @@ def test_parcours_complet_des_phases_2_et_3(
     assert len(client.get("/api/v1/mes-tickets-transport", headers=eleve_headers).json()) == 1
     assert len(client.get("/api/v1/mes-tickets-cantine", headers=eleve_headers).json()) == 1
     assert len(client.get("/api/v1/mes-billets", headers=tuteur_headers).json()) == 1
-    assert len(client.get("/api/v1/mes-missions-micro-job", headers=enseignant_headers).json()) == 1
+    assert len(client.get("/api/v1/mes-missions-micro-job", headers=etudiant_headers).json()) == 1
     assert len(client.get("/api/v1/mes-missions-micro-job", headers=tuteur_headers).json()) == 1

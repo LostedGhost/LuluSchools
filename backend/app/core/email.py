@@ -138,6 +138,18 @@ class BrevoEmailClient:
         )
         self._send(to_email, to_name, "Vos identifiants LuluSchools", html_content, text_content)
 
+    def send_notification_email(self, to_email: str, to_name: str, subject: str, message: str) -> None:
+        """UC-40/56 (lot admin etablissement) : notification generique (ex. rentree
+        ouverte, invitation a (re)inscrire) - contrairement a send_otp_email/
+        send_temporary_credentials_email, ne porte aucune donnee sensible (code, mot de
+        passe), le corps est un simple texte fourni par l'appelant."""
+        body_html = f"""
+              <h1 style="margin:0 0 16px 0; font-size:18px; color:{_INK};">Bonjour {to_name},</h1>
+              <p style="margin:0; font-size:14px; line-height:1.6; color:{_INK_SOFT}; white-space:pre-line;">{message}</p>"""
+        html_content = _wrap_email_html(preheader=subject, title=subject, body_html=body_html)
+        text_content = f"Bonjour {to_name},\n\n{message}\n"
+        self._send(to_email, to_name, subject, html_content, text_content)
+
 
 def get_email_client() -> BrevoEmailClient:
     return BrevoEmailClient()

@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.actes.models import StatutDemandeActe
 from app.modules.paiements.schemas import AmorcerPaiementRequest  # noqa: F401 (reexporte pour compat)
+from app.modules.recrutement.schemas import ChampFormulaire
 
 
 class TypeActeCreate(BaseModel):
@@ -11,6 +12,7 @@ class TypeActeCreate(BaseModel):
     prix: float = Field(ge=0, default=0)
     pieces_requises: str
     condition_eligibilite: str | None = None
+    schema_formulaire: list[ChampFormulaire] | None = None
 
 
 class TypeActeOut(BaseModel):
@@ -22,6 +24,7 @@ class TypeActeOut(BaseModel):
     prix: float
     pieces_requises: str
     condition_eligibilite: str | None
+    schema_formulaire: list[ChampFormulaire] | None
 
 
 class DemandeActeCreate(BaseModel):
@@ -32,6 +35,7 @@ class DemandeActeCreate(BaseModel):
     reference_evaluation: str | None = None
     motif: str | None = None
     eleve_utilisateur_id: str | None = None  # requis seulement quand le tuteur soumet pour son enfant
+    reponses_formulaire: dict | None = None  # UC-51/65 : champs non-fichier uniquement, voir POST .../pieces/{champ_id}
 
     @model_validator(mode="after")
     def _valider_exclusivite(self) -> "DemandeActeCreate":
@@ -54,6 +58,8 @@ class DemandeActeOut(BaseModel):
     eleve_matricule: str | None
     type_acte_id: str | None
     est_reclamation: bool
+    reponses_formulaire: dict | None
+    document_final_lulufiles_id: str | None
     statut: StatutDemandeActe
     paiement_confirme: bool
     motif_rejet: str | None
@@ -64,3 +70,9 @@ class TraiterDemandeRequest(BaseModel):
 
     decision: StatutDemandeActe
     motif_rejet: str | None = None
+
+
+class LienDocumentOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str

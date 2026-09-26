@@ -15,6 +15,7 @@ from app.core.deps import (
     verifier_portee_etablissement,
 )
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.formulaire import valider_reponses_formulaire
 from app.core.llm import DocumentScoringError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
 from app.modules.identite.models import Enseignant, RoleUtilisateur, Utilisateur
@@ -87,7 +88,16 @@ def creer_poste(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
-    poste = Poste(etablissement_id=etablissement_id, titre=payload.titre, statut=StatutPoste.OUVERT)
+    poste = Poste(
+        etablissement_id=etablissement_id,
+        titre=payload.titre,
+        description=payload.description,
+        matiere=payload.matiere,
+        remuneration_min=payload.remuneration_min,
+        remuneration_max=payload.remuneration_max,
+        schema_formulaire=[c.model_dump() for c in payload.schema_formulaire] if payload.schema_formulaire else None,
+        statut=StatutPoste.OUVERT,
+    )
     db.add(poste)
     db.flush()
     for critere in payload.criteres:
@@ -202,6 +212,7 @@ def postuler(
     types: list[str] = Form(...),
     fichiers: list[UploadFile] = File(...),
     casier_judiciaire: UploadFile = File(...),
+    reponses_formulaire: str | None = Form(None),
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
     llm_client: FreeLLMClient = Depends(get_llm_client),
@@ -221,9 +232,15 @@ def postuler(
             "documents_incomplets",
             "Les documents fournis ne correspondent pas exactement aux criteres du poste.",
         )
+    # UC-48/63 : reponses au schema_formulaire du poste, distinct des documents notes par
+    # l'IA ci-dessus (deux mecanismes complementaires, voir cahier des charges).
+    reponses_validees = valider_reponses_formulaire(poste.schema_formulaire, reponses_formulaire)
 
     candidature = Candidature(
-        poste_id=poste_id, enseignant_id=enseignant.id, statut=StatutCandidature.EN_EVALUATION
+        poste_id=poste_id,
+        enseignant_id=enseignant.id,
+        reponses_formulaire=reponses_validees,
+        statut=StatutCandidature.EN_EVALUATION,
     )
     db.add(candidature)
     db.flush()

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.modules.controle_acces.router import est_controleur_designe, verifier_a
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.paiements.schemas import AmorcerPaiementRequest
+from app.modules.ticketerie.generation import generer_pdf_ticket
 
 router = APIRouter(tags=["billetterie"])
 
@@ -250,6 +251,36 @@ def rembourser_billet(
     db.commit()
     db.refresh(billet)
     return billet
+
+
+@router.get("/billets/{billet_id}/pdf")
+def obtenir_pdf_billet(
+    billet_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+) -> Response:
+    """UC-54/68 (lot admin etablissement) : meme controle d'acces que la validation d'un
+    billet (proprietaire, controleur designe, ou admin de l'etablissement organisateur)."""
+    billet = db.get(BilletEvenement, billet_id)
+    if billet is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Billet introuvable.")
+    evenement = db.get(Evenement, billet.evenement_id)
+    est_proprietaire = billet.utilisateur_id == utilisateur.id
+    est_controleur = est_controleur_designe(
+        db, utilisateur.id, evenement.etablissement_id, ServiceControle.EVENEMENT, evenement.id
+    )
+    est_admin = utilisateur.role in (RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
+    if not (est_proprietaire or est_controleur or est_admin):
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce billet ne vous appartient pas.")
+    if est_admin and not est_proprietaire:
+        verifier_admin_de_l_etablissement(db, utilisateur, evenement.etablissement_id)
+
+    pdf = generer_pdf_ticket(
+        titre="Billet d'evenement",
+        sous_titre=evenement.titre,
+        type_ticket="evenement",
+        ticket_id=billet.id,
+        lignes_info=[("Lieu", evenement.lieu), ("Date", evenement.date_heure.isoformat()), ("Statut", billet.statut.value)],
+    )
+    return Response(content=pdf, media_type="application/pdf")
 
 
 @router.get("/mes-billets", response_model=list[BilletEvenementOut])

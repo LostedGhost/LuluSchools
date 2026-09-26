@@ -37,6 +37,11 @@ class Eleve(Base):
     date_naissance: Mapped[date] = mapped_column(Date)
     nationalite: Mapped[Nationalite] = mapped_column(Enum(Nationalite), default=Nationalite.NATIONALE)
     matricule: Mapped[str | None] = mapped_column(String(30), unique=True, index=True, nullable=True)
+    # UC-42/57 (lot admin etablissement) : upload reserve au titulaire du compte
+    # (eleve/etudiant lui-meme), jamais impose par un tiers - LuluFiles (ADR-003). Affichee
+    # uniquement dans la "vie scolaire" si l'eleve est un etudiant (etablissement UP),
+    # jamais pour un eleve EP/ES - regle appliquee cote lecture, pas ici.
+    photo_lulufiles_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     tuteur_id: Mapped[str | None] = mapped_column(ForeignKey("tuteurs.utilisateur_id"), nullable=True)
     utilisateur_id: Mapped[str | None] = mapped_column(
         ForeignKey("utilisateurs.id"), unique=True, nullable=True

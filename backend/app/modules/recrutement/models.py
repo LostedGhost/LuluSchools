@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, LargeBinary, String, Text
+from sqlalchemy import JSON, Date, DateTime, Enum, Float, ForeignKey, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -64,6 +64,17 @@ class Poste(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     etablissement_id: Mapped[str] = mapped_column(ForeignKey("etablissements.id"), index=True)
     titre: Mapped[str] = mapped_column(String(200))
+    # UC-47/62 (lot admin etablissement) : complete l'annonce - independants de `criteres`
+    # (notation IA des documents, inchange) et de `schema_formulaire` (collecte
+    # d'information contextuelle) - trois mecanismes qui coexistent sans se chevaucher.
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    matiere: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    remuneration_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    remuneration_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Liste de {id, label, type, requis, options?} - meme moteur que
+    # TypeActeAcademique.schema_formulaire (actes/models.py), un seul JSON schema pour
+    # les deux usages plutot que deux implementations dupliquees.
+    schema_formulaire: Mapped[list | None] = mapped_column(JSON, nullable=True)
     statut: Mapped[StatutPoste] = mapped_column(Enum(StatutPoste), default=StatutPoste.OUVERT)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -88,6 +99,9 @@ class Candidature(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     poste_id: Mapped[str] = mapped_column(ForeignKey("postes.id"), index=True)
     enseignant_id: Mapped[str] = mapped_column(ForeignKey("enseignants.utilisateur_id"), index=True)
+    # UC-48/63 : reponses au schema_formulaire du poste - {champ_id: valeur}, valeur =
+    # texte pour la plupart des types, lulufiles_file_id pour un champ type="fichier".
+    reponses_formulaire: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     statut: Mapped[StatutCandidature] = mapped_column(Enum(StatutCandidature))
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

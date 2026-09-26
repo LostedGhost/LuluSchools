@@ -6,12 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles
+from app.core.etudiant import est_etudiant
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client
 from app.modules.controle_acces.router import verifier_admin_de_l_etablissement
 from app.modules.etablissements.models import Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
-from app.modules.inscriptions.router import AGE_MAJORITE_NUMERIQUE, _age_a
 from app.modules.marketplace.models import (
     AnnonceMarketplace,
     CategorieAnnonce,
@@ -77,14 +77,17 @@ def _etablissement_actuel_de_l_eleve(db: Session, utilisateur_id: str) -> str | 
 
 
 def _verifier_eleve_de_l_etablissement(db: Session, utilisateur: Utilisateur, etablissement_id: str) -> Eleve:
-    """UC-20 : reserve aux eleves >=16 ans (meme seuil que l'auto-validation
-    d'inscription, Art. 446), inscrits et valides dans CET etablissement precis."""
+    """UC-58 (lot admin etablissement, arbitrage utilisateur du 2026-09-26) : reserve aux
+    ETUDIANTS (inscrits et valides dans un etablissement de type UP), pas plus au seul
+    critere d'age >=16 ans (Art. 446) - resserrement coherent avec le nom deja donne a
+    cette fonctionnalite depuis la Phase 4 ("marketplace etudiante"). Inscrits et valides
+    dans CET etablissement precis (inchange)."""
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
-    if eleve is None or _age_a(eleve.date_naissance) < AGE_MAJORITE_NUMERIQUE:
+    if eleve is None or not est_etudiant(db, eleve.id):
         raise api_error(
             status.HTTP_403_FORBIDDEN,
             "acces_refuse",
-            "La marketplace est reservee aux eleves de 16 ans ou plus.",
+            "La marketplace est reservee aux etudiants.",
         )
     if _etablissement_actuel_de_l_eleve(db, utilisateur.id) != etablissement_id:
         raise api_error(

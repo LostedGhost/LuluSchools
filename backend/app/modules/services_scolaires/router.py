@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -18,6 +18,7 @@ from app.modules.services_scolaires.models import (
     TicketTransport,
     TypeRepasCantine,
 )
+from app.modules.ticketerie.generation import generer_pdf_ticket
 from app.modules.services_scolaires.schemas import (
     LigneTransportCreate,
     LigneTransportOut,
@@ -237,6 +238,26 @@ def obtenir_ticket_transport(
     return ticket
 
 
+@router.get("/tickets-transport/{ticket_id}/pdf")
+def obtenir_pdf_ticket_transport(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> Response:
+    """UC-54/68 (lot admin etablissement) : meme controle d'acces que
+    obtenir_ticket_transport ci-dessus - reutilise, pas duplique."""
+    ticket = obtenir_ticket_transport(ticket_id, db, utilisateur)
+    ligne = db.get(LigneTransport, ticket.ligne_id)
+    pdf = generer_pdf_ticket(
+        titre="Ticket de transport",
+        sous_titre=ligne.nom,
+        type_ticket="transport",
+        ticket_id=ticket.id,
+        lignes_info=[("Date du trajet", ticket.date_trajet.isoformat()), ("Statut", ticket.statut.value)],
+    )
+    return Response(content=pdf, media_type="application/pdf")
+
+
 @router.get("/mes-tickets-transport", response_model=list[TicketTransportOut])
 def mes_tickets_transport(
     db: Session = Depends(get_db),
@@ -420,6 +441,24 @@ def obtenir_ticket_cantine(
     if est_admin and not est_proprietaire and not est_tuteur:
         verifier_admin_de_l_etablissement(db, utilisateur, type_repas.etablissement_id)
     return ticket
+
+
+@router.get("/tickets-cantine/{ticket_id}/pdf")
+def obtenir_pdf_ticket_cantine(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> Response:
+    ticket = obtenir_ticket_cantine(ticket_id, db, utilisateur)
+    type_repas = db.get(TypeRepasCantine, ticket.type_repas_id)
+    pdf = generer_pdf_ticket(
+        titre="Ticket de cantine",
+        sous_titre=type_repas.nom,
+        type_ticket="cantine",
+        ticket_id=ticket.id,
+        lignes_info=[("Date de service", ticket.date_service.isoformat()), ("Statut", ticket.statut.value)],
+    )
+    return Response(content=pdf, media_type="application/pdf")
 
 
 @router.get("/mes-tickets-cantine", response_model=list[TicketCantineOut])

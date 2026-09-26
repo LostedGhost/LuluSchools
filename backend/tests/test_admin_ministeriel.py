@@ -99,7 +99,9 @@ def test_validation_en_lot_de_propositions_referentiel(client, admin_ministeriel
     assert lot.json()[0]["statut"] == "valide"
 
 
-def _offre_acceptee(client, ctx, kkiapay_secret):
+def _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers):
+    """UC-57 (lot admin etablissement) : seul un etudiant peut desormais accepter une
+    offre (PRESTATAIRE), plus un enseignant/tuteur/admin."""
     offre = client.post(
         "/api/v1/micro-jobs/offres",
         json={"titre": "Cours de soutien", "description": "Aide aux devoirs", "prix": 5000},
@@ -111,16 +113,16 @@ def _offre_acceptee(client, ctx, kkiapay_secret):
         headers=ctx["tuteur_headers"],
     )
     _payer_via_webhook(client, f"tx-{offre['id']}", kkiapay_secret)
-    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=ctx["enseignant_headers"]).json()
+    mission = client.post(f"/api/v1/micro-jobs/offres/{offre['id']}/accepter", headers=etudiant_headers).json()
     return offre, mission
 
 
 def test_file_de_contestations_micro_job_avec_contexte(
-    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers, etudiant_headers
 ):
     ctx = classe_avec_enseignant_et_eleve
-    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret)
-    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
+    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers)
+    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
     contestation = client.post(
         f"/api/v1/missions-micro-job/{mission['id']}/contester",
         json={"motif": "Travail non conforme"},
@@ -136,11 +138,11 @@ def test_file_de_contestations_micro_job_avec_contexte(
 
 
 def test_file_des_reversements_en_attente(
-    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers
+    client, classe_avec_enseignant_et_eleve, kkiapay_secret, admin_ministeriel_headers, etudiant_headers
 ):
     ctx = classe_avec_enseignant_et_eleve
-    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret)
-    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=ctx["enseignant_headers"])
+    offre, mission = _offre_acceptee(client, ctx, kkiapay_secret, etudiant_headers)
+    client.post(f"/api/v1/missions-micro-job/{mission['id']}/declarer-fin", headers=etudiant_headers)
     client.post(f"/api/v1/missions-micro-job/{mission['id']}/valider", headers=ctx["tuteur_headers"])
 
     file_attente = client.get("/api/v1/missions-micro-job/a-reverser", headers=admin_ministeriel_headers)

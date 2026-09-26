@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
-from app.core.deps import api_error, require_roles
+from app.core.deps import api_error, get_current_active_user, require_roles
+from app.core.etudiant import est_etudiant
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+from app.modules.inscriptions.models import Eleve
 from app.modules.micro_jobs.models import (
     ContestationMicroJob,
     MissionMicroJob,
@@ -33,23 +35,46 @@ router = APIRouter(tags=["micro-jobs"])
 
 _DELAI_VALIDATION_TACITE = timedelta(days=5)
 
-# Cote CLIENT (publier une offre, la payer, valider/contester le travail rendu) :
-# ouvert a tous les roles authentifies, Eleve inclus - payer pour un service ne pose
-# pas de question d'age minimum de travail (voir OffreMicroJob docstring, ADR-008 addendum).
-_ROLES_CLIENT = (
-    RoleUtilisateur.ENSEIGNANT,
-    RoleUtilisateur.TUTEUR,
-    RoleUtilisateur.ADMIN_ETABLISSEMENT,
-    RoleUtilisateur.ADMIN_MINISTERIEL,
-    RoleUtilisateur.ELEVE,
-)
-# Cote PRESTATAIRE (accepter une offre, etre remunere pour le travail) : Eleve exclu.
-_ROLES_PRESTATAIRE = (
+_ROLES_ADULTES = (
     RoleUtilisateur.ENSEIGNANT,
     RoleUtilisateur.TUTEUR,
     RoleUtilisateur.ADMIN_ETABLISSEMENT,
     RoleUtilisateur.ADMIN_MINISTERIEL,
 )
+
+
+def _est_etudiant_utilisateur(db: Session, utilisateur: Utilisateur) -> bool:
+    if utilisateur.role != RoleUtilisateur.ELEVE:
+        return False
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
+    return eleve is not None and est_etudiant(db, eleve.id)
+
+
+def _exiger_client_micro_job(
+    db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+) -> Utilisateur:
+    """UC-57 (lot admin etablissement, arbitrage utilisateur du 2026-09-26) : CLIENT
+    (publier une offre, payer) ouvert aux adultes + aux etudiants (eleve inscrit et
+    valide dans un etablissement UP) - un eleve EP/ES est exclu, ce qu'aucune verification
+    explicite ne faisait avant ce lot (l'ancien _ROLES_CLIENT incluait tout ELEVE sans
+    distinction)."""
+    if utilisateur.role in _ROLES_ADULTES or _est_etudiant_utilisateur(db, utilisateur):
+        return utilisateur
+    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Reserve aux adultes et aux etudiants.")
+
+
+def _exiger_prestataire_micro_job(
+    db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+) -> Utilisateur:
+    """UC-57 : PRESTATAIRE (accepter une offre, etre remunere) reserve aux SEULS
+    etudiants - les adultes (Enseignant/Tuteur/A+/A++), auparavant seuls roles majeurs
+    autorises ici (ADR-008 addendum), en sont desormais exclus : les micro-jobs sont
+    penses comme un revenu d'appoint etudiant, pas un service entre adultes de la
+    plateforme (arbitrage explicite de l'utilisateur, corrige la premiere proposition du
+    cahier des charges qui excluait aussi les adultes du cote CLIENT)."""
+    if _est_etudiant_utilisateur(db, utilisateur):
+        return utilisateur
+    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Reserve aux etudiants.")
 
 
 def _aware_utc(moment: datetime) -> datetime:
@@ -73,7 +98,7 @@ def _appliquer_validation_tacite(db: Session, mission: MissionMicroJob) -> Missi
 def creer_offre(
     payload: OffreMicroJobCreate,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT)),
+    utilisateur: Utilisateur = Depends(_exiger_client_micro_job),
 ) -> OffreMicroJob:
     """UC-18 : publier une offre = se declarer CLIENT et s'engager a payer. L'offre
     n'est visible des prestataires qu'une fois le paiement confirme (voir
@@ -92,7 +117,7 @@ def amorcer_paiement_offre(
     offre_id: str,
     payload: AmorcerPaiementRequest,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT)),
+    utilisateur: Utilisateur = Depends(_exiger_client_micro_job),
 ) -> OffreMicroJob:
     offre = db.get(OffreMicroJob, offre_id)
     if offre is None:
@@ -110,7 +135,7 @@ def amorcer_paiement_offre(
 
 @router.post("/micro-jobs/offres/{offre_id}/annuler", response_model=OffreMicroJobOut)
 def annuler_offre(
-    offre_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
+    offre_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(_exiger_client_micro_job)
 ) -> OffreMicroJob:
     """Annulation reservee a une offre pas encore payee - une fois le paiement
     confirme (OUVERTE), l'offre suit le circuit normal (acceptation ou reste ouverte)."""
@@ -130,14 +155,14 @@ def annuler_offre(
 
 @router.get("/micro-jobs/offres", response_model=list[OffreMicroJobOut])
 def lister_offres(
-    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
+    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(_exiger_client_micro_job)
 ) -> list[OffreMicroJob]:
     return db.query(OffreMicroJob).filter(OffreMicroJob.statut == StatutOffreMicroJob.OUVERTE).all()
 
 
 @router.get("/micro-jobs/offres/{offre_id}", response_model=OffreMicroJobOut)
 def obtenir_offre(
-    offre_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
+    offre_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(_exiger_client_micro_job)
 ) -> OffreMicroJob:
     offre = db.get(OffreMicroJob, offre_id)
     if offre is None:
@@ -149,7 +174,7 @@ def obtenir_offre(
     "/micro-jobs/offres/{offre_id}/accepter", response_model=MissionMicroJobOut, status_code=status.HTTP_201_CREATED
 )
 def accepter_offre(
-    offre_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_PRESTATAIRE))
+    offre_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(_exiger_prestataire_micro_job)
 ) -> MissionMicroJob:
     """Accepter = devenir le PRESTATAIRE remunere. Reserve aux roles majeurs (Eleve
     exclu, voir ADR-008). Le paiement est deja confirme depuis la publication de
@@ -178,7 +203,7 @@ def accepter_offre(
 
 @router.post("/missions-micro-job/{mission_id}/declarer-fin", response_model=MissionMicroJobOut)
 def declarer_fin_mission(
-    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_PRESTATAIRE))
+    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(_exiger_prestataire_micro_job)
 ) -> MissionMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
     if mission is None:
@@ -198,7 +223,7 @@ def declarer_fin_mission(
 
 @router.post("/missions-micro-job/{mission_id}/valider", response_model=MissionMicroJobOut)
 def valider_mission(
-    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
+    mission_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(_exiger_client_micro_job)
 ) -> MissionMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
     if mission is None:
@@ -221,7 +246,7 @@ def contester_mission(
     mission_id: str,
     payload: ContesterMissionRequest,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT)),
+    utilisateur: Utilisateur = Depends(_exiger_client_micro_job),
 ) -> ContestationMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
     if mission is None:
@@ -400,7 +425,7 @@ def reverser_prestataire(
 
 @router.get("/mes-missions-micro-job", response_model=list[MissionMicroJobOut])
 def mes_missions(
-    db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(*_ROLES_CLIENT))
+    db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(_exiger_client_micro_job)
 ) -> list[MissionMicroJob]:
     mes_offre_ids = [o.id for o in db.query(OffreMicroJob).filter(OffreMicroJob.client_id == utilisateur.id).all()]
     query = db.query(MissionMicroJob).filter(

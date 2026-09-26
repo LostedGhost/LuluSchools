@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -10,6 +11,22 @@ from app.modules.recrutement.models import (
     StatutPoste,
     StatutProposition,
 )
+
+TypeChampFormulaire = Literal["texte_court", "texte_long", "fichier", "choix_unique", "choix_multiple"]
+
+
+class ChampFormulaire(BaseModel):
+    """UC-47/50/62/64 (lot admin etablissement) : un seul moteur de formulaire dynamique,
+    partage entre Poste (recrutement) et TypeActeAcademique (actes academiques) - pattern
+    JSON-schema-driven standard (type/label/requis/options par champ)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=50)
+    label: str = Field(min_length=1, max_length=200)
+    type: TypeChampFormulaire
+    requis: bool = False
+    options: list[str] | None = None
 
 
 class CritereDocumentCreate(BaseModel):
@@ -24,6 +41,11 @@ class PosteCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     titre: str
+    description: str | None = None
+    matiere: str | None = None
+    remuneration_min: float | None = Field(default=None, ge=0)
+    remuneration_max: float | None = Field(default=None, ge=0)
+    schema_formulaire: list[ChampFormulaire] | None = None
     criteres: list[CritereDocumentCreate]
 
 
@@ -41,6 +63,11 @@ class PosteOut(BaseModel):
     id: str
     etablissement_id: str
     titre: str
+    description: str | None
+    matiere: str | None
+    remuneration_min: float | None
+    remuneration_max: float | None
+    schema_formulaire: list[ChampFormulaire] | None
     statut: StatutPoste
     criteres: list[CritereDocumentOut]
 
@@ -68,6 +95,7 @@ class CandidatureOut(BaseModel):
     poste_id: str
     statut: StatutCandidature
     score: float | None
+    reponses_formulaire: dict | None
     documents: list[DocumentCandidatureOut]
     enseignant_nom: str
     enseignant_prenom: str

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
+from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.deps import (
     api_error,
     get_current_active_user,
@@ -20,28 +21,51 @@ from app.modules.etablissements.models import (
     Classe,
     Etablissement,
     EtablissementPhoto,
+    RentreeScolaire,
+    StatutRentree,
     TypeEtablissement,
+    annee_academique_courante,
 )
 from app.modules.etablissements.schemas import (
     ActionGroupeeEtablissementRequest,
     AffectationEnseignantCreate,
     AffectationEnseignantOut,
     AnnuairePubliqueOut,
+    BulletinVieScolaireOut,
     ClasseCreate,
     ClasseOut,
+    ConsoleCoursOut,
+    ConsoleCoursPageOut,
+    ConsoleEleveOut,
+    ConsoleElevesPageOut,
+    ConsoleEnseignantOut,
+    ConsoleEnseignantsPageOut,
+    ConsoleNoteOut,
+    ConsoleNotesPageOut,
+    ConsoleTuteurOut,
+    ConsoleTuteursPageOut,
     DescriptionUpdate,
     EtablissementCreate,
     EtablissementOut,
     EtablissementPhotoOut,
     EtablissementPhotoPubliqueOut,
     EtablissementVitrineOut,
+    InscriptionVieScolaireOut,
+    InviterTuteursResponse,
     LocalisationUpdate,
     PosteVitrineOut,
+    ReconduireClassesRequest,
+    RentreeCreate,
+    RentreeOut,
+    VieScolaireOut,
     VitrinePubliqueOut,
     VitrineTotauxOut,
 )
+from app.modules.evaluations.models import Bulletin
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.messagerie.models import Conversation, TypeConversation
+from app.modules.pedagogie.models import Cours
 from app.modules.recrutement.models import Contrat, Poste, StatutContrat, StatutPoste
 
 router = APIRouter(prefix="/etablissements", tags=["etablissements"])
@@ -356,6 +380,22 @@ def appliquer_action_groupee_etablissements(
     return etablissements
 
 
+def _resoudre_annee_academique(db: Session, etablissement_id: str, annee_demandee: str | None) -> str:
+    """UC-43/58 : si aucune annee n'est precisee, on reprend celle de la rentree OUVERTE
+    de l'etablissement (UC-39/55) si elle existe, sinon un repli calcule sur la date du
+    jour - jamais une erreur bloquante, la creation de classe ne doit pas exiger d'avoir
+    prealablement declare une rentree."""
+    if annee_demandee:
+        return annee_demandee
+    rentree_ouverte = (
+        db.query(RentreeScolaire)
+        .filter(RentreeScolaire.etablissement_id == etablissement_id, RentreeScolaire.statut == StatutRentree.OUVERTE)
+        .order_by(RentreeScolaire.created_at.desc())
+        .first()
+    )
+    return rentree_ouverte.annee_academique if rentree_ouverte is not None else annee_academique_courante()
+
+
 @router.post(
     "/{etablissement_id}/classes", response_model=ClasseOut, status_code=status.HTTP_201_CREATED
 )
@@ -372,6 +412,8 @@ def creer_classe(
     classe = Classe(
         etablissement_id=etablissement_id,
         niveau=payload.niveau,
+        filiere=payload.filiere,
+        annee_academique=_resoudre_annee_academique(db, etablissement_id, payload.annee_academique),
         capacite=payload.capacite,
         politique_depassement=payload.politique_depassement,
     )
@@ -469,10 +511,490 @@ def photos_publiques_etablissement(
 @router.get("/{etablissement_id}/classes", response_model=list[ClasseOut])
 def lister_classes(
     etablissement_id: str,
+    annee_academique: str | None = None,
     db: Session = Depends(get_db),
     _utilisateur: Utilisateur = Depends(get_current_user),
 ) -> list[Classe]:
-    return db.query(Classe).filter(Classe.etablissement_id == etablissement_id).all()
+    """UC-45/60 : `annee_academique` optionnel - un client qui veut voir toutes les
+    annees (ex. pour peupler un selecteur d'historique) omet le filtre."""
+    requete = db.query(Classe).filter(Classe.etablissement_id == etablissement_id)
+    if annee_academique:
+        requete = requete.filter(Classe.annee_academique == annee_academique)
+    return requete.all()
+
+
+@router.post("/{etablissement_id}/classes/reconduire", response_model=list[ClasseOut])
+def reconduire_classes(
+    etablissement_id: str,
+    payload: ReconduireClassesRequest,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> list[Classe]:
+    """UC-44/59 : duplique la STRUCTURE (niveau/filiere/capacite/politique de
+    depassement) vers une nouvelle annee academique - jamais les eleves, une reconduction
+    demarre toujours vide (l'inscription reste un acte annuel explicite, UC-39/40)."""
+    if db.get(Etablissement, etablissement_id) is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+
+    classes = (
+        db.query(Classe)
+        .filter(Classe.id.in_(payload.classe_ids), Classe.etablissement_id == etablissement_id)
+        .all()
+    )
+    trouvees = {c.id for c in classes}
+    manquantes = set(payload.classe_ids) - trouvees
+    if manquantes:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND, "introuvable", f"Classe(s) introuvable(s) : {', '.join(sorted(manquantes))}."
+        )
+
+    nouvelles = []
+    for classe in classes:
+        nouvelle = Classe(
+            etablissement_id=etablissement_id,
+            niveau=classe.niveau,
+            filiere=classe.filiere,
+            annee_academique=payload.nouvelle_annee,
+            reconduite_depuis_id=classe.id,
+            capacite=classe.capacite,
+            politique_depassement=classe.politique_depassement,
+        )
+        db.add(nouvelle)
+        nouvelles.append(nouvelle)
+    db.commit()
+
+    for nouvelle in nouvelles:
+        db.refresh(nouvelle)
+        # Meme hook que creer_classe : groupe de messagerie auto-cree pour chaque
+        # nouvelle classe.
+        db.add(Conversation(type=TypeConversation.GROUPE_CLASSE, classe_id=nouvelle.id))
+    db.commit()
+    return nouvelles
+
+
+# ═══════════════════════════════════════════════════════════════
+# Rentree scolaire (UC-39/40/55/56)
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.post("/{etablissement_id}/rentrees", response_model=RentreeOut, status_code=status.HTTP_201_CREATED)
+def declarer_rentree(
+    etablissement_id: str,
+    payload: RentreeCreate,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> RentreeScolaire:
+    if db.get(Etablissement, etablissement_id) is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+
+    # UC-39/55 : une seule rentree OUVERTE a la fois par etablissement - toute rentree
+    # deja ouverte est fermee automatiquement (pas d'erreur bloquante, la nouvelle
+    # declaration prime).
+    db.query(RentreeScolaire).filter(
+        RentreeScolaire.etablissement_id == etablissement_id, RentreeScolaire.statut == StatutRentree.OUVERTE
+    ).update({"statut": StatutRentree.FERMEE})
+
+    rentree = RentreeScolaire(etablissement_id=etablissement_id, annee_academique=payload.annee_academique)
+    db.add(rentree)
+    db.commit()
+    db.refresh(rentree)
+    return rentree
+
+
+@router.get("/{etablissement_id}/rentrees", response_model=list[RentreeOut])
+def lister_rentrees(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> list[RentreeScolaire]:
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    return (
+        db.query(RentreeScolaire)
+        .filter(RentreeScolaire.etablissement_id == etablissement_id)
+        .order_by(RentreeScolaire.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/{etablissement_id}/rentrees/{rentree_id}/inviter-tuteurs", response_model=InviterTuteursResponse)
+def inviter_tuteurs(
+    etablissement_id: str,
+    rentree_id: str,
+    db: Session = Depends(get_db),
+    email_client: BrevoEmailClient = Depends(get_email_client),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> InviterTuteursResponse:
+    """UC-40/56 : notifie les tuteurs des eleves deja connus de cet etablissement (une
+    Inscription existe, quel que soit son statut ou son annee) que la rentree est
+    ouverte - reutilise BrevoEmailClient, aucun nouveau canal de notification."""
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    rentree = db.get(RentreeScolaire, rentree_id)
+    if rentree is None or rentree.etablissement_id != etablissement_id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Rentree introuvable.")
+
+    classe_ids = db.query(Classe.id).filter(Classe.etablissement_id == etablissement_id)
+    eleve_ids = [
+        row[0] for row in db.query(Inscription.eleve_id).filter(Inscription.classe_id.in_(classe_ids)).distinct().all()
+    ]
+    tuteurs = (
+        db.query(Utilisateur)
+        .join(Eleve, Eleve.tuteur_id == Utilisateur.id)
+        .filter(Eleve.id.in_(eleve_ids), Utilisateur.email.isnot(None))
+        .distinct()
+        .all()
+        if eleve_ids
+        else []
+    )
+
+    etablissement = db.get(Etablissement, etablissement_id)
+    nb_notifies = 0
+    for tuteur in tuteurs:
+        try:
+            email_client.send_notification_email(
+                to_email=tuteur.email,
+                to_name=tuteur.prenom,
+                subject=f"Rentree {rentree.annee_academique} ouverte a {etablissement.nom}",
+                message=(
+                    f"{etablissement.nom} a ouvert les inscriptions pour l'annee academique "
+                    f"{rentree.annee_academique}. Connectez-vous a votre espace LuluSchools pour "
+                    "(re)inscrire votre enfant."
+                ),
+            )
+        except EmailDeliveryError:
+            continue
+        nb_notifies += 1
+    return InviterTuteursResponse(nb_tuteurs_notifies=nb_notifies)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Vie scolaire (UC-41/42/57)
+# ═══════════════════════════════════════════════════════════════
+
+
+@classes_router.get("/eleves/{eleve_utilisateur_id}/vie-scolaire", response_model=VieScolaireOut)
+def consulter_vie_scolaire(
+    eleve_utilisateur_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
+    ),
+) -> VieScolaireOut:
+    """UC-41/57 : un A+ ne peut lire que si son etablissement a recu AU MOINS UNE
+    Inscription de cet eleve (quel que soit son statut ou son annee) - droit de lecture
+    permanent une fois acquis, comme un dossier de transfert scolaire reel (voir cahier
+    des charges § annexe). L'A++ n'a aucune restriction. Parametre = l'id Utilisateur de
+    l'eleve (convention deja utilisee partout ailleurs, ex. eleve_utilisateur_id), jamais
+    Eleve.id qui reste un identifiant interne."""
+    eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
+    if eleve is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Eleve introuvable.")
+
+    toutes_inscriptions = (
+        db.query(Inscription).filter(Inscription.eleve_id == eleve.id).order_by(Inscription.created_at.desc()).all()
+    )
+    classe_par_id = {c.id: c for c in db.query(Classe).filter(Classe.id.in_({i.classe_id for i in toutes_inscriptions}))}
+    etablissement_ids = {c.etablissement_id for c in classe_par_id.values()}
+    etablissements = {e.id: e for e in db.query(Etablissement).filter(Etablissement.id.in_(etablissement_ids)).all()}
+
+    if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        lien = db.get(AdminEtablissement, utilisateur.id)
+        mon_etablissement_id = lien.etablissement_id if lien is not None else None
+        a_recu_une_demande = any(
+            classe_par_id[i.classe_id].etablissement_id == mon_etablissement_id for i in toutes_inscriptions
+        )
+        if not a_recu_une_demande:
+            raise api_error(
+                status.HTTP_403_FORBIDDEN,
+                "acces_refuse",
+                "Votre etablissement n'a jamais recu de demande d'inscription de cet eleve.",
+            )
+
+    est_etudiant = est_etudiant_fn(db, eleve.id)
+    photo_url = None
+    if est_etudiant and eleve.photo_lulufiles_id:
+        try:
+            photo_url = files_client.get_signed_link(eleve.photo_lulufiles_id, disposition="inline")
+        except FileStorageError:
+            photo_url = None
+
+    bulletins = db.query(Bulletin).filter(Bulletin.eleve_id == eleve.id).order_by(Bulletin.created_at.desc()).all()
+    bulletin_classe_ids = {b.classe_id for b in bulletins} - set(classe_par_id.keys())
+    if bulletin_classe_ids:
+        classe_par_id.update({c.id: c for c in db.query(Classe).filter(Classe.id.in_(bulletin_classe_ids))})
+        nouveaux_etabs = {c.etablissement_id for c in classe_par_id.values()} - set(etablissements.keys())
+        if nouveaux_etabs:
+            etablissements.update(
+                {e.id: e for e in db.query(Etablissement).filter(Etablissement.id.in_(nouveaux_etabs)).all()}
+            )
+
+    return VieScolaireOut(
+        eleve_id=eleve.id,
+        nom=eleve.nom,
+        prenom=eleve.prenom,
+        date_naissance=eleve.date_naissance,
+        matricule=eleve.matricule,
+        est_etudiant=est_etudiant,
+        photo_url=photo_url,
+        inscriptions=[
+            InscriptionVieScolaireOut(
+                id=i.id,
+                etablissement_id=classe_par_id[i.classe_id].etablissement_id,
+                etablissement_nom=etablissements[classe_par_id[i.classe_id].etablissement_id].nom,
+                classe_niveau=classe_par_id[i.classe_id].niveau,
+                classe_filiere=classe_par_id[i.classe_id].filiere,
+                annee_academique=classe_par_id[i.classe_id].annee_academique,
+                statut=i.statut.value,
+                created_at=i.created_at,
+            )
+            for i in toutes_inscriptions
+        ],
+        bulletins=[
+            BulletinVieScolaireOut(
+                id=b.id,
+                etablissement_nom=etablissements[classe_par_id[b.classe_id].etablissement_id].nom,
+                periode=b.periode,
+                moyenne_generale=b.moyenne_generale,
+                decision_passage=b.decision_passage,
+            )
+            for b in bulletins
+        ],
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Console etablissement (UC-45/46/60/61)
+# ═══════════════════════════════════════════════════════════════
+
+
+def _classes_en_portee(db: Session, etablissement_id: str, classe_id: str | None, annee_academique: str | None) -> list[str]:
+    requete = db.query(Classe.id).filter(Classe.etablissement_id == etablissement_id)
+    if classe_id:
+        requete = requete.filter(Classe.id == classe_id)
+    if annee_academique:
+        requete = requete.filter(Classe.annee_academique == annee_academique)
+    return [row[0] for row in requete.all()]
+
+
+@router.get("/{etablissement_id}/console/eleves", response_model=ConsoleElevesPageOut)
+def console_eleves(
+    etablissement_id: str,
+    classe_id: str | None = None,
+    annee_academique: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> ConsoleElevesPageOut:
+    """UC-45/46/60/61 : pivot classe (optionnel) x annee (optionnel, defaut toutes) -
+    reutilise DataTable (Phase 5) cote frontend. Pagination serveur obligatoire (meme
+    regle qu'ADR-009/Phase 5)."""
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+    classe_ids = _classes_en_portee(db, etablissement_id, classe_id, annee_academique)
+    if not classe_ids:
+        return ConsoleElevesPageOut(items=[], total=0, limit=limit, offset=offset)
+
+    requete = db.query(Inscription).filter(Inscription.classe_id.in_(classe_ids))
+    total = requete.with_entities(func.count(Inscription.id)).scalar() or 0
+    page = requete.order_by(Inscription.created_at.desc()).offset(offset).limit(limit).all()
+
+    classes = {c.id: c for c in db.query(Classe).filter(Classe.id.in_({i.classe_id for i in page}))} if page else {}
+    eleves = {e.id: e for e in db.query(Eleve).filter(Eleve.id.in_({i.eleve_id for i in page})).all()} if page else {}
+
+    items = [
+        ConsoleEleveOut(
+            eleve_id=i.eleve_id,
+            nom=eleves[i.eleve_id].nom,
+            prenom=eleves[i.eleve_id].prenom,
+            matricule=eleves[i.eleve_id].matricule,
+            classe_id=i.classe_id,
+            classe_niveau=classes[i.classe_id].niveau,
+            classe_filiere=classes[i.classe_id].filiere,
+            statut_inscription=i.statut.value,
+        )
+        for i in page
+    ]
+    return ConsoleElevesPageOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/{etablissement_id}/console/enseignants", response_model=ConsoleEnseignantsPageOut)
+def console_enseignants(
+    etablissement_id: str,
+    classe_id: str | None = None,
+    annee_academique: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> ConsoleEnseignantsPageOut:
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+    classe_ids = _classes_en_portee(db, etablissement_id, classe_id, annee_academique)
+    if not classe_ids:
+        return ConsoleEnseignantsPageOut(items=[], total=0, limit=limit, offset=offset)
+
+    requete = db.query(AffectationEnseignant).filter(AffectationEnseignant.classe_id.in_(classe_ids))
+    total = requete.with_entities(func.count(AffectationEnseignant.id)).scalar() or 0
+    page = requete.order_by(AffectationEnseignant.created_at.desc()).offset(offset).limit(limit).all()
+
+    classes = {c.id: c for c in db.query(Classe).filter(Classe.id.in_({a.classe_id for a in page}))} if page else {}
+    enseignants = (
+        {u.id: u for u in db.query(Utilisateur).filter(Utilisateur.id.in_({a.enseignant_id for a in page})).all()}
+        if page
+        else {}
+    )
+
+    items = [
+        ConsoleEnseignantOut(
+            utilisateur_id=a.enseignant_id,
+            nom=enseignants[a.enseignant_id].nom,
+            prenom=enseignants[a.enseignant_id].prenom,
+            classe_id=a.classe_id,
+            classe_niveau=classes[a.classe_id].niveau,
+            classe_filiere=classes[a.classe_id].filiere,
+        )
+        for a in page
+    ]
+    return ConsoleEnseignantsPageOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/{etablissement_id}/console/tuteurs", response_model=ConsoleTuteursPageOut)
+def console_tuteurs(
+    etablissement_id: str,
+    classe_id: str | None = None,
+    annee_academique: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> ConsoleTuteursPageOut:
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+    classe_ids = _classes_en_portee(db, etablissement_id, classe_id, annee_academique)
+    if not classe_ids:
+        return ConsoleTuteursPageOut(items=[], total=0, limit=limit, offset=offset)
+
+    eleves_en_portee = (
+        db.query(Eleve)
+        .join(Inscription, Inscription.eleve_id == Eleve.id)
+        .filter(Inscription.classe_id.in_(classe_ids), Eleve.tuteur_id.isnot(None))
+        .distinct()
+        .all()
+    )
+    par_tuteur: dict[str, int] = {}
+    for eleve in eleves_en_portee:
+        par_tuteur[eleve.tuteur_id] = par_tuteur.get(eleve.tuteur_id, 0) + 1
+
+    tuteur_ids = sorted(par_tuteur.keys())
+    total = len(tuteur_ids)
+    page_ids = tuteur_ids[offset : offset + limit]
+    tuteurs = {u.id: u for u in db.query(Utilisateur).filter(Utilisateur.id.in_(page_ids)).all()} if page_ids else {}
+
+    items = [
+        ConsoleTuteurOut(
+            utilisateur_id=tid,
+            nom=tuteurs[tid].nom,
+            prenom=tuteurs[tid].prenom,
+            email=tuteurs[tid].email,
+            nb_enfants_dans_le_perimetre=par_tuteur[tid],
+        )
+        for tid in page_ids
+    ]
+    return ConsoleTuteursPageOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/{etablissement_id}/console/cours", response_model=ConsoleCoursPageOut)
+def console_cours(
+    etablissement_id: str,
+    classe_id: str | None = None,
+    annee_academique: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> ConsoleCoursPageOut:
+    """UC-45/46/60/61 : equivalent A+ (scope etablissement) du GET /admin/cours A++
+    (Phase 5, scope national)."""
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+    classe_ids = _classes_en_portee(db, etablissement_id, classe_id, annee_academique)
+    if not classe_ids:
+        return ConsoleCoursPageOut(items=[], total=0, limit=limit, offset=offset)
+
+    requete = db.query(Cours).filter(Cours.classe_id.in_(classe_ids))
+    total = requete.with_entities(func.count(Cours.id)).scalar() or 0
+    page = requete.order_by(Cours.created_at.desc()).offset(offset).limit(limit).all()
+
+    classes = {c.id: c for c in db.query(Classe).filter(Classe.id.in_({c.classe_id for c in page}))} if page else {}
+    enseignants = (
+        {u.id: u for u in db.query(Utilisateur).filter(Utilisateur.id.in_({c.enseignant_id for c in page})).all()}
+        if page
+        else {}
+    )
+
+    items = [
+        ConsoleCoursOut(
+            id=cours.id,
+            titre=cours.titre,
+            chapitre=cours.chapitre,
+            classe_id=cours.classe_id,
+            classe_niveau=classes[cours.classe_id].niveau,
+            enseignant_nom=enseignants[cours.enseignant_id].nom,
+            enseignant_prenom=enseignants[cours.enseignant_id].prenom,
+        )
+        for cours in page
+    ]
+    return ConsoleCoursPageOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/{etablissement_id}/console/notes", response_model=ConsoleNotesPageOut)
+def console_notes(
+    etablissement_id: str,
+    classe_id: str | None = None,
+    annee_academique: str | None = None,
+    periode: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> ConsoleNotesPageOut:
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    limit = max(1, min(limit, 60))
+    offset = max(0, offset)
+    classe_ids = _classes_en_portee(db, etablissement_id, classe_id, annee_academique)
+    if not classe_ids:
+        return ConsoleNotesPageOut(items=[], total=0, limit=limit, offset=offset)
+
+    requete = db.query(Bulletin).filter(Bulletin.classe_id.in_(classe_ids))
+    if periode:
+        requete = requete.filter(Bulletin.periode == periode)
+    total = requete.with_entities(func.count(Bulletin.id)).scalar() or 0
+    page = requete.order_by(Bulletin.updated_at.desc()).offset(offset).limit(limit).all()
+
+    classes = {c.id: c for c in db.query(Classe).filter(Classe.id.in_({b.classe_id for b in page}))} if page else {}
+    eleves = {e.id: e for e in db.query(Eleve).filter(Eleve.id.in_({b.eleve_id for b in page})).all()} if page else {}
+
+    items = [
+        ConsoleNoteOut(
+            eleve_id=b.eleve_id,
+            eleve_nom=eleves[b.eleve_id].nom,
+            eleve_prenom=eleves[b.eleve_id].prenom,
+            classe_id=b.classe_id,
+            classe_niveau=classes[b.classe_id].niveau,
+            periode=b.periode,
+            moyenne_generale=b.moyenne_generale,
+            decision_passage=b.decision_passage,
+        )
+        for b in page
+    ]
+    return ConsoleNotesPageOut(items=items, total=total, limit=limit, offset=offset)
 
 
 @classes_router.post(

@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles, verifier_portee_etablissement
+from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.formulaire import valider_reponses_formulaire
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
 from app.modules.actes.schemas import (
     AmorcerPaiementRequest,
     DemandeActeCreate,
     DemandeActeOut,
+    LienDocumentOut,
     TraiterDemandeRequest,
     TypeActeCreate,
     TypeActeOut,
@@ -59,6 +62,7 @@ def creer_type_acte(
         prix=payload.prix,
         pieces_requises=payload.pieces_requises,
         condition_eligibilite=payload.condition_eligibilite,
+        schema_formulaire=[c.model_dump() for c in payload.schema_formulaire] if payload.schema_formulaire else None,
     )
     db.add(type_acte)
     db.commit()
@@ -144,6 +148,7 @@ def soumettre_demande_acte(
 
     statut_initial = StatutDemandeActe.EN_TRAITEMENT
     paiement_confirme = True
+    reponses_validees = None
     if payload.type_acte_id:
         type_acte = db.get(TypeActeAcademique, payload.type_acte_id)
         if type_acte is None:
@@ -151,6 +156,9 @@ def soumettre_demande_acte(
         if type_acte.prix > 0:
             statut_initial = StatutDemandeActe.SOUMISE
             paiement_confirme = False
+        # UC-51/65 : reponses au schema_formulaire du type d'acte, memes regles que le
+        # formulaire de candidature (recrutement/router.py::postuler).
+        reponses_validees = valider_reponses_formulaire(type_acte.schema_formulaire, payload.reponses_formulaire)
 
     demande = DemandeActeAcademique(
         eleve_id=eleve.id,
@@ -158,6 +166,7 @@ def soumettre_demande_acte(
         est_reclamation=payload.est_reclamation,
         reference_evaluation=payload.reference_evaluation,
         motif=payload.motif,
+        reponses_formulaire=reponses_validees,
         statut=statut_initial,
         paiement_confirme=paiement_confirme,
     )
@@ -242,3 +251,105 @@ def traiter_demande_acte(
     db.commit()
     db.refresh(demande)
     return demande
+
+
+def _verifier_proprietaire_ou_tuteur(db: Session, utilisateur: Utilisateur, eleve: Eleve) -> None:
+    if utilisateur.role == RoleUtilisateur.ELEVE and eleve.utilisateur_id != utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette demande ne vous appartient pas.")
+    if utilisateur.role == RoleUtilisateur.TUTEUR and eleve.tuteur_id != utilisateur.id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette demande ne vous appartient pas.")
+
+
+@router.post("/demandes-actes/{demande_id}/pieces/{champ_id}", response_model=DemandeActeOut)
+async def televerser_piece_jointe(
+    demande_id: str,
+    champ_id: str,
+    fichier: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR)),
+) -> DemandeActeAcademique:
+    """UC-51/65 : upload d'une piece pour un champ de type "fichier" du
+    schema_formulaire - appel dedie APRES la creation de la demande (voir
+    valider_reponses_formulaire, qui n'exige jamais un fichier des la creation)."""
+    demande = db.get(DemandeActeAcademique, demande_id)
+    if demande is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Demande introuvable.")
+    eleve = db.get(Eleve, demande.eleve_id)
+    _verifier_proprietaire_ou_tuteur(db, utilisateur, eleve)
+
+    type_acte = db.get(TypeActeAcademique, demande.type_acte_id) if demande.type_acte_id else None
+    champs_fichier = {c["id"] for c in (type_acte.schema_formulaire or [])} if type_acte else set()
+    if champ_id not in champs_fichier:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "champ_inconnu", "Ce champ n'existe pas sur ce type d'acte.")
+
+    contenu = await fichier.read()
+    try:
+        lulufiles_file_id = files_client.upload(
+            contenu, fichier.filename or champ_id, fichier.content_type or "application/octet-stream"
+        )
+    except FileStorageError as exc:
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "upload_echoue", "Impossible d'envoyer la piece jointe.") from exc
+
+    demande.reponses_formulaire = {**(demande.reponses_formulaire or {}), champ_id: lulufiles_file_id}
+    db.commit()
+    db.refresh(demande)
+    return demande
+
+
+@router.post("/demandes-actes/{demande_id}/livrer-document", response_model=DemandeActeOut)
+async def livrer_document_acte(
+    demande_id: str,
+    fichier: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> DemandeActeAcademique:
+    """UC-52/66 : resout l'ecart deja documente (aucune livraison de document possible) -
+    reserve a l'acte ACCEPTEE, condition de telechargement (UC-53/67)."""
+    demande = db.get(DemandeActeAcademique, demande_id)
+    if demande is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Demande introuvable.")
+    eleve = db.get(Eleve, demande.eleve_id)
+    etablissement_id = _etablissement_actuel_de_l_eleve(db, eleve)
+    _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+
+    if demande.statut != StatutDemandeActe.ACCEPTEE:
+        raise api_error(
+            status.HTTP_409_CONFLICT, "statut_invalide", "Seule une demande acceptee peut recevoir son document final."
+        )
+
+    contenu = await fichier.read()
+    try:
+        lulufiles_file_id = files_client.upload(
+            contenu, fichier.filename or "acte.pdf", fichier.content_type or "application/pdf"
+        )
+    except FileStorageError as exc:
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "upload_echoue", "Impossible d'envoyer le document.") from exc
+
+    demande.document_final_lulufiles_id = lulufiles_file_id
+    db.commit()
+    db.refresh(demande)
+    return demande
+
+
+@router.get("/demandes-actes/{demande_id}/lien-document", response_model=LienDocumentOut)
+def obtenir_lien_document_acte(
+    demande_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR)),
+) -> LienDocumentOut:
+    demande = db.get(DemandeActeAcademique, demande_id)
+    if demande is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Demande introuvable.")
+    eleve = db.get(Eleve, demande.eleve_id)
+    _verifier_proprietaire_ou_tuteur(db, utilisateur, eleve)
+    if not demande.document_final_lulufiles_id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Le document final n'est pas encore disponible.")
+
+    try:
+        url = files_client.get_signed_link(demande.document_final_lulufiles_id, disposition="attachment")
+    except FileStorageError as exc:
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du document.") from exc
+    return LienDocumentOut(url=url)

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -38,6 +38,11 @@ class TypeActeAcademique(Base):
     prix: Mapped[float] = mapped_column(Float, default=0)
     pieces_requises: Mapped[str] = mapped_column(Text)
     condition_eligibilite: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # UC-50/64 (lot admin etablissement) : meme moteur que Poste.schema_formulaire
+    # (recrutement/models.py) - un seul JSON schema pour les deux usages. `pieces_requises`
+    # (texte libre existant) reste pour compatibilite descriptive, mais n'est plus le
+    # mecanisme de collecte pour une nouvelle demande des que ce champ est renseigne.
+    schema_formulaire: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -50,6 +55,12 @@ class DemandeActeAcademique(Base):
     est_reclamation: Mapped[bool] = mapped_column(Boolean, default=False)
     reference_evaluation: Mapped[str | None] = mapped_column(String(200), nullable=True)
     motif: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # UC-51/65 : reponses au schema_formulaire du type d'acte - meme forme que
+    # Candidature.reponses_formulaire (recrutement/models.py).
+    reponses_formulaire: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # UC-52/66 : resout l'ecart deja documente (aucune livraison de document) - renseigne
+    # par l'A+ au traitement, condition de telechargement (UC-53/67).
+    document_final_lulufiles_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     statut: Mapped[StatutDemandeActe] = mapped_column(Enum(StatutDemandeActe), default=StatutDemandeActe.SOUMISE)
     paiement_confirme: Mapped[bool] = mapped_column(Boolean, default=False)
     kkiapay_transaction_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)

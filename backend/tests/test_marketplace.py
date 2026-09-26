@@ -58,28 +58,22 @@ def _creer_eleve_dans_classe(client, fake_email_client, classe_id, admin_headers
     return eleve_headers
 
 
-@pytest.fixture()
-def marketplace_ctx(client, fake_email_client, admin_ministeriel_headers):
+def _creer_etablissement_admin(client, fake_email_client, admin_ministeriel_headers, *, nom, type_etab, email):
     etablissement = client.post(
         "/api/v1/etablissements",
         json={
-            "nom": "College Test Marketplace",
-            "type": "ES",
+            "nom": nom,
+            "type": type_etab,
             "statut": "public",
-            "admin": {"nom": "Adjovi", "prenom": "Rachidi", "email": "rachidi.adjovi.marketplace@example.com"},
+            "admin": {"nom": "Adjovi", "prenom": "Rachidi", "email": email},
             "latitude": 6.4,
             "longitude": 2.4,
         },
         headers=admin_ministeriel_headers,
     ).json()
-    mot_de_passe_temp = next(
-        m["mot_de_passe"]
-        for m in fake_email_client.sent
-        if m.get("to_email") == "rachidi.adjovi.marketplace@example.com"
-    )
+    mot_de_passe_temp = next(m["mot_de_passe"] for m in fake_email_client.sent if m.get("to_email") == email)
     login_admin = client.post(
-        "/api/v1/auth/login",
-        json={"identifiant": "rachidi.adjovi.marketplace@example.com", "mot_de_passe": mot_de_passe_temp},
+        "/api/v1/auth/login", json={"identifiant": email, "mot_de_passe": mot_de_passe_temp}
     ).json()
     admin_headers = {"Authorization": f"Bearer {login_admin['access_token']}"}
     client.post(
@@ -87,10 +81,26 @@ def marketplace_ctx(client, fake_email_client, admin_ministeriel_headers):
         json={"ancien_mot_de_passe": mot_de_passe_temp, "nouveau_mot_de_passe": "NouveauMdp1"},
         headers=admin_headers,
     )
+    return etablissement, admin_headers
+
+
+@pytest.fixture()
+def marketplace_ctx(client, fake_email_client, admin_ministeriel_headers):
+    # UC-58 (lot admin etablissement) : marketplace reservee aux ETUDIANTS (etablissement
+    # de type UP), plus au seul critere d'age >=16 ans - l'etablissement principal de ce
+    # contexte de test est donc desormais UP, pas ES.
+    etablissement, admin_headers = _creer_etablissement_admin(
+        client,
+        fake_email_client,
+        admin_ministeriel_headers,
+        nom="Universite Test Marketplace",
+        type_etab="UP",
+        email="rachidi.adjovi.marketplace@example.com",
+    )
 
     classe = client.post(
         f"/api/v1/etablissements/{etablissement['id']}/classes",
-        json={"niveau": "6eme", "capacite": 3, "politique_depassement": "ordre_arrivee"},
+        json={"niveau": "1ère année de Licence", "capacite": 3, "politique_depassement": "ordre_arrivee"},
         headers=admin_headers,
     ).json()
 
@@ -100,7 +110,7 @@ def marketplace_ctx(client, fake_email_client, admin_ministeriel_headers):
         classe["id"],
         admin_headers,
         email="vendeur.marketplace@example.com",
-        date_naissance="2009-01-01",
+        date_naissance="2005-01-01",
     )
     acheteur_headers = _creer_eleve_dans_classe(
         client,
@@ -108,14 +118,31 @@ def marketplace_ctx(client, fake_email_client, admin_ministeriel_headers):
         classe["id"],
         admin_headers,
         email="acheteur.marketplace@example.com",
-        date_naissance="2008-06-15",
+        date_naissance="2004-06-15",
     )
-    mineur_headers = _creer_eleve_dans_classe(
+
+    # UC-58 : un eleve EP/ES (pas etudiant) dans un etablissement DIFFERENT - persona pour
+    # verifier l'exclusion, remplace l'ancien "mineur de moins de 16 ans" (l'age n'est
+    # plus le critere).
+    autre_etablissement, autre_admin_headers = _creer_etablissement_admin(
         client,
         fake_email_client,
-        classe["id"],
-        admin_headers,
-        email="mineur.marketplace@example.com",
+        admin_ministeriel_headers,
+        nom="College Test Marketplace (non etudiant)",
+        type_etab="ES",
+        email="admin.non-etudiant.marketplace@example.com",
+    )
+    autre_classe = client.post(
+        f"/api/v1/etablissements/{autre_etablissement['id']}/classes",
+        json={"niveau": "6ème", "capacite": 3, "politique_depassement": "ordre_arrivee"},
+        headers=autre_admin_headers,
+    ).json()
+    eleve_non_etudiant_headers = _creer_eleve_dans_classe(
+        client,
+        fake_email_client,
+        autre_classe["id"],
+        autre_admin_headers,
+        email="non-etudiant.marketplace@example.com",
         date_naissance="2013-01-01",
     )
 
@@ -124,7 +151,7 @@ def marketplace_ctx(client, fake_email_client, admin_ministeriel_headers):
         "admin_headers": admin_headers,
         "vendeur_headers": vendeur_headers,
         "acheteur_headers": acheteur_headers,
-        "mineur_headers": mineur_headers,
+        "eleve_non_etudiant_headers": eleve_non_etudiant_headers,
     }
 
 
@@ -167,9 +194,9 @@ def test_creer_annonce_prix_invalide_refuse(marketplace_ctx, client):
     assert response.status_code == 422
 
 
-def test_creer_annonce_refusee_pour_un_mineur_de_moins_de_16_ans(marketplace_ctx, client):
+def test_creer_annonce_refusee_pour_un_eleve_non_etudiant(marketplace_ctx, client):
     ctx = marketplace_ctx
-    response = _creer_annonce(client, ctx["mineur_headers"], ctx["etablissement"]["id"])
+    response = _creer_annonce(client, ctx["eleve_non_etudiant_headers"], ctx["etablissement"]["id"])
     assert response.status_code == 403
 
 
@@ -229,8 +256,8 @@ def test_parcours_complet_vente_avec_sequestre(marketplace_ctx, client, kkiapay_
     ).json()
     assert annonce_reservee["statut"] == "reservee"
 
-    encore_dispo = client.post(f"/api/v1/marketplace/annonces/{annonce['id']}/reserver", headers=ctx["mineur_headers"])
-    assert encore_dispo.status_code in (403, 409)  # mineur refuse de toute facon avant meme le statut
+    encore_dispo = client.post(f"/api/v1/marketplace/annonces/{annonce['id']}/reserver", headers=ctx["eleve_non_etudiant_headers"])
+    assert encore_dispo.status_code in (403, 409)  # eleve non etudiant refuse de toute facon avant meme le statut
 
     client.post(
         f"/api/v1/marketplace/transactions/{transaction['id']}/paiement/amorcer",

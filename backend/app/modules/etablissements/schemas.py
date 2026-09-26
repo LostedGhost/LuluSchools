@@ -1,6 +1,8 @@
+from datetime import date, datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.modules.etablissements.models import PolitiqueDepassement, StatutEtablissement, TypeEtablissement
+from app.modules.etablissements.models import PolitiqueDepassement, StatutEtablissement, StatutRentree, TypeEtablissement
 
 
 class AdminEtablissementCreate(BaseModel):
@@ -61,6 +63,8 @@ class ClasseCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     niveau: str
+    filiere: str | None = None
+    annee_academique: str | None = None
     capacite: int
     politique_depassement: PolitiqueDepassement
 
@@ -71,8 +75,18 @@ class ClasseOut(BaseModel):
     id: str
     etablissement_id: str
     niveau: str
+    filiere: str | None
+    annee_academique: str
+    reconduite_depuis_id: str | None
     capacite: int
     politique_depassement: PolitiqueDepassement
+
+
+class ReconduireClassesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    classe_ids: list[str] = Field(min_length=1)
+    nouvelle_annee: str = Field(min_length=1)
 
 
 class AffectationEnseignantCreate(BaseModel):
@@ -159,6 +173,189 @@ class AnnuairePubliqueOut(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[EtablissementVitrineOut]
+    total: int
+    limit: int
+    offset: int
+
+
+# ═══════════════════════════════════════════════════════════════
+# Lot admin etablissement (Phase 6) : rentree scolaire (UC-39/40/55/56)
+# ═══════════════════════════════════════════════════════════════
+
+
+class RentreeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    annee_academique: str = Field(min_length=1)
+
+
+class RentreeOut(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    etablissement_id: str
+    annee_academique: str
+    statut: StatutRentree
+    created_at: datetime
+
+
+class InviterTuteursResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nb_tuteurs_notifies: int
+
+
+# ═══════════════════════════════════════════════════════════════
+# Vie scolaire (UC-41/42/57)
+# ═══════════════════════════════════════════════════════════════
+
+
+class InscriptionVieScolaireOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    etablissement_id: str
+    etablissement_nom: str
+    classe_niveau: str
+    classe_filiere: str | None
+    annee_academique: str
+    statut: str
+    created_at: datetime
+
+
+class BulletinVieScolaireOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    etablissement_nom: str
+    periode: str
+    moyenne_generale: float
+    decision_passage: str | None
+
+
+class VieScolaireOut(BaseModel):
+    """UC-41/42/57 : vue agregee en lecture, aucune nouvelle table - `photo_url` n'est
+    renseignee que si l'eleve est un etudiant (derniere inscription validee dans un
+    etablissement de type UP), jamais pour un eleve EP/ES (regle appliquee cote routeur,
+    jamais devinable depuis ce seul schema)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_id: str
+    nom: str
+    prenom: str
+    date_naissance: date
+    matricule: str | None
+    est_etudiant: bool
+    photo_url: str | None
+    inscriptions: list[InscriptionVieScolaireOut]
+    bulletins: list[BulletinVieScolaireOut]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Console etablissement (UC-45/46/60/61) : filtre classe et/ou annee, objet au choix
+# ═══════════════════════════════════════════════════════════════
+
+
+class ConsoleEleveOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_id: str
+    nom: str
+    prenom: str
+    matricule: str | None
+    classe_id: str
+    classe_niveau: str
+    classe_filiere: str | None
+    statut_inscription: str
+
+
+class ConsoleEnseignantOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    utilisateur_id: str
+    nom: str
+    prenom: str
+    classe_id: str
+    classe_niveau: str
+    classe_filiere: str | None
+
+
+class ConsoleTuteurOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    utilisateur_id: str
+    nom: str
+    prenom: str
+    email: str | None
+    nb_enfants_dans_le_perimetre: int
+
+
+class ConsoleCoursOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    titre: str
+    chapitre: str
+    classe_id: str
+    classe_niveau: str
+    enseignant_nom: str
+    enseignant_prenom: str
+
+
+class ConsoleNoteOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    eleve_id: str
+    eleve_nom: str
+    eleve_prenom: str
+    classe_id: str
+    classe_niveau: str
+    periode: str
+    moyenne_generale: float
+    decision_passage: str | None
+
+
+class ConsoleElevesPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ConsoleEleveOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ConsoleEnseignantsPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ConsoleEnseignantOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ConsoleTuteursPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ConsoleTuteurOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ConsoleCoursPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ConsoleCoursOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ConsoleNotesPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ConsoleNoteOut]
     total: int
     limit: int
     offset: int
