@@ -15,6 +15,7 @@ build/
 .env.*
 !.env.example
 backend/scripts/seed_render.bat
+backend/scripts/update_localisations_render.bat
 
 # OS / editor
 .DS_Store
