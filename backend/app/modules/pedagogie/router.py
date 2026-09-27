@@ -13,7 +13,7 @@ from app.core.deps import (
     require_roles,
     verifier_portee_etablissement,
 )
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import ElProfessorError, FreeLLMClient, QuizGenerationError, get_llm_client
 from app.modules.etablissements.models import AffectationEnseignant, Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -66,6 +66,12 @@ MAX_TAILLE_COURS_VIDEO_OCTETS = 200 * 1024 * 1024  # UC-15 (Phase 3), delegue - 
 # verifiable cote serveur sans bibliotheque de parsing video, limitation assumee pour ce premier jet.
 
 router = APIRouter(tags=["pedagogie"])
+
+_TYPES_PAR_FORMAT = {
+    FormatCours.PDF: frozenset({"application/pdf"}),
+    FormatCours.AUDIO: frozenset({"audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/webm", "audio/aac"}),
+    FormatCours.VIDEO: frozenset({"video/mp4", "video/webm", "video/ogg", "video/quicktime"}),
+}
 
 
 def _verifier_enseignant_rattache(db: Session, enseignant: Utilisateur, classe_id: str) -> None:
@@ -155,8 +161,8 @@ def _cours_lisible(db: Session, utilisateur: Utilisateur, cours_id: str) -> Cour
 @router.post("/classes/{classe_id}/cours", response_model=CoursOut, status_code=status.HTTP_201_CREATED)
 def publier_cours(
     classe_id: str,
-    titre: str = Form(...),
-    chapitre: str = Form(...),
+    titre: str = Form(..., min_length=1, max_length=200),
+    chapitre: str = Form(..., min_length=1, max_length=200),
     format: FormatCours = Form(...),
     contenu_texte: str | None = Form(None),
     fichier: UploadFile | None = File(None),
@@ -171,14 +177,8 @@ def publier_cours(
 
     lulufiles_file_id = None
     if fichier is not None:
-        contenu = fichier.file.read()
         limite = MAX_TAILLE_COURS_VIDEO_OCTETS if format == FormatCours.VIDEO else MAX_TAILLE_COURS_OCTETS
-        if len(contenu) > limite:
-            raise api_error(
-                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                "fichier_trop_volumineux",
-                f"Fichier limite a {limite // (1024 * 1024)} Mo.",
-            )
+        contenu = lire_upload_borne(fichier, limite, _TYPES_PAR_FORMAT.get(format))
         try:
             lulufiles_file_id = files_client.upload(
                 contenu, fichier.filename or titre, fichier.content_type or "application/octet-stream"

@@ -418,6 +418,19 @@ def lister_missions_a_reverser(
     """UC-33/48 : file des missions validees pas encore reversees, avec le contact
     mobile money deja connu du prestataire (Utilisateur.telephone) - remplace la saisie
     manuelle d'un identifiant de mission."""
+    # La validation tacite (client silencieux 5 jours) n'etait appliquee qu'a l'occasion
+    # d'une action sur la mission : un prestataire dont le client ne repondait jamais
+    # n'apparaissait donc jamais dans cette file, et n'etait jamais paye.
+    for mission_echue in (
+        db.query(MissionMicroJob)
+        .filter(
+            MissionMicroJob.statut == StatutMissionMicroJob.TERMINEE_DECLAREE,
+            MissionMicroJob.date_limite_validation.isnot(None),
+        )
+        .all()
+    ):
+        _appliquer_validation_tacite(db, mission_echue)
+
     missions = (
         db.query(MissionMicroJob)
         .filter(

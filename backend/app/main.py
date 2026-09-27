@@ -7,6 +7,7 @@ from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DataError, IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,26 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 "details": {"fields": jsonable_encoder(exc.errors())},
             }
         },
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """Contrainte d'unicite violee (ex. deux requetes concurrentes, identifiant de
+    transaction deja rattache) : un conflit metier, pas une panne serveur."""
+    logger.warning("Contrainte d'integrite violee sur %s %s : %s", request.method, request.url.path, exc.orig)
+    return JSONResponse(
+        status_code=409,
+        content={"error": {"code": "conflit", "message": "Cette operation entre en conflit avec des donnees existantes.", "details": {}}},
+    )
+
+
+@app.exception_handler(DataError)
+async def data_error_handler(request: Request, exc: DataError) -> JSONResponse:
+    logger.warning("Donnee refusee par la base sur %s %s : %s", request.method, request.url.path, exc.orig)
+    return JSONResponse(
+        status_code=422,
+        content={"error": {"code": "donnee_invalide", "message": "Une valeur fournie est invalide ou trop longue.", "details": {}}},
     )
 
 

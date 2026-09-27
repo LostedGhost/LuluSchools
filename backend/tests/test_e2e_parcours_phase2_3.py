@@ -11,6 +11,8 @@ suit le chemin nominal complet, UC-11 a UC-19.
 import io
 from datetime import date, datetime, timedelta, timezone
 
+from app.core.reservation import aujourdhui_benin
+
 
 def _signup_et_verifier(client, fake_email_client, chemin, nom, prenom, email, mot_de_passe="Password1"):
     client.post(f"/api/v1/auth/{chemin}", json={"nom": nom, "prenom": prenom, "email": email, "mot_de_passe": mot_de_passe})
@@ -253,7 +255,7 @@ def test_parcours_complet_des_phases_2_et_3(
         json={"nom": "Ligne Cotonou-Centre", "prix": 300, "capacite_par_trajet": 20},
         headers=admin_headers,
     ).json()
-    demain = (date.today() + timedelta(days=5)).isoformat()
+    demain = aujourdhui_benin().isoformat()  # tickets valides le jour meme (transport puis cantine)
     ticket_transport = client.post(
         f"/api/v1/lignes-transport/{ligne['id']}/tickets", json={"date_trajet": demain}, headers=eleve_headers
     ).json()

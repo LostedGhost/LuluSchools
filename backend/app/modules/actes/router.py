@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles, verifier_portee_etablissement
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import MO, TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.formulaire import valider_reponses_formulaire
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
 from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
@@ -289,7 +289,7 @@ def _verifier_proprietaire_ou_tuteur(db: Session, utilisateur: Utilisateur, elev
 
 
 @router.post("/demandes-actes/{demande_id}/pieces/{champ_id}", response_model=DemandeActeOut)
-async def televerser_piece_jointe(
+def televerser_piece_jointe(
     demande_id: str,
     champ_id: str,
     fichier: UploadFile = File(...),
@@ -315,7 +315,7 @@ async def televerser_piece_jointe(
     if champ_id not in champs_fichier:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "champ_inconnu", "Ce champ n'existe pas sur ce type d'acte.")
 
-    contenu = await fichier.read()
+    contenu = lire_upload_borne(fichier, 10 * MO, TYPES_DOCUMENT)
     try:
         lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or champ_id, fichier.content_type or "application/octet-stream"
@@ -330,7 +330,7 @@ async def televerser_piece_jointe(
 
 
 @router.post("/demandes-actes/{demande_id}/livrer-document", response_model=DemandeActeOut)
-async def livrer_document_acte(
+def livrer_document_acte(
     demande_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -351,7 +351,7 @@ async def livrer_document_acte(
             status.HTTP_409_CONFLICT, "statut_invalide", "Seule une demande acceptee peut recevoir son document final."
         )
 
-    contenu = await fichier.read()
+    contenu = lire_upload_borne(fichier, 20 * MO, TYPES_DOCUMENT)
     try:
         lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "acte.pdf", fichier.content_type or "application/pdf"

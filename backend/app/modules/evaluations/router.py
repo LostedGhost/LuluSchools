@@ -8,7 +8,7 @@ from app.core.audit import journaliser_action_ministerielle
 from app.core.conversion import convertir_en_image
 from app.core.database import get_db, get_session_factory
 from app.core.deps import api_error, require_roles
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
 from app.modules.evaluations.models import (
@@ -96,7 +96,7 @@ def _verifier_proprietaire_du_devoir(db: Session, enseignant: Utilisateur, devoi
 
 
 @router.post("/devoirs/{devoir_id}/sujet-document", response_model=DevoirOut)
-async def televerser_sujet_document(
+def televerser_sujet_document(
     devoir_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -111,13 +111,7 @@ async def televerser_sujet_document(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     _verifier_proprietaire_du_devoir(db, enseignant, devoir)
 
-    contenu = await fichier.read()
-    if len(contenu) > MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS:
-        raise api_error(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            "fichier_trop_volumineux",
-            f"Fichier limite a {MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS // (1024 * 1024)} Mo.",
-        )
+    contenu = lire_upload_borne(fichier, MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS, TYPES_DOCUMENT)
     try:
         devoir.sujet_lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "sujet", fichier.content_type or "application/octet-stream"
@@ -158,7 +152,7 @@ def obtenir_lien_sujet_document(
 
 
 @router.post("/devoirs/{devoir_id}/bareme-document", response_model=DevoirProprietaireOut)
-async def televerser_bareme_document(
+def televerser_bareme_document(
     devoir_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -172,13 +166,7 @@ async def televerser_bareme_document(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     _verifier_proprietaire_du_devoir(db, enseignant, devoir)
 
-    contenu = await fichier.read()
-    if len(contenu) > MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS:
-        raise api_error(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            "fichier_trop_volumineux",
-            f"Fichier limite a {MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS // (1024 * 1024)} Mo.",
-        )
+    contenu = lire_upload_borne(fichier, MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS, TYPES_DOCUMENT)
     try:
         devoir.bareme_document_lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "bareme", fichier.content_type or "application/octet-stream"
@@ -391,7 +379,7 @@ def soumettre_devoir(
     response_model=SoumissionOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def soumettre_devoir_par_copie_image(
+def soumettre_devoir_par_copie_image(
     devoir_id: str,
     background_tasks: BackgroundTasks,
     fichier: UploadFile = File(...),
@@ -421,13 +409,7 @@ async def soumettre_devoir_par_copie_image(
     if db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first():
         raise api_error(status.HTTP_409_CONFLICT, "deja_soumis", "Vous avez deja soumis ce devoir.")
 
-    contenu = await fichier.read()
-    if len(contenu) > MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS:
-        raise api_error(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            "fichier_trop_volumineux",
-            f"Fichier limite a {MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS // (1024 * 1024)} Mo.",
-        )
+    contenu = lire_upload_borne(fichier, MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS, TYPES_DOCUMENT)
     try:
         copie_lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "copie", fichier.content_type or "application/octet-stream"

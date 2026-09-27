@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles
 from app.core.etudiant import est_etudiant
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import MO, TYPES_IMAGE, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
 from app.modules.coffre_fort.service import evaluer_depense
 from app.modules.controle_acces.router import verifier_admin_de_l_etablissement
@@ -39,6 +39,7 @@ from app.modules.marketplace.schemas import (
     RetirerAnnonceRequest,
     SignalementAnnonceOut,
     TraiterSignalementAnnonceRequest,
+    TransactionAReverserOut,
     TransactionMarketplaceOut,
 )
 from app.modules.paiements.schemas import AmorcerPaiementRequest
@@ -46,6 +47,9 @@ from app.modules.paiements.schemas import AmorcerPaiementRequest
 router = APIRouter(tags=["marketplace"])
 
 _DELAI_CONFIRMATION_RECEPTION = timedelta(days=5)
+MAX_PHOTOS_ANNONCE = 6
+# Sans plafond, un seul compte pouvait reserver (sans payer) toutes les annonces.
+MAX_RESERVATIONS_IMPAYEES = 3
 
 # Transactions dans un statut non termine : bloquent une nouvelle reservation de la
 # meme annonce (voir Annonce.statut, deja RESERVEE) et sont celles qu'un retrait
@@ -160,10 +164,10 @@ def _serialiser_annonce_detail(
     response_model=AnnonceMarketplaceDetailOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def creer_annonce(
+def creer_annonce(
     etablissement_id: str,
-    titre: str = Form(...),
-    description: str = Form(...),
+    titre: str = Form(..., min_length=1, max_length=200),
+    description: str = Form(..., min_length=1, max_length=5000),
     categorie: CategorieAnnonce = Form(...),
     etat: EtatArticle = Form(...),
     prix: float = Form(..., gt=0),
@@ -180,6 +184,11 @@ async def creer_annonce(
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "photo_requise", "Au moins une photo est obligatoire."
         )
+    if len(photos) > MAX_PHOTOS_ANNONCE:
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "trop_de_photos", f"Maximum {MAX_PHOTOS_ANNONCE} photos par annonce."
+        )
+    contenus_photos = [lire_upload_borne(p, 5 * MO, TYPES_IMAGE) for p in photos]
 
     annonce = AnnonceMarketplace(
         etablissement_id=etablissement_id,
@@ -193,8 +202,7 @@ async def creer_annonce(
     db.add(annonce)
     db.flush()
 
-    for ordre, fichier in enumerate(photos):
-        contenu = await fichier.read()
+    for ordre, (fichier, contenu) in enumerate(zip(photos, contenus_photos)):
         try:
             file_id = files_client.upload(
                 contenu, fichier.filename or f"photo-{ordre}.jpg", fichier.content_type or "image/jpeg"
@@ -394,7 +402,9 @@ def mes_annonces(
 def reserver_annonce(
     annonce_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE))
 ) -> TransactionMarketplace:
-    annonce = db.get(AnnonceMarketplace, annonce_id)
+    # Verrou de ligne (Postgres) : deux acheteurs simultanes ne peuvent pas reserver la
+    # meme annonce.
+    annonce = db.query(AnnonceMarketplace).filter(AnnonceMarketplace.id == annonce_id).with_for_update().first()
     if annonce is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Annonce introuvable.")
     _verifier_eleve_de_l_etablissement(db, utilisateur, annonce.etablissement_id)
@@ -402,6 +412,20 @@ def reserver_annonce(
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Vous ne pouvez pas acheter votre propre annonce.")
     if annonce.statut != StatutAnnonce.DISPONIBLE:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette annonce n'est pas disponible.")
+    reservations_impayees = (
+        db.query(TransactionMarketplace)
+        .filter(
+            TransactionMarketplace.acheteur_id == utilisateur.id,
+            TransactionMarketplace.statut == StatutTransactionMarketplace.EN_ATTENTE_PAIEMENT,
+        )
+        .count()
+    )
+    if reservations_impayees >= MAX_RESERVATIONS_IMPAYEES:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "trop_de_reservations",
+            f"Vous avez deja {MAX_RESERVATIONS_IMPAYEES} reservations en attente de paiement : payez-les ou annulez-les.",
+        )
 
     transaction = TransactionMarketplace(annonce_id=annonce_id, acheteur_id=utilisateur.id, prix_paye=annonce.prix)
     annonce.statut = StatutAnnonce.RESERVEE
@@ -646,6 +670,7 @@ def reverser_vendeur(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Transaction introuvable.")
     annonce = db.get(AnnonceMarketplace, transaction.annonce_id)
     verifier_admin_de_l_etablissement(db, admin, annonce.etablissement_id)
+    transaction = _appliquer_confirmation_tacite(db, transaction)
     if transaction.statut != StatutTransactionMarketplace.CONFIRMEE:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction n'est pas prete a etre reversee.")
 
@@ -655,6 +680,50 @@ def reverser_vendeur(
     db.commit()
     db.refresh(transaction)
     return transaction
+
+
+@router.get(
+    "/etablissements/{etablissement_id}/marketplace/transactions-a-reverser",
+    response_model=list[TransactionAReverserOut],
+)
+def transactions_a_reverser(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[TransactionAReverserOut]:
+    """File de reversement de l'A+ : l'ecran exigeait jusqu'ici de saisir a la main
+    l'identifiant d'une transaction. Applique au passage la confirmation tacite (acheteur
+    silencieux 5 jours apres la remise), sans quoi le vendeur n'etait jamais paye."""
+    verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    lignes = (
+        db.query(TransactionMarketplace, AnnonceMarketplace)
+        .join(AnnonceMarketplace, TransactionMarketplace.annonce_id == AnnonceMarketplace.id)
+        .filter(
+            AnnonceMarketplace.etablissement_id == etablissement_id,
+            TransactionMarketplace.statut.in_(
+                [StatutTransactionMarketplace.REMISE_DECLAREE, StatutTransactionMarketplace.CONFIRMEE]
+            ),
+        )
+        .all()
+    )
+    resultat = []
+    for transaction, annonce in lignes:
+        transaction = _appliquer_confirmation_tacite(db, transaction)
+        if transaction.statut != StatutTransactionMarketplace.CONFIRMEE:
+            continue
+        vendeur = db.get(Utilisateur, annonce.vendeur_id)
+        resultat.append(
+            TransactionAReverserOut(
+                id=transaction.id,
+                annonce_titre=annonce.titre,
+                prix_paye=transaction.prix_paye,
+                vendeur_nom=vendeur.nom if vendeur else "",
+                vendeur_prenom=vendeur.prenom if vendeur else "",
+                vendeur_telephone=vendeur.telephone if vendeur else None,
+                date_remise_declaree=transaction.date_remise_declaree,
+            )
+        )
+    return resultat
 
 
 @router.get("/mes-transactions-marketplace", response_model=list[TransactionMarketplaceOut])

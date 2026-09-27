@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
+from app.core.reservation import filtre_place_occupee
 from app.modules.billetterie.models import BilletEvenement, Evenement, StatutBillet, StatutEvenement
 from app.modules.billetterie.schemas import (
     AdminEvenementOut,
@@ -201,12 +202,27 @@ def acheter_billet(
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cet evenement n'accepte plus d'achats.")
 
     beneficiaire_id = _resoudre_beneficiaire_billet(db, utilisateur, payload.eleve_utilisateur_id if payload else None)
+    if _aware_utc(evenement.date_heure) < datetime.now(timezone.utc):
+        raise api_error(status.HTTP_409_CONFLICT, "evenement_passe", "Cet evenement a deja eu lieu.")
+    if (
+        db.query(BilletEvenement)
+        .filter(
+            BilletEvenement.evenement_id == evenement_id,
+            BilletEvenement.utilisateur_id == beneficiaire_id,
+            BilletEvenement.statut.in_([StatutBillet.ACHETE, StatutBillet.VALIDE]),
+            filtre_place_occupee(BilletEvenement),
+        )
+        .first()
+        is not None
+    ):
+        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un billet existe deja pour cette personne.")
 
     deja_vendus = (
         db.query(BilletEvenement)
         .filter(
             BilletEvenement.evenement_id == evenement_id,
             BilletEvenement.statut.in_([StatutBillet.ACHETE, StatutBillet.VALIDE]),
+            filtre_place_occupee(BilletEvenement),
         )
         .count()
     )

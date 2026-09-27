@@ -20,6 +20,11 @@ from app.modules.cours_direct import models as cours_direct_models  # noqa: F401
 from app.modules.visites_virtuelles import models as visites_virtuelles_models  # noqa: F401
 from app.modules.micro_jobs import models as micro_jobs_models  # noqa: F401
 from app.modules.vie_scolaire import models as vie_scolaire_models  # noqa: F401
+# Sans ces imports, `alembic revision --autogenerate` proposait de SUPPRIMER les tables
+# marketplace, journal d'audit et coffre-fort (absentes de target_metadata).
+from app.modules.audit import models as audit_models  # noqa: F401
+from app.modules.coffre_fort import models as coffre_fort_models  # noqa: F401
+from app.modules.marketplace import models as marketplace_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

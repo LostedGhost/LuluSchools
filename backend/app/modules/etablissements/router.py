@@ -12,7 +12,7 @@ from app.core.deps import (
     verifier_portee_etablissement,
 )
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import MO, TYPES_IMAGE, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.security import generate_temporary_password, hash_password
 from app.modules.etablissements.models import (
     AdminEtablissement,
@@ -435,7 +435,7 @@ def creer_classe(
 @router.post(
     "/{etablissement_id}/photos", response_model=EtablissementPhotoOut, status_code=status.HTTP_201_CREATED
 )
-async def ajouter_photo_etablissement(
+def ajouter_photo_etablissement(
     etablissement_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -455,7 +455,7 @@ async def ajouter_photo_etablissement(
     if nb_photos >= 8:
         raise api_error(status.HTTP_400_BAD_REQUEST, "limite_atteinte", "Maximum 8 photos par etablissement.")
 
-    contenu = await fichier.read()
+    contenu = lire_upload_borne(fichier, 5 * MO, TYPES_IMAGE)
     try:
         file_id = files_client.upload(
             contenu, fichier.filename or "photo.jpg", fichier.content_type or "image/jpeg"
