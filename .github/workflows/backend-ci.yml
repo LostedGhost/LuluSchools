@@ -61,3 +61,13 @@ jobs:
         env:
           JWT_SECRET_KEY: ci-only-secret
           CASIER_JUDICIAIRE_ENCRYPTION_KEY: ci-only-secret
+
+      # SQLite masque certaines erreurs propres a PostgreSQL (ex. DISTINCT sur une colonne
+      # json, qui a casse l'ecran Recrutement en production) : la meme suite est rejouee sur
+      # le service Postgres (schema cree une fois, tables videes entre deux tests).
+      - name: Tests (PostgreSQL)
+        run: pytest -q
+        env:
+          LULU_TEST_DATABASE_URL: postgresql+psycopg://luluschools:luluschools@localhost:5432/luluschools_ci
+          JWT_SECRET_KEY: ci-only-secret
+          CASIER_JUDICIAIRE_ENCRYPTION_KEY: ci-only-secret

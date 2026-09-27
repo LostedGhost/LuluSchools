@@ -1,50 +1,14 @@
-import threading
-import time
-from collections import deque
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Request, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import api_error
+from app.modules.identite.models import TentativeLimitee
 
-
-class LimiteurFenetreGlissante:
-    """Limiteur en memoire, par cle, sur fenetre glissante. Suffisant pour le deploiement
-    actuel (un seul worker uvicorn sur Render, ADR-006) ; a remplacer par un stockage
-    partage si la plateforme passe un jour sur plusieurs instances."""
-
-    def __init__(self) -> None:
-        self._evenements: dict[str, deque[float]] = {}
-        self._verrou = threading.Lock()
-
-    def _purger(self, file: deque[float], maintenant: float, fenetre: float) -> None:
-        while file and maintenant - file[0] > fenetre:
-            file.popleft()
-
-    def depasse(self, cle: str, maximum: int, fenetre_secondes: float) -> bool:
-        maintenant = time.monotonic()
-        with self._verrou:
-            file = self._evenements.get(cle)
-            if file is None:
-                return False
-            self._purger(file, maintenant, fenetre_secondes)
-            return len(file) >= maximum
-
-    def enregistrer(self, cle: str) -> None:
-        with self._verrou:
-            self._evenements.setdefault(cle, deque()).append(time.monotonic())
-            if len(self._evenements) > 50_000:
-                self._evenements.clear()
-
-    def reinitialiser(self, cle: str | None = None) -> None:
-        with self._verrou:
-            if cle is None:
-                self._evenements.clear()
-            else:
-                self._evenements.pop(cle, None)
-
-
-limiteur = LimiteurFenetreGlissante()
+_CONSERVATION = timedelta(days=1)
 
 
 def adresse_client(request: Request) -> str:
@@ -57,10 +21,20 @@ def adresse_client(request: Request) -> str:
     return request.client.host if request.client else "inconnu"
 
 
-def verifier_limite(cle: str, maximum: int, fenetre_secondes: float) -> None:
+def _depasse(db: Session, cle: str, maximum: int, fenetre_secondes: float) -> bool:
+    depuis = datetime.now(timezone.utc) - timedelta(seconds=fenetre_secondes)
+    nombre = (
+        db.query(func.count(TentativeLimitee.id))
+        .filter(TentativeLimitee.cle == cle, TentativeLimitee.created_at >= depuis)
+        .scalar()
+    )
+    return (nombre or 0) >= maximum
+
+
+def verifier_limite(db: Session, cle: str, maximum: int, fenetre_secondes: float) -> None:
     if not settings.rate_limit_enabled:
         return
-    if limiteur.depasse(cle, maximum, fenetre_secondes):
+    if _depasse(db, cle[:255], maximum, fenetre_secondes):
         raise api_error(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "trop_de_tentatives",
@@ -68,14 +42,28 @@ def verifier_limite(cle: str, maximum: int, fenetre_secondes: float) -> None:
         )
 
 
-def consommer(cle: str, maximum: int, fenetre_secondes: float) -> None:
-    """Verifie puis compte une tentative (pour les actions limitees a chaque appel,
-    succes ou echec : inscription, renvoi de code, mot de passe oublie)."""
-    verifier_limite(cle, maximum, fenetre_secondes)
-    if settings.rate_limit_enabled:
-        limiteur.enregistrer(cle)
+def enregistrer_echec(db: Session, cle: str) -> None:
+    """Commit immediat : l'appelant leve le plus souvent une erreur juste apres, ce qui
+    annulerait sinon l'enregistrement. A n'appeler que sans modification metier en attente."""
+    if not settings.rate_limit_enabled:
+        return
+    cle = cle[:255]
+    db.query(TentativeLimitee).filter(
+        TentativeLimitee.cle == cle, TentativeLimitee.created_at < datetime.now(timezone.utc) - _CONSERVATION
+    ).delete(synchronize_session=False)
+    db.add(TentativeLimitee(cle=cle))
+    db.commit()
 
 
-def enregistrer_echec(cle: str) -> None:
-    if settings.rate_limit_enabled:
-        limiteur.enregistrer(cle)
+def consommer(db: Session, cle: str, maximum: int, fenetre_secondes: float) -> None:
+    """Verifie puis compte une tentative (actions limitees a chaque appel, succes ou
+    echec : inscription, renvoi de code, mot de passe oublie)."""
+    verifier_limite(db, cle, maximum, fenetre_secondes)
+    enregistrer_echec(db, cle)
+
+
+def reinitialiser(db: Session, cle: str) -> None:
+    if not settings.rate_limit_enabled:
+        return
+    db.query(TentativeLimitee).filter(TentativeLimitee.cle == cle[:255]).delete(synchronize_session=False)
+    db.commit()

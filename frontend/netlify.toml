@@ -27,8 +27,7 @@
   to = "/index.html"
   status = 200
 
-# En-tetes de securite, identiques a vercel.json (pas de CSP : le widget Kkiapay et les
-# ressources de la landing page doivent d'abord etre inventories).
+# En-tetes de securite, identiques a vercel.json (CSP : voir aussi vite.config.ts).
 [[headers]]
   for = "/*"
   [headers.values]
@@ -37,3 +36,4 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(self), microphone=(self), geolocation=(self), payment=(self)"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.kkiapay.me; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://images.pexels.com https://*.tile.openstreetmap.org https://lulufiles-api.onrender.com https://*.kkiapay.me; media-src 'self' blob: https://lulufiles-api.onrender.com; connect-src 'self' https://*.kkiapay.me; frame-src https://*.kkiapay.me; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"

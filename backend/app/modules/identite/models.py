@@ -71,6 +71,17 @@ class Enseignant(Base):
     utilisateur: Mapped[Utilisateur] = relationship()
 
 
+class TentativeLimitee(Base):
+    """Evenements comptes par la limitation de debit (app/core/rate_limit.py) : en base
+    plutot qu'en memoire pour rester valable avec plusieurs workers/instances."""
+
+    __tablename__ = "tentatives_limitees"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    cle: Mapped[str] = mapped_column(String(255), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
 class ObjetOtp(str, enum.Enum):
     VERIFICATION_EMAIL = "verification_email"
     REINITIALISATION_MOT_DE_PASSE = "reinitialisation_mot_de_passe"

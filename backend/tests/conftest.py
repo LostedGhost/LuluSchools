@@ -4,13 +4,12 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.core.database import Base, get_db, get_session_factory
-from app.core.rate_limit import limiteur
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
 from app.core.llm import (
@@ -31,45 +30,60 @@ from app.modules.identite.models import RoleUtilisateur, Utilisateur
 def _limitation_debit_desactivee():
     """Les fixtures ouvrent des dizaines de sessions depuis la meme IP de test : la
     limitation de debit est desactivee par defaut et reactivee explicitement par les
-    tests qui la verifient (fixture `limitation_debit`)."""
+    tests qui la verifient (fixture `limitation_debit`). Les compteurs vivent en base,
+    donc repartent de zero a chaque test."""
     settings.rate_limit_enabled = False
-    limiteur.reinitialiser()
     yield
     settings.rate_limit_enabled = False
-    limiteur.reinitialiser()
 
 
 @pytest.fixture()
 def limitation_debit():
     settings.rate_limit_enabled = True
-    limiteur.reinitialiser()
     yield
 
 
-# Optionnel : rejouer toute la suite sur un vrai PostgreSQL (base dediee, videe a chaque
-# test). SQLite masque certaines erreurs propres a Postgres (ex. DISTINCT sur colonne json).
+# Optionnel : rejouer toute la suite sur un vrai PostgreSQL (base dediee). SQLite masque
+# certaines erreurs propres a Postgres (ex. DISTINCT sur colonne json). Le schema est cree
+# une seule fois par session de test, puis les tables sont videes (TRUNCATE) entre deux
+# tests : recreer le schema a chaque test etait tres lent et saturait le disque.
 _URL_TEST_POSTGRES = os.environ.get("LULU_TEST_DATABASE_URL")
 
 
+@pytest.fixture(scope="session")
+def _moteur_postgres():
+    if not _URL_TEST_POSTGRES:
+        yield None
+        return
+    engine = create_engine(_URL_TEST_POSTGRES, pool_size=5, max_overflow=5)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
 @pytest.fixture()
-def db_session():
-    if _URL_TEST_POSTGRES:
-        engine = create_engine(_URL_TEST_POSTGRES)
-        Base.metadata.drop_all(engine)
+def db_session(_moteur_postgres):
+    if _moteur_postgres is not None:
+        engine = _moteur_postgres
+        with engine.begin() as connexion:
+            tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+            connexion.execute(text(f"TRUNCATE {tables} CASCADE"))
     else:
         engine = create_engine(
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
-    Base.metadata.create_all(engine)
+        Base.metadata.create_all(engine)
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = testing_session_local()
     try:
         yield session
     finally:
         session.close()
-        engine.dispose()
+        if _moteur_postgres is None:
+            engine.dispose()
 
 
 class FakeEmailClient:
