@@ -47,7 +47,10 @@ par un mineur, un casier judiciaire jamais vérifiable ni purgé (Art. 395), des
 prestataires jamais payés en cas de validation tacite, et une API qui gelait pendant chaque
 téléversement. Nouveaux parcours : renvoi d'OTP, mot de passe oublié, verdict casier, file de
 reversement marketplace. Migration `0016`. Suite de tests rejouable sur PostgreSQL
-(`LULU_TEST_DATABASE_URL`). Rapport, actions hors code (rotation du mot de passe DB exposé
+(`LULU_TEST_DATABASE_URL`). Seconde passe le même jour (12 constats de plus) : paiements
+rattachés par `partnerId`, limitation de débit en base, CSP, migration `0017` (aucune dérive
+de schéma), tests PostgreSQL en CI, arbitrages messagerie/contrôleurs. 294 tests au vert
+sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.
 

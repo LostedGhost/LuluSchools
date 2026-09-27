@@ -217,7 +217,9 @@ Détail : `docs/audit-securite-2026-09-27.md`. Côté frontend :
 - `pages/MotDePasseOubliePage.tsx` (route `/mot-de-passe-oublie`, lien depuis `LoginPage`) ; bouton de renvoi du code dans `SignupPage`.
 - `RecrutementPage` : panneau casier judiciaire (statut, consultation confidentielle en blob, verdict) ; le formulaire de contrat n'apparaît qu'après un verdict « conforme ».
 - `MarketplaceAdminPage` : liste « vendeurs à payer » (fin de la saisie manuelle d'ID pour le reversement).
-- `vercel.json` / `netlify.toml` : en-têtes de sécurité ; `vite.config.ts` : cible du proxy surchargeable par `LULU_API_PROXY`.
+- `vercel.json` / `netlify.toml` : en-têtes de sécurité dont une **Content-Security-Policy** (même valeur dans `vite.config.ts`, appliquée par `vite preview`) — toute nouvelle ressource externe (script, image, iframe) doit y être ajoutée dans les trois fichiers ; `vite.config.ts` : cible du proxy surchargeable par `LULU_API_PROXY`.
+- `KkiapayButton` : prop obligatoire `typeRessource` (forme le `partnerId` que le webhook utilise pour identifier la ressource payée) ; un seul écouteur Kkiapay global.
+- `ConversationPage` : messages chargés par pages de 100, bouton « Charger les messages précédents ».
 - Vérifié en navigateur contre un backend réel (PostgreSQL, services externes simulés) : erreur de connexion, mot de passe oublié, OTP erroné + renvoi, verdict casier, reversement vendeur.
 
 ## Limites connues (non bloquantes pour un MVP, à traiter avant une mise en production plus large)

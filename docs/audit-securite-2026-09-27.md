@@ -74,18 +74,37 @@ Gravité : **C** critique · **H** haute · **M** moyenne · **B** basse.
 | 30 | B | Liens de visite virtuelle sans validation de schéma. | `https://` uniquement. |
 | 31 | B | Aucun en-tête de sécurité sur le frontend. | `nosniff`, anti-framing, HSTS, `Permissions-Policy` (Vercel et Netlify). |
 
+### Seconde passe (même jour) : risques résiduels et points mineurs
+
+| # | Grav. | Constat | Correctif |
+|---|---|---|---|
+| 32 | H | Rattachement paiement ↔ ressource par un identifiant de transaction fourni par le navigateur : un identifiant intercepté pouvait être rattaché à une autre ressource de même prix. | Le widget transmet `partnerId` = `<type>:<id>` (champ documenté par Kkiapay, renvoyé dans le webhook) : la ressource désignée par le payeur fait foi, un rattachement concurrent est défait. Repli sur l'ancien rattachement pour les paiements déjà amorcés. |
+| 33 | H | Frontend : les écouteurs de succès Kkiapay s'empilaient à chaque ouverture du widget ; un paiement réussi était rattaché à toutes les ressources ouvertes auparavant. | Un seul écouteur, routé vers le paiement en cours. |
+| 34 | M | Limitation de débit en mémoire (un seul worker). | Compteurs en base (`tentatives_limitees`). |
+| 35 | M | Aucune Content-Security-Policy (jetons en `localStorage` exposés à toute injection de script). | CSP stricte (Vercel, Netlify, `vite preview`), sources inventoriées ; vérifiée sur le build de production. |
+| 36 | B | Dérive de schéma (types enum, unicité). | Migration `0017` ; `alembic check` : aucune dérive. |
+| 37 | M | Messages d'une conversation et signalements non paginés ; liste des signalements lisant ceux de tout le pays. | Pagination par curseur (+ bouton « charger les précédents ») ; requête jointe, 200 max. |
+| 38 | M | Devoir masqué accessible par lien direct et soumettable par l'élève/le tuteur. | 404 pour eux. |
+| 39 | M | Élève désinscrit conservant l'accès à une session live déjà rejointe. | Inscription validée exigée à chaque accès. |
+| 40 | M | Tickets transport/cantine achetables par un élève d'un autre établissement. | Réservés aux élèves de l'établissement. |
+| 41 | M | Inscription et vérification OTP révélaient l'existence d'un compte. | Réponse identique ; le propriétaire de l'adresse est prévenu par e-mail. |
+| 42 | B | Photos publiques d'un établissement suspendu ; file de révision vide pour l'A++ ; signalements en double ; listes à requêtes multiples. | Corrigés. |
+| 43 | — | **Arbitrages du 2026-09-27** : messagerie privée élève ↔ élève possible entre tous les établissements ; contrôleur désignable parmi tous les comptes. | Limitée au même établissement ; contrôleur choisi parmi les enseignants sous contrat et les admins de l'établissement. |
+
 ## 3. Vérifications
 
-- Backend : **282 tests** (246 existants + 36 nouveaux : `test_securite_auth.py`,
-  `test_securite_acces.py`), au vert sous SQLite. Mode PostgreSQL (`LULU_TEST_DATABASE_URL`) :
-  premiers modules au vert, exécution complète interrompue par la saturation du disque C: de la
-  machine de développement (voir § 4) — à rejouer (idéalement en CI).
-- Migration `0016_durcissement_securite` : montée, descente, remontée vérifiées sur PostgreSQL.
+- Backend : **294 tests** (246 existants + 48 nouveaux : `test_securite_auth.py`,
+  `test_securite_acces.py`, `test_securite_complements.py`), **au vert sous SQLite ET sous
+  PostgreSQL** (`LULU_TEST_DATABASE_URL`, désormais exécuté en CI).
+- Migrations `0016` et `0017` : montée, descente, remontée vérifiées sur PostgreSQL ;
+  `alembic check` sans aucune dérive.
 - Frontend : `tsc -b`, `vite build`, `oxlint` (0 erreur).
 - Navigateur, contre un backend réel : erreur de connexion affichée sur place ; mot de passe
   oublié de bout en bout ; code OTP erroné puis renvoi puis validation ; panneau casier
   (consultation, verdict conforme, apparition du formulaire de contrat) ; file « vendeurs à
-  payer » et reversement.
+  payer » et reversement. CSP vérifiée sur le build de production : rendu de la landing
+  page, chargement du script Kkiapay, tuiles OpenStreetMap et photos Pexels autorisés,
+  domaine non listé bloqué, aucune violation en console.
 
 ## 4. Actions requises hors code
 
@@ -106,27 +125,12 @@ Gravité : **C** critique · **H** haute · **M** moyenne · **B** basse.
 4. **Contrats en attente** : une candidature ne peut plus recevoir de contrat sans verdict
    « conforme » sur le casier — informer les A+.
 
-## 5. Risques résiduels (hors périmètre de cette branche)
+## 5. Risques résiduels
 
-- **Rattachement transaction ↔ ressource** : `…/paiement/amorcer` accepte l'identifiant de
-  transaction fourni par le client, sans vérification côté Kkiapay. Le montant est contrôlé au
-  webhook, mais un identifiant de transaction intercepté pourrait être rattaché à une autre
-  ressource de même prix. Durcissement proposé : transmettre l'ID de ressource au widget
-  (`data`) et le contrôler dans le webhook.
-- **Limiteur en mémoire** : valable pour un seul worker (configuration actuelle) ; à déplacer
-  vers un stockage partagé en cas de mise à l'échelle horizontale.
-- **Jetons en `localStorage`** : exposés en cas de XSS (aucun puits XSS trouvé ; React échappe
-  par défaut). Une CSP stricte reste à définir après inventaire du widget Kkiapay et des
-  ressources de la landing page.
-- **Dérive cosmétique de schéma** : deux types enum PostgreSQL nommés différemment des modèles
-  et trois contraintes d'unicité exprimées en contrainte plutôt qu'en index — sans effet à
-  l'exécution (vérifié), à aligner lors d'une prochaine migration.
-- **Pagination** : plusieurs listes (messages d'une conversation, signalements) restent non
-  paginées.
-- **Règles produit à arbitrer** (non modifiées, faute de décision métier) : un élève peut
-  ouvrir une conversation privée avec n'importe quel autre élève de la plateforme (tous
-  établissements confondus) ; un A+ peut désigner comme contrôleur n'importe quel compte, pas
-  seulement ceux proposés par la recherche (enseignants sous contrat, admins).
-- **CI** : ajouter à `backend-ci.yml` une seconde exécution de `pytest` avec
-  `LULU_TEST_DATABASE_URL` pointant sur le service PostgreSQL déjà présent (non fait ici :
-  modification de pipeline laissée à votre validation).
+- **Jetons en `localStorage`** : désormais protégés par la CSP ; un passage du refresh token
+  en cookie `HttpOnly` réduirait encore l'exposition, mais demande un proxy même-origine
+  pour l'API (déjà le cas via Vercel/Netlify) et une refonte du flux de rafraîchissement.
+- **Paiements amorcés avant le déploiement** : ils restent confirmés par l'ancien
+  rattachement (sans `partnerId`) ; le risque disparaît de lui-même avec eux.
+- **`style-src 'unsafe-inline'`** dans la CSP : nécessaire aux styles injectés par Leaflet et
+  le widget Kkiapay ; le risque (injection de style, pas de script) est faible.
