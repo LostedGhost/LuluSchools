@@ -75,7 +75,7 @@ LuluSchools/
 ├── backend/            API FastAPI (monolithe modulaire, un module = models+schemas+router)
 │   ├── app/modules/    21 modules métier (identité, établissements, pédagogie, coffre_fort, ...)
 │   ├── alembic/        migrations, une par évolution de schéma
-│   ├── scripts/        seed_admin_ministeriel.py, seed_mega.py (jeu de données grandeur nature)
+│   ├── scripts/        seed_admin_ministeriel.py, seed_mega.py + seed_donnees/ (jeu de données cohérent), verifier_seed.py, seed_render.bat
 │   ├── tests/          pytest, SQLite en mémoire, tous les services externes mockés
 │   └── PROJECT_MAP.md  carte détaillée du backend (fichier par fichier)
 ├── frontend/           application React (Vite/TS/Tailwind), une page par écran, par rôle
@@ -114,15 +114,20 @@ npm install
 npm run dev              # démarre le frontend sur http://localhost:5173 (proxy /api vers le backend local)
 ```
 
-Pour peupler la base locale avec un jeu de données réaliste (~30 établissements, ~6200
-comptes, toutes les tables applicatives) plutôt que de créer des comptes un par un :
+Pour peupler la base avec un jeu de données réaliste et cohérent (échelle 1,0 : 30
+établissements dont **l'Université d'Abomey-Calavi, toujours présente**, ~5 200 élèves,
+~8 700 comptes, toutes les tables), qui rejoue le workflow réel de chaque entité et se
+vérifie lui-même (39 règles métier) :
 
 ```bash
 cd backend
 python scripts/seed_mega.py --yes   # --scale ajuste le volume, --seed change le tirage aléatoire
 ```
 
-Tous les comptes générés partagent le mot de passe `Password1!`.
+Base en ligne (Render), depuis `cmd.exe` : `backend\scripts\seed_render.bat` (demande
+l'External Database URL et, de préférence, la `CASIER_JUDICIAIRE_ENCRYPTION_KEY` de Render).
+Tous les comptes partagent le mot de passe `Password1!` ; les comptes de démonstration
+(A++, A+ de l'UAC, étudiant, tuteur, enseignant, lycée, primaire) sont affichés à la fin.
 
 ## Tests
 
@@ -189,6 +194,6 @@ Premier déploiement au Bénin : conformité suivie article par article contre l
 
 ## Statut du projet
 
-**310 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
+**311 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
 6 lots livrés (Phase 1 → Phase 6 + volets Professeur et Élève/Tuteur), détail complet et
 limites connues dans l'[audit des fonctionnalités](docs/audit-fonctionnalites-plateforme.md).

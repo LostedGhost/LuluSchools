@@ -1,7 +1,7 @@
 import secrets
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/core/config.py -> parents[3] = racine du depot (a cote de .env.example)
@@ -16,6 +16,16 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     database_url: str = "postgresql+psycopg://user:password@localhost:5432/luluschools"
+
+    @field_validator("database_url")
+    @classmethod
+    def _pilote_psycopg(cls, valeur: str) -> str:
+        """Render (et la plupart des hebergeurs) fournissent postgres:// ou postgresql://,
+        que SQLAlchemy associerait au pilote psycopg2, non installe : on impose psycopg 3."""
+        for prefixe in ("postgres://", "postgresql://"):
+            if valeur.startswith(prefixe):
+                return "postgresql+psycopg://" + valeur[len(prefixe):]
+        return valeur
 
     jwt_secret_key: str = "change-me"
     jwt_access_token_expire_minutes: int = 30

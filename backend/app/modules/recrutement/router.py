@@ -8,6 +8,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Response, U
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from cryptography.fernet import InvalidToken
+
 from app.core.crypto import chiffrer_bytes, dechiffrer_bytes
 from app.core.database import get_db, get_session_factory
 from app.core.deps import (
@@ -615,7 +617,17 @@ def telecharger_casier(
             "casier_purge",
             "Le document a ete supprime (verdict rendu ou delai de conservation depasse) ; seul le statut est conserve.",
         )
-    contenu = dechiffrer_bytes(verification.contenu_chiffre)
+    try:
+        contenu = dechiffrer_bytes(verification.contenu_chiffre)
+    except InvalidToken as exc:
+        # Chiffre avec une autre cle (rotation de CASIER_JUDICIAIRE_ENCRYPTION_KEY, donnees
+        # importees d'un autre environnement) : illisible, mais jamais une erreur 500.
+        logger.error("casier_judiciaire: document illisible avec la cle actuelle (candidature %s)", candidature_id)
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "casier_illisible",
+            "Ce document ne peut pas être déchiffré avec la clé actuelle : demandez au candidat de le déposer à nouveau.",
+        ) from exc
     type_contenu = mimetypes.guess_type(verification.nom_fichier)[0] or "application/octet-stream"
     logger.info("casier_judiciaire: consultation de la candidature %s par %s", candidature_id, admin.id)
     return Response(

@@ -480,3 +480,21 @@ def test_compte_a_mot_de_passe_temporaire_bloque_sur_les_endpoints_metier(client
     reponse = client.get("/api/v1/etablissements", headers=_en_tete(token_pour(utilisateur)))
     assert reponse.status_code == 403
     assert reponse.json()["error"]["code"] == "changement_mot_de_passe_requis"
+
+
+def test_casier_chiffre_avec_une_autre_cle_renvoie_une_erreur_claire(
+    client, db_session, fake_llm_client, etablissement_avec_classe, enseignant_headers
+):
+    """Document chiffre avec une autre cle (rotation, donnees importees d'un autre
+    environnement) : 409 explicite, jamais une erreur 500."""
+    from cryptography.fernet import Fernet
+
+    admin = etablissement_avec_classe["admin_headers"]
+    _, candidature = _poste_et_candidature(client, etablissement_avec_classe, enseignant_headers, fake_llm_client)
+    verification = db_session.query(VerificationCasierJudiciaire).filter_by(candidature_id=candidature["id"]).one()
+    verification.contenu_chiffre = Fernet(Fernet.generate_key()).encrypt(b"%PDF autre environnement")
+    db_session.commit()
+
+    reponse = client.get(f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/document", headers=admin)
+    assert reponse.status_code == 409
+    assert reponse.json()["error"]["code"] == "casier_illisible"

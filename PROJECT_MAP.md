@@ -51,7 +51,9 @@ reversement marketplace. Migration `0016`. Suite de tests rejouable sur PostgreS
 rattachés par `partnerId`, limitation de débit en base, CSP, migration `0017` (aucune dérive
 de schéma), tests PostgreSQL en CI, arbitrages messagerie/contrôleurs, parcours navigateur de tous les rôles (PATCH /me pour le numéro Mobile Money), puis **refonte d'El Professor en interface de chat complète**
 (flux SSE, pièces jointes image/PDF, aide générale de l'élève, synthèse vocale, migration `0018`,
-vérifiée contre le vrai FreeLLM). 310 tests au vert
+vérifiée contre le vrai FreeLLM), plafonds de tokens retirés (1000 messages/jour), et
+**seed réécrit** (`backend/scripts/seed_donnees/`, UAC toujours présente, auto-vérifié sur
+39 règles métier, `seed_render.bat` pour la base en ligne). 311 tests au vert
 sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.

@@ -161,7 +161,7 @@ Détail complet : `docs/audit-securite-2026-09-27.md`. Points de repère pour re
 
 ### scripts/
 - `seed_admin_ministeriel.py` — crée le tout premier compte A++ (aucune route API ne le fait, choix de sécurité assumé). À exécuter une fois au déploiement, directement sur le serveur.
-- `seed_mega.py` — seed de développement « grandeur nature » : peuple **toutes** les tables applicatives (35+ tables, Phase 1 + Phase 2/3) avec un volume représentatif du système éducatif béninois. Voir section dédiée ci-dessous.
+- `seed_mega.py` + `seed_donnees/` — seed « grandeur nature » cohérent avec le workflow réel (UAC toujours présente), `verifier_seed.py` (39 règles métier), `seed_render.bat` (seed de la base en ligne). Voir section dédiée ci-dessous.
 
 ## Modèle de données (résumé)
 `Utilisateur` (1) → (0..1) `Tuteur` | `Enseignant` | `AdminEtablissement`. `AdminEtablissement` (N) → (1) `Etablissement` (1) → (N) `Classe`. `Poste` (1) → (N) `CritereDocumentPoste`, (1) → (N) `Candidature` (1) → (N) `DocumentCandidature`, (1) → (0..1) `VerificationCasierJudiciaire`, (1) → (0..1) `Contestation`, (1) → (0..1) `Contrat`.
@@ -198,69 +198,47 @@ Implémenté endpoint par endpoint après validation des cas d'utilisation (`../
 
 **Étape 5 (validation de bout en bout) close** : `tests/test_e2e_parcours_phase2_3.py` — même principe que `test_e2e_parcours_complet.py` (Phase 1), un seul jeu d'objets réutilisé à travers tous les modules plutôt que des fixtures isolées par test. Ordre rejoué : messagerie (groupe de classe auto-créé, DM tuteur→enfant, DM adulte→élève refusé, signalement traité) → El Professor + cours vidéo → cours en direct (consentement caméra, démarrage, participation, fin) → tickets transport et cantine (même enseignant cumulant les deux désignations de Contrôleur) → billetterie → visite virtuelle 3D → micro-job (offre → paiement → déclaration → validation → reversement A++). N'a pas révélé de bug d'intégration (contrairement à la Phase 1, qui en avait révélé plusieurs) — les modules Phase 2/3 réutilisent systématiquement les mêmes helpers RBAC (`verifier_admin_de_l_etablissement`, `est_controleur_designe`) que les tests unitaires exerçaient déjà.
 
-## Seed de développement grandeur nature (`scripts/seed_mega.py`)
+## Seed grandeur nature (`scripts/seed_mega.py` + paquet `scripts/seed_donnees/`)
 
-Créé sur demande explicite de l'utilisateur (« tests grandeur nature »), pour disposer d'un
-jeu de données réaliste couvrant les UC implémentés sans passer par des dizaines de
-comptes créés manuellement. Usage : `cd backend && python scripts/seed_mega.py --yes`
-(`--scale` ajuste tous les volumes, `--seed` change le tirage aléatoire — reproductible).
-Étendu le 2026-09-26 pour couvrir la Phase 4 (marketplace étudiante, UC-20/21/22) en plus
-des 18 UC des Phases 1/2/3.
+**Réécrit le 2026-09-27** : l'ancien seed (antérieur à l'audit) produisait des données
+incohérentes avec les règles des routeurs (plusieurs contrats par poste, contrat sans casier
+conforme, un seul enseignant pour 15 classes, moyennes de bulletin inventées sur 20 au lieu
+d'être calculées sur 100, identifiants de fichiers fictifs donnant des liens cassés,
+sessions « en cours » figées, tickets validés dans le futur...). Le nouveau seed rejoue le
+workflow réel de chaque entité ; chaque module du paquet documente les règles qu'il suit :
 
-**Ce qu'il fait** : réinitialise entièrement le schéma (`Base.metadata.drop_all` puis
-`create_all` — même technique que `tests/conftest.py` sur SQLite, appliquée ici à Postgres)
-puis insère directement via SQLAlchemy (sans passer par les endpoints HTTP, pour la vitesse)
-~30 établissements (10 EP, 10 ES moitié général/moitié technique, 10 UP moitié
-public/moitié privé), avec la vraie taxonomie béninoise : niveaux Maternelle→CM2, séries
-générales A1/A2/B/C/D et techniques F2-F4/G1-G3 encodées directement dans `Classe.niveau`
-(pas de colonne `filiere` dédiée — le modèle n'en a pas, volontairement non modifié pour
-un simple seed), filières universitaires réalistes (Droit, Génie Civil, Informatique de
-Gestion, etc.) avec leurs propres matières. Résultat typique (`--scale 1.0`) : 370 classes,
-~4400 élèves/inscriptions, ~6200 utilisateurs, et un volume cohérent sur les 40 tables
-restantes (recrutement, pédagogie, évaluations, actes, messagerie, cours en direct,
-transport/cantine, billetterie, micro-jobs, visites virtuelles, **marketplace étudiante**)
-— recensement exact dans le récapitulatif imprimé en fin d'exécution. Tous les comptes
-partagent le mot de passe `Password1!` (mot de passe permanent, flux OTP volontairement
-court-circuité).
+- `contexte.py` — configuration (`--scale`), horloge (tout est daté par rapport au moment du
+  seed : rentrée mi-septembre, activité entre la rentrée et maintenant), insertion **groupée
+  par table dans l'ordre des clés étrangères** (`persister`) : une requête par table au lieu
+  d'un aller-retour par ligne, indispensable contre une base distante.
+- `etablissements.py` — **Université d'Abomey-Calavi toujours créée en premier (code UP01)**,
+  quel que soit `--scale`, avec ses vraies entités (FADESP, FASEG, IFRI, EPAC, FSS, FLLAC,
+  FAST) ; EP/ES/UP avec la taxonomie béninoise (`taxonomie.py`), A+ `admin.<code>@...`,
+  référentiels de coefficients nationaux.
+- `recrutement.py` — poste → candidatures notées (rejet automatique sous le seuil) → verdict
+  casier CONFORME → **un** contrat par poste (POURVU) → signature ; reconductions dans la
+  fenêtre de 30 jours ; postes encore ouverts avec casiers à examiner et contestations.
+- `scolarite.py` — familles (nom du tuteur, fratries), âge conforme au niveau, consentement
+  parental horodaté pour les moins de 16 ans uniquement (Art. 446), capacité respectée.
+- `pedagogie.py` / `evaluations.py` — contenus par des enseignants **affectés**, cours PDF avec
+  texte extrait, quiz et notes cohérents avec le niveau de chaque élève, **bulletin calculé
+  comme l'application**, El Professor (4 personas, alertes), vie scolaire.
+- `vie_classe.py` — messagerie selon les règles de DM, sessions live (tableau en coordonnées
+  normalisées, capture rendue par `rendu_tableau.py`).
+- `services.py` / `economie.py` — actes, tickets, billets, micro-jobs, marketplace et
+  Coffre-fort avec les vraies transitions (paiement, validation tacite, reversement exigeant
+  un numéro Mobile Money, validations parentales liées à de vraies dépenses).
+- `demo.py` — scénarios **garantis** pour les comptes de démonstration (chaque écran et chaque
+  file d'administration a quelque chose à montrer).
+- `fichiers.py` — vrais fichiers générés (pymupdf) et téléversés **une fois** sur LuluFiles ;
+  sans LuluFiles, aucune donnée n'exige de fichier (jamais d'identifiant fictif).
 
-**Marketplace (UC-20/21/22, ajouté le 2026-09-26)** : par établissement ayant au moins deux
-élèves ≥16 ans avec compte (seuil dupliqué de `AGE_MAJORITE_NUMERIQUE`, pas d'import d'un
-module de router dans ce script qui ne dépend sinon que de `models` purs), génère des
-annonces réalistes (fournitures, manuels, uniformes, électronique...), un signalement
-occasionnel (15 %, dont 60 % déjà traités par l'A+), puis pour 60 % des annonces une
-transaction couvrant tout le cycle de vie du séquestre (`en_attente_paiement` → `finalisee`
-ou `remboursee`/`annulee`), y compris les deux issues d'une contestation (acceptée →
-remboursement, rejetée → transaction confirmée) — le statut de l'`Annonce` liée est toujours
-recalculé en cohérence (`reservee`/`vendue`/`disponible`), jamais laissé désynchronisé de sa
-transaction. Vérifié par un script isolé (SQLite en mémoire, hors périmètre Postgres/Alembic
-de ce seed) rejouant la fonction sur 80 graines aléatoires différentes : les 8 statuts de
-transaction et les 3 décisions de contestation sont tous atteints sans erreur.
-
-**Piège réel rencontré et corrigé** : un premier jet faisait un seul `db.add()` par ligne
-puis un unique `commit()` final, en supposant que SQLAlchemy trierait automatiquement les
-INSERT par dépendance de clé étrangère (comportement bien réel... mais seulement quand des
-`relationship()` relient les mappers). Aucun modèle de ce projet n'utilise `relationship()`
-pour ses clés étrangères (que des colonnes id brutes) : sans elles, l'ordre d'insertion
-n'est pas garanti, ce qui provoquait des `ForeignKeyViolation` aléatoires (reproduit dans un
-cas minimal à 2 tables sans aucune complexité annexe). Corrigé en remplaçant tout `db.add`
-par un helper `add()` qui `flush()` immédiatement après chaque ajout — chaque ligne devient
-réelle dans la transaction en cours avant que la suivante ne puisse la référencer, sans rien
-perdre de l'atomicité globale (un seul `commit()` final).
-
-**Second piège** : `Base.metadata.drop_all`/`create_all` ne touchent jamais la table
-`alembic_version` (hors de `Base.metadata`) — après un seed, `alembic upgrade head`
-croirait la base vierge et rejouerait toutes les migrations sur des tables déjà présentes.
-Le script aligne donc `alembic_version` sur `head` via `alembic.command.stamp(..., purge=True)`
-juste après le reset (`purge=True` efface la table plutôt que de calculer un delta depuis
-son contenu courant — nécessaire ici car l'historique de migrations de ce projet a été
-squashé en une seule révision (`0001_schema_initial`), rendant tout ancien contenu de
-`alembic_version` incompatible).
-
-**Limites assumées** : `etablissement_photos` reste vide (nécessiterait de vrais envois
-LuluFiles, hors périmètre d'un seed hors-ligne) ; `otp_verifications` reste vide (flux OTP
-volontairement court-circuité, son absence est l'état normal en régime établi) ;
-`photos_annonce_marketplace` réutilise le même identifiant LuluFiles factice que les cours
-PDF/vidéo (`LULUFILES_ID_PLACEHOLDER`), jamais un vrai envoi.
+`scripts/verifier_seed.py` (lancé automatiquement en fin de seed) relit la base et contrôle
+39 règles métier. Vérifié sur PostgreSQL : échelles 0,05 / 0,2 / 1,0 et trois graines, 39/39 ;
+puis chaque compte de démonstration appelle tous les endpoints GET de l'API : aucune erreur
+serveur. Échelle 1,0 : 30 établissements, 323 classes, ~5 200 élèves, ~8 700 comptes, 37 s en
+local (sans fichiers). `scripts/seed_render.bat` : seed de la base Render depuis le poste
+(aperçu, confirmation, clé de chiffrement des casiers de Render facultative, vérification).
 
 ## Phase 5 — Volet Professeur (UC-23 à UC-28)
 
