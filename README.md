@@ -153,7 +153,7 @@ complète : [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.m
 | Document | Contenu |
 |---|---|
 | [docs/audit-fonctionnalites-plateforme.md](docs/audit-fonctionnalites-plateforme.md) | Audit complet des fonctionnalités, par domaine, avec état de validation et limites connues |
-| [docs/audit-securite-2026-09-27.md](docs/audit-securite-2026-09-27.md) | Audit de sécurité et de fiabilité : 43 constats corrigés (deux passes), vérifications, actions requises hors code, risques résiduels |
+| [docs/audit-securite-2026-09-27.md](docs/audit-securite-2026-09-27.md) | Audit de sécurité et de fiabilité : 47 constats corrigés (deux passes + parcours complet de tous les rôles), vérifications, actions requises hors code, risques résiduels |
 | [SUIVI-PROJET.md](SUIVI-PROJET.md) | Avancement du pipeline en 8 étapes, cadrage verrouillé |
 | [docs/cas-utilisation-phase-1.md](docs/cas-utilisation-phase-1.md) | Cas d'utilisation validés de la Phase 1, avec règles métier et références légales |
 | [docs/diagrammes-uml-phase1.md](docs/diagrammes-uml-phase1.md) | Diagramme de cas d'utilisation et diagrammes de classes |
@@ -189,6 +189,6 @@ Premier déploiement au Bénin : conformité suivie article par article contre l
 
 ## Statut du projet
 
-**294 tests backend passants** (SQLite et PostgreSQL, dont 48 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
+**295 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
 6 lots livrés (Phase 1 → Phase 6 + volets Professeur et Élève/Tuteur), détail complet et
 limites connues dans l'[audit des fonctionnalités](docs/audit-fonctionnalites-plateforme.md).

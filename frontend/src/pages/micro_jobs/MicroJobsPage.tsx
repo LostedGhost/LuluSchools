@@ -30,6 +30,7 @@ import {
 import { KkiapayButton } from "../../components/KkiapayButton";
 import { Briefcase, Handshake } from "lucide-react";
 import { estRempli } from "../../utils/validation";
+import { NumeroMobileMoney } from "../../components/NumeroMobileMoney";
 
 const STATUT_MISSION_TONE: Record<MissionMicroJobOut["statut"], "pending" | "success" | "error" | "neutral" | "info"> = {
   en_cours: "pending",
@@ -213,6 +214,7 @@ export function MicroJobsPage() {
           {showForm ? "Fermer" : "+ Publier une demande"}
         </Btn>
       </div>
+      {estPrestataireEligible && <NumeroMobileMoney contexte="le paiement de vos missions" />}
 
       <div className="mb-6 space-y-3">
         <ErrorBanner>{erreur}</ErrorBanner>

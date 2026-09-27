@@ -34,6 +34,16 @@ const STATUT_LABEL: Record<StatutTicket, string> = {
   rembourse: "Remboursé",
 };
 
+// Un ticket "achete" peut etre paye ou non : le statut seul ne suffit pas a informer
+// l'utilisateur (il affichait "En attente de validation" dans les deux cas).
+function libelleTicket(t: { statut: StatutTicket; paiement_confirme: boolean }): { label: string; tone: "pending" | "success" | "neutral" | "error" } {
+  if (t.statut === "achete") {
+    return t.paiement_confirme ? { label: "Payé — à présenter", tone: "success" } : { label: "Paiement en attente", tone: "pending" };
+  }
+  return { label: STATUT_LABEL[t.statut], tone: STATUT_TONE[t.statut] };
+}
+
+
 interface ServicesScolairesPanelProps {
   etablissementId: string;
   eleveUtilisateurId?: string;
@@ -249,7 +259,7 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                     <p style={{ margin: 0, fontWeight: 600, color: "var(--ink)" }}>
                       {new Date(t.date_trajet).toLocaleDateString("fr-FR")} — {t.prix_paye.toLocaleString("fr-FR")} FCFA
                     </p>
-                    <Badge tone={STATUT_TONE[t.statut]}>{STATUT_LABEL[t.statut]}</Badge>
+                    <Badge tone={libelleTicket(t).tone}>{libelleTicket(t).label}</Badge>
                   </div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     {t.statut === "achete" && !t.paiement_confirme && (
@@ -262,7 +272,7 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                     )}
                     {t.statut === "achete" && (
                       <Btn variant="outline" size="sm" loading={actionTicketId === t.id} onClick={() => rembourserTransport(t.id)}>
-                        Rembourser
+                        {t.paiement_confirme ? "Rembourser" : "Annuler"}
                       </Btn>
                     )}
                   </div>
@@ -312,7 +322,7 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                     <p style={{ margin: 0, fontWeight: 600, color: "var(--ink)" }}>
                       {new Date(t.date_service).toLocaleDateString("fr-FR")} — {t.prix_paye.toLocaleString("fr-FR")} FCFA
                     </p>
-                    <Badge tone={STATUT_TONE[t.statut]}>{STATUT_LABEL[t.statut]}</Badge>
+                    <Badge tone={libelleTicket(t).tone}>{libelleTicket(t).label}</Badge>
                   </div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     {t.statut === "achete" && !t.paiement_confirme && (
@@ -325,7 +335,7 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                     )}
                     {t.statut === "achete" && (
                       <Btn variant="outline" size="sm" loading={actionTicketId === t.id} onClick={() => rembourserCantine(t.id)}>
-                        Rembourser
+                        {t.paiement_confirme ? "Rembourser" : "Annuler"}
                       </Btn>
                     )}
                   </div>

@@ -257,3 +257,13 @@ def test_conversation_inconnue_pagination_repere_invalide(client, classe_avec_en
         f"/api/v1/conversations/{conversation.id}/messages", params={"avant": "inexistant"}, headers=ctx["eleve_headers"]
     )
     assert reponse.status_code == 404
+
+
+def test_numero_mobile_money_renseigne_par_l_etudiant(client, etudiant_headers):
+    """Sans numero, l'administration ne pouvait pas reverser un etudiant prestataire/vendeur."""
+    assert client.get("/api/v1/me", headers=etudiant_headers).json()["telephone"] is None
+    invalide = client.patch("/api/v1/me", json={"telephone": "abc"}, headers=etudiant_headers)
+    assert invalide.status_code == 422
+    ok = client.patch("/api/v1/me", json={"telephone": "+229 01 97 00 00 00"}, headers=etudiant_headers)
+    assert ok.status_code == 200
+    assert ok.json()["telephone"] == "+229 01 97 00 00 00"

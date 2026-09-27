@@ -49,7 +49,7 @@ téléversement. Nouveaux parcours : renvoi d'OTP, mot de passe oublié, verdict
 reversement marketplace. Migration `0016`. Suite de tests rejouable sur PostgreSQL
 (`LULU_TEST_DATABASE_URL`). Seconde passe le même jour (12 constats de plus) : paiements
 rattachés par `partnerId`, limitation de débit en base, CSP, migration `0017` (aucune dérive
-de schéma), tests PostgreSQL en CI, arbitrages messagerie/contrôleurs. 294 tests au vert
+de schéma), tests PostgreSQL en CI, arbitrages messagerie/contrôleurs, parcours navigateur de tous les rôles (PATCH /me pour le numéro Mobile Money). 295 tests au vert
 sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.

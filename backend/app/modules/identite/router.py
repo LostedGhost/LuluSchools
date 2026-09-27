@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
-from app.core.deps import exiger_compte_actif, get_current_user, require_roles
+from app.core.deps import exiger_compte_actif, get_current_active_user, get_current_user, require_roles
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.rate_limit import adresse_client, consommer, enregistrer_echec, reinitialiser, verifier_limite
@@ -45,6 +45,7 @@ from app.modules.identite.schemas import (
     EnseignantOut,
     LoginRequest,
     MeOut,
+    MiseAJourProfilRequest,
     MotDePasseOublieRequest,
     OtpVerifyRequest,
     OtpVerifyResponse,
@@ -480,8 +481,21 @@ def _construire_me_out(db: Session, utilisateur: Utilisateur) -> dict:
         "role": utilisateur.role,
         "email_verifie": utilisateur.email_verifie,
         "mot_de_passe_temporaire": utilisateur.mot_de_passe_temporaire,
+        "telephone": utilisateur.telephone,
         "est_etudiant": eleve is not None and est_etudiant_fn(db, eleve.id),
     }
+
+
+@me_router.patch("/me", response_model=MeOut)
+def mettre_a_jour_mon_profil(
+    payload: MiseAJourProfilRequest,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> dict:
+    utilisateur.telephone = payload.telephone
+    db.commit()
+    db.refresh(utilisateur)
+    return _construire_me_out(db, utilisateur)
 
 
 @me_router.get("/me", response_model=MeOut)

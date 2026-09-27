@@ -60,6 +60,10 @@ export function reinitialiserMotDePasse(identifiant: string, code: string, nouve
   });
 }
 
+export function mettreAJourTelephone(telephone: string) {
+  return api.patch<MeOut>("/me", { telephone });
+}
+
 export function monProfil() {
   return api.get<MeOut>("/me");
 }

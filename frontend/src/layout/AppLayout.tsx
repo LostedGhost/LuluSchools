@@ -81,7 +81,7 @@ interface NavItem {
   end?: boolean;
 }
 
-function navPourRole(role: string | undefined): NavItem[] {
+function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
   const iconSize = 18;
   if (role === "tuteur") {
     return [
@@ -103,8 +103,14 @@ function navPourRole(role: string | undefined): NavItem[] {
       { to: "/eleve/cours-direct", label: "Cours en direct", icon: <Radio size={iconSize} /> },
       { to: "/eleve/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
       { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
-      { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
-      { to: "/eleve/marketplace", label: "Marketplace", icon: <ShoppingBag size={iconSize} /> },
+      // Micro-jobs et marketplace : reserves aux etudiants (UC-57/58) - un eleve de
+      // primaire/secondaire n'y voit qu'un refus du serveur, donc pas d'entree de menu.
+      ...(estEtudiant
+        ? [
+            { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
+            { to: "/eleve/marketplace", label: "Marketplace", icon: <ShoppingBag size={iconSize} /> },
+          ]
+        : []),
       { to: "/messagerie", label: "Messagerie", icon: <MessageCircle size={iconSize} /> },
     ];
   }
@@ -417,7 +423,7 @@ function MobileHeader() {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { utilisateur } = useAuth();
-  const items = navPourRole(utilisateur?.role);
+  const items = navPourRole(utilisateur?.role, !!utilisateur?.est_etudiant);
   const [collapsed, setCollapsed] = useState(false);
 
   // Sur petits écrans, auto-collapse

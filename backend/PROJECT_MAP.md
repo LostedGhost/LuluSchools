@@ -70,7 +70,7 @@ Détail complet : `docs/audit-securite-2026-09-27.md`. Points de repère pour re
 
 ### app/modules/identite/
 - `models.py` — `Utilisateur` (table de base commune à tous les rôles ; `login_id` = e-mail pour tuteur/enseignant/admin, matricule pour un élève), `Tuteur`, `OtpVerification`, enum `RoleUtilisateur`.
-- `router.py` — `router` (`/auth/tuteurs`, `/auth/tuteurs/verify-otp` — UC-01) + `auth_router`/`me_router` (`/auth/login`, `/auth/refresh`, `/auth/change-password`, `/me`).
+- `router.py` — `router` (`/auth/tuteurs`, `/auth/tuteurs/verify-otp` — UC-01) + `auth_router`/`me_router` (`/auth/login`, `/auth/refresh`, `/auth/change-password`, `GET /me`, `PATCH /me` — numéro Mobile Money, seul champ modifiable par l'utilisateur, requis pour les reversements marketplace/micro-jobs).
 - `schemas.py` — schémas Pydantic stricts (`extra="forbid"`, anti mass-assignment), validateur de force de mot de passe partagé création/changement.
 
 ### app/modules/etablissements/

@@ -30,6 +30,7 @@ export interface MeOut {
   email_verifie: boolean;
   mot_de_passe_temporaire: boolean;
   est_etudiant: boolean;
+  telephone: string | null;
 }
 
 export interface TuteurOut {

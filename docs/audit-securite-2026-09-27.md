@@ -93,7 +93,7 @@ Gravité : **C** critique · **H** haute · **M** moyenne · **B** basse.
 
 ## 3. Vérifications
 
-- Backend : **294 tests** (246 existants + 48 nouveaux : `test_securite_auth.py`,
+- Backend : **295 tests** (246 existants + 49 nouveaux : `test_securite_auth.py`,
   `test_securite_acces.py`, `test_securite_complements.py`), **au vert sous SQLite ET sous
   PostgreSQL** (`LULU_TEST_DATABASE_URL`, désormais exécuté en CI).
 - Migrations `0016` et `0017` : montée, descente, remontée vérifiées sur PostgreSQL ;
@@ -106,6 +106,35 @@ Gravité : **C** critique · **H** haute · **M** moyenne · **B** basse.
   page, chargement du script Kkiapay, tuiles OpenStreetMap et photos Pexels autorisés,
   domaine non listé bloqué, aucune violation en console.
 
+### 3.1 Parcours complet de tous les rôles (build de production + PostgreSQL réel)
+
+Frontend servi par `vite preview` (build de production, CSP active), backend réel sur une
+base PostgreSQL neuve migrée par Alembic, jeu de données créé par l'API. Seuls l'e-mail, le
+stockage de fichiers et le LLM étaient simulés ; le widget Kkiapay était simulé côté
+navigateur et son webhook rejoué avec le `partnerId` attendu. Chaque écran de chaque rôle
+a été ouvert : **aucune erreur API inattendue, aucune erreur JavaScript, aucune violation CSP**.
+
+| Rôle | Actions exercées de bout en bout |
+|------|----------------------------------|
+| A++ | Tableau de bord, établissements, suspension puis réactivation d'un compte (journal d'audit, connexion refusée pendant la suspension), reversement micro-job. |
+| A+ lycée / université | Verdict casier + contrat, validation d'inscription, acceptation d'acte et remise du document, reversement vendeur marketplace. |
+| Enseignant | Signature de contrat par tracé, publication de cours, quiz généré par IA, devoir, note de vie scolaire, contrôle de tickets et billets (double validation refusée), session live (WebSocket sous CSP, chat). |
+| Tuteur | Consentement, achat et paiement de ticket, message à l'enfant, billet d'événement payé. |
+| Élève | Quiz (100/100), devoir corrigé automatiquement, acte payé, session live, messagerie, groupe de classe. |
+| Étudiant | Marketplace (réservation, paiement, remise, confirmation), micro-job (publication, paiement, acceptation, fin, validation). |
+
+Défauts trouvés et corrigés pendant ce parcours :
+
+| # | Gravité | Défaut | Correctif |
+|---|---------|--------|-----------|
+| 44 | É | Aucun moyen pour un élève ou un étudiant de renseigner son numéro Mobile Money : le reversement des ventes marketplace et des micro-jobs était impossible. | `PATCH /me` (numéro validé) + encart « Numéro Mobile Money » sur les pages Marketplace et Micro-jobs. |
+| 45 | M | Menu de l'élève (non étudiant) affichant Micro-jobs et Marketplace, qui lui répondent 403. | Entrées réservées aux étudiants. |
+| 46 | M | Ticket non payé affiché « Valide » avec un bouton « Rembourser ». | « Paiement en attente » / « Payé — à présenter » ; bouton « Annuler » tant qu'il n'est pas payé. |
+| 47 | B | Bulletin : erreur rouge en début de période au lieu d'un état vide ; note de devoir affichée sur 20 quel que soit le barème ; « / 100 » doublé sur les scores de quiz et de bulletin. | Corrigés. |
+
+Points mineurs non corrigés (cosmétiques) : le message de succès du contrôle d'accès reste
+affiché jusqu'au scan suivant ; le panneau de suspension A++ s'ouvre sous le tableau.
+
 ## 4. Actions requises hors code
 
 0. **Poste de développement** : le disque C: est plein (0 Go libre) ; le service
@@ -116,7 +145,7 @@ Gravité : **C** critique · **H** haute · **M** moyenne · **B** basse.
 1. **Rotation du mot de passe PostgreSQL** exposé dans l'historique git (`render.yaml`,
    commit antérieur) si ce n'est pas déjà fait — voir `docs/deploiement-render-vercel.md`.
    Le purger de l'historique si le dépôt est public.
-2. **Déploiement** : `alembic upgrade head` applique `0016` au démarrage (déjà dans
+2. **Déploiement** : `alembic upgrade head` applique `0016` et `0017` au démarrage (déjà dans
    `startCommand`). Vérifier que `JWT_SECRET_KEY`, `KKIAPAY_SECRET` et
    `CASIER_JUDICIAIRE_ENCRYPTION_KEY` sont définis sur Render : le service refuse
    désormais de démarrer sans eux.
@@ -132,5 +161,8 @@ Gravité : **C** critique · **H** haute · **M** moyenne · **B** basse.
   pour l'API (déjà le cas via Vercel/Netlify) et une refonte du flux de rafraîchissement.
 - **Paiements amorcés avant le déploiement** : ils restent confirmés par l'ancien
   rattachement (sans `partnerId`) ; le risque disparaît de lui-même avec eux.
+- **Paiement Kkiapay réel non rejoué** : le rattachement par `partnerId` est vérifié contre la
+  documentation et le SDK, et simulé de bout en bout ; un paiement en mode *sandbox* sur
+  l'environnement déployé reste la seule preuve définitive.
 - **`style-src 'unsafe-inline'`** dans la CSP : nécessaire aux styles injectés par Leaflet et
   le widget Kkiapay ; le risque (injection de style, pas de script) est faible.

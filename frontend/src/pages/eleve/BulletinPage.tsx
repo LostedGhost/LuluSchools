@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { obtenirBulletin } from "../../api/evaluations";
-import { messageErreur } from "../../api/client";
+import { codeErreur, messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { BulletinOut } from "../../types/api";
 import { Card, ErrorBanner, EmptyState, Btn } from "../../components/ui";
@@ -24,7 +24,10 @@ export function BulletinPage() {
     setBulletin(null);
     obtenirBulletin(profil.id, profil.classe_id, periode)
       .then((res) => setBulletin(res.data))
-      .catch((err) => setErreur(messageErreur(err, "Aucune moyenne disponible pour cette periode.")))
+      .catch((err) => {
+        // Aucun devoir encore evalue : situation normale en debut de periode, pas une erreur.
+        if (codeErreur(err) !== "aucun_devoir_evalue") setErreur(messageErreur(err, "Aucune moyenne disponible pour cette periode."));
+      })
       .finally(() => setChargement(false));
   }, [profil.classe_id, profil.id, periode]);
 
@@ -64,9 +67,8 @@ export function BulletinPage() {
           <Card className="text-center anim-pop-in">
             <p className="text-label" style={{ color: "var(--ink-soft)", marginBottom: "8px" }}>Moyenne générale</p>
             <ScoreBurst
-              score={bulletin.moyenne_generale}
+              score={Math.round(bulletin.moyenne_generale * 10) / 10}
               max={100}
-              label="/ 100"
               tone={bulletin.moyenne_generale >= 50 ? "success" : "error"}
             />
           </Card>
