@@ -128,6 +128,10 @@ Tous les comptes générés partagent le mot de passe `Password1!`.
 
 ```bash
 cd backend && pytest                 # suite backend (aucune dépendance externe, tout est mocké)
+# même suite sur un vrai PostgreSQL (base dédiée, schéma recréé à chaque test : lent et
+# gourmand en écritures, prévoir de l'espace disque) — SQLite masque certaines erreurs
+# propres à Postgres :
+LULU_TEST_DATABASE_URL=postgresql+psycopg://user:mdp@localhost:5432/luluschools_tests pytest
 cd frontend && npx tsc -b            # vérification de types
 cd frontend && npx vite build        # build de production
 cd frontend && npx oxlint            # lint
@@ -149,6 +153,7 @@ complète : [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.m
 | Document | Contenu |
 |---|---|
 | [docs/audit-fonctionnalites-plateforme.md](docs/audit-fonctionnalites-plateforme.md) | Audit complet des fonctionnalités, par domaine, avec état de validation et limites connues |
+| [docs/audit-securite-2026-09-27.md](docs/audit-securite-2026-09-27.md) | Audit de sécurité et de fiabilité : 31 constats corrigés, vérifications, actions requises hors code, risques résiduels |
 | [SUIVI-PROJET.md](SUIVI-PROJET.md) | Avancement du pipeline en 8 étapes, cadrage verrouillé |
 | [docs/cas-utilisation-phase-1.md](docs/cas-utilisation-phase-1.md) | Cas d'utilisation validés de la Phase 1, avec règles métier et références légales |
 | [docs/diagrammes-uml-phase1.md](docs/diagrammes-uml-phase1.md) | Diagramme de cas d'utilisation et diagrammes de classes |
@@ -176,13 +181,14 @@ Premier déploiement au Bénin : conformité suivie article par article contre l
 
 - **Art. 446** — protection des mineurs : branche d'âge à l'inscription, micro-jobs/marketplace réservés aux étudiants majeurs numériques
 - **Art. 389-390** — consentement parental horodaté et démontrable
-- **Art. 395** — données sensibles (casier judiciaire) chiffrées et gardées en base, jamais confiées à un stockage tiers
+- **Art. 395** — données sensibles (casier judiciaire) chiffrées et gardées en base, jamais confiées à un stockage tiers, consultables par le seul A+ recruteur et purgées au verdict ou à 30 jours (seul le statut conforme/non conforme est conservé)
+- **Art. 446** — seul le tuteur peut donner le consentement parental d'un mineur de moins de 16 ans
 - **Art. 284-287** — signature électronique simple (tracé canvas) pour les contrats enseignants
 - **Art. 401** — aucune décision automatisée par IA sans recours humain (écran de révision manuelle systématique)
 - **Art. 354/356** — bornes de remboursement précises (transport/cantine, billetterie)
 
 ## Statut du projet
 
-**239 tests backend passants**, `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
+**282 tests backend passants** (dont 36 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
 6 lots livrés (Phase 1 → Phase 6 + volets Professeur et Élève/Tuteur), détail complet et
 limites connues dans l'[audit des fonctionnalités](docs/audit-fonctionnalites-plateforme.md).
