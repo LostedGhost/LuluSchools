@@ -198,11 +198,11 @@ export function EleveDashboard() {
               desc: "Groupe de classe et messages privés",
             },
             {
-              to: "/eleve/el-professor-famille",
+              to: "/eleve/el-professor",
               icon: <Bot size={24} />,
               tone: "magic" as const,
-              title: "El Professor Famille",
-              desc: "Conversation partagée avec votre tuteur",
+              title: "El Professor",
+              desc: "Ton assistant pour comprendre tes cours et réviser",
             },
             {
               to: "/eleve/passeport",

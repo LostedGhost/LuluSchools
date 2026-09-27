@@ -43,7 +43,7 @@ détail exhaustif (règles métier, limites assumées, état de validation) dans
 | **Recrutement** | Postes, formulaire de candidature dynamique, notation de documents par IA, casier judiciaire chiffré, contrat signé par tracé canvas |
 | **Pédagogie** | Cours (texte/PDF/audio/vidéo), quiz généré par IA, vie scolaire, sessions en direct avec tableau collaboratif temps réel |
 | **Évaluations** | Devoirs formatifs/sommatifs, soumission texte ou copie photographiée corrigée par IA, référentiels de coefficients, bulletins pondérés |
-| **El Professor** | Assistant IA à 4 personas (élève, enseignant, tuteur, famille), garde-fou de sécurité avec alerte administrative |
+| **El Professor** | Assistant IA à 4 personas (élève, enseignant, tuteur, famille) : vraie interface de chat (réponses en direct, Markdown et formules, photo ou PDF joints, lecture à voix haute, dictée), aide sur un cours ou aide générale, garde-fou de sécurité avec alerte administrative |
 | **Actes académiques** | Catalogue par établissement, demande et traitement, paiement Kkiapay |
 | **Vie extra-scolaire** | Transport/cantine, billetterie d'événements, visites virtuelles 3D/drone, ticketerie unifiée avec QR codes |
 | **Économie étudiante** | Marketplace et micro-jobs réservés aux étudiants majeurs, séquestre de paiement, arbitrage de contestations |
@@ -189,6 +189,6 @@ Premier déploiement au Bénin : conformité suivie article par article contre l
 
 ## Statut du projet
 
-**295 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
+**310 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
 6 lots livrés (Phase 1 → Phase 6 + volets Professeur et Élève/Tuteur), détail complet et
 limites connues dans l'[audit des fonctionnalités](docs/audit-fonctionnalites-plateforme.md).

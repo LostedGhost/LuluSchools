@@ -36,6 +36,7 @@ import {
   Send,
   BookMarked,
   LayoutGrid,
+  Sparkles,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -79,6 +80,8 @@ interface NavItem {
   label: string;
   icon: ReactNode;
   end?: boolean;
+  /** Libellé de la barre du bas (mobile), sinon le premier mot de `label`. */
+  court?: string;
 }
 
 function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
@@ -87,6 +90,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
     return [
       { to: "/tuteur", label: "Mes enfants", icon: <Users size={iconSize} />, end: true },
       { to: "/tuteur/nouvelle-inscription", label: "Nouvelle inscription", icon: <UserCheck size={iconSize} /> },
+      { to: "/tuteur/el-professor", label: "El Professor", court: "El Prof", icon: <Sparkles size={iconSize} /> },
       { to: "/tuteur/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
       { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
       { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
@@ -97,6 +101,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
     return [
       { to: "/eleve", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
       { to: "/eleve/cours", label: "Cours", icon: <BookOpen size={iconSize} /> },
+      { to: "/eleve/el-professor", label: "El Professor", court: "El Prof", icon: <Sparkles size={iconSize} /> },
       { to: "/eleve/devoirs", label: "Devoirs", icon: <ClipboardList size={iconSize} /> },
       { to: "/eleve/bulletin", label: "Bulletin", icon: <Award size={iconSize} /> },
       { to: "/eleve/actes", label: "Actes académiques", icon: <FileText size={iconSize} /> },
@@ -122,6 +127,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
       { to: "/enseignant/contrats", label: "Mes contrats", icon: <FileText size={iconSize} /> },
       { to: "/enseignant/cours", label: "Mes cours", icon: <BookOpen size={iconSize} /> },
       { to: "/enseignant/devoirs", label: "Mes devoirs", icon: <PencilRuler size={iconSize} /> },
+      { to: "/enseignant/el-professor", label: "El Professor", court: "El Prof", icon: <Sparkles size={iconSize} /> },
       { to: "/enseignant/cours-direct", label: "Cours en direct", icon: <Radio size={iconSize} /> },
       { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
       { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
@@ -342,7 +348,7 @@ function BottomNav({ items }: { items: NavItem[] }) {
               aria-current={isActive ? "page" : undefined}
             >
               <span style={{ width: "20px", height: "20px" }}>{item.icon}</span>
-              <span>{item.label.split(" ")[0]}</span>
+              <span>{item.court ?? item.label.split(" ")[0]}</span>
             </NavLink>
           );
         })}

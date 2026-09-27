@@ -57,6 +57,13 @@ A++ (admin ministériel) · A+ (admin établissement) · A- (admin/décideur pas
 - Aucune note, décision ou statut n'est produit par cet assistant (pas de décision automatisée à effet significatif — cohérent avec Art. 401, déjà appliqué ailleurs sur la plateforme).
 - **Portée V1 : uniquement l'Élève, uniquement sur le contenu d'un cours donné [Délégué]** — c'est le cœur de l'idée d'origine (expliquer les cours à l'élève) et le périmètre le plus resserré possible à spécifier/tester. "Orienter chaque acteur selon son profil" (guide d'usage plateforme pour tuteur/enseignant/A+) est noté comme extension possible d'une Phase ultérieure, pas de cette UC — élargir la portée maintenant ferait de cette UC un produit différent (un assistant plateforme générique) avant même d'avoir validé la version pédagogique de base.
 - Historique de conversation conservé par élève et par cours (pas de session éphémère) **[Délégué]** — utile à la continuité pédagogique d'une session à l'autre, cohérent avec le reste de la plateforme qui conserve l'historique (tentatives de quiz, soumissions).
+- **Évolution du 2026-09-27 — interface de conversation complète [Délégué]** :
+  - l'élève peut aussi ouvrir des conversations d'**aide générale** (toutes matières, adaptées au niveau de sa classe), avec les mêmes garde-fous que l'aide sur un cours ;
+  - pièce jointe **image ou PDF** (10 Mo) pour les 4 personas ; l'image n'est jamais conservée (minimisation, Art. 383), seul le texte extrait d'un PDF l'est ;
+  - le contenu d'un cours **PDF** est désormais transmis à l'assistant (texte extrait) ; pour un cours audio/vidéo, l'assistant sait qu'il n'en a pas le contenu ;
+  - réponse **diffusée au fil de l'eau**, lecture à voix haute (synthèse vocale FreeLLM), dictée par le navigateur, renommage/suppression des conversations ;
+  - un signal de détresse dans la conversation d'un élève prépare une **alerte pour l'administration** (jamais montrée au tuteur, qui peut être la source du danger) ;
+  - l'assistant ne cite jamais de numéro d'urgence (vérification réelle : le modèle citait le 119, numéro français).
 
 ---
 

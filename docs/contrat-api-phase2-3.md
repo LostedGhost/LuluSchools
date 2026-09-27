@@ -64,6 +64,21 @@ Même structure qu'UC-11, entités et endpoints renommés :
 | GET | `/cours/{id}/el-professor/session` | Élève propriétaire | Session + historique des échanges |
 | POST | `/el-professor/sessions/{id}/messages` | Élève propriétaire | `question` (texte) → appel **synchrone** à FreeLLM (contexte = `cours.contenu_texte` + historique de la session), retourne la réponse immédiatement — synchrone comme la génération de quiz (UC-07), pas de raison de différer une réponse de chat interactif en arrière-plan (contrairement à la notation/correction, ADR-005, qui n'a pas de contrainte d'interactivité immédiate) |
 
+### Interface de conversation complète (2026-09-27) — 4 personas
+
+`{persona}` ∈ `eleve`, `enseignant`, `tuteur`, `famille`. Accès : propriétaire de la conversation (fil familial : le tuteur et l'enfant, écriture après `rejoindre`), sinon 404.
+
+| Méthode | Chemin | Rôle | Notes |
+|---|---|---|---|
+| GET | `/el-professor/eleve/sessions` | Élève | Toutes ses conversations (cours et aide générale), avec `cours_titre`, `sujet` |
+| POST | `/el-professor/eleve/sessions` | Élève | `cours_id` (facultatif : sans lui, conversation d'aide générale, plusieurs possibles ; avec, reprise de la conversation du cours), `sujet` |
+| POST | `/el-professor/{persona}/sessions/{id}/flux` | Propriétaire | Multipart : `question` (1-4000), `fichier` facultatif (PNG/JPEG/WebP/PDF, 10 Mo). Réponse `text/event-stream` : `debut`, `delta` ({texte})…, puis `fin` (les deux messages enregistrés) ou `erreur` ({message}) — rien n'est enregistré en cas d'échec. 60 questions/heure/compte (429) |
+| PATCH | `/el-professor/{persona}/sessions/{id}` | Propriétaire (fil familial : tuteur) | `sujet` (1-200) |
+| DELETE | `/el-professor/{persona}/sessions/{id}` | Propriétaire (fil familial : tuteur) | 204 ; les alertes déjà émises sont conservées |
+| POST | `/el-professor/synthese-vocale` | Élève, enseignant, tuteur | `texte` (1-2500) → `audio/wav` ; 30 lectures/heure/compte |
+
+Les messages exposent `piece_jointe_nom` / `piece_jointe_type`. `AlerteElProfessorOut.origine` accepte désormais `eleve`.
+
 ## Contenu vidéo/podcast (UC-15)
 
 **Pas de nouvel endpoint** : extension directe de `POST /classes/{id}/cours` (UC-06, Phase 1) — le champ `format` accepte désormais aussi `video`, avec une limite serveur de 200 Mo / 15 minutes (délégué UC-15) vérifiée à l'upload, `413`/`422` sinon. Le reste du cycle de vie (rattachement classe/matière/chapitre, visibilité) est inchangé.

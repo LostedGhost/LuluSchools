@@ -1,4 +1,6 @@
 import unicodedata
+
+import httpx
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
@@ -7,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
+from app.core.documents import DocumentIllisibleError, extraire_texte_pdf, telecharger_borne
 from app.core.deps import (
     api_error,
     get_current_active_user,
@@ -148,6 +151,26 @@ def _verifier_lecture_contenus_classe(db: Session, utilisateur: Utilisateur, cla
     return True
 
 
+def texte_du_cours(db: Session, cours: Cours, files_client: LuluFilesClient) -> str:
+    """Contenu textuel d'un cours : saisi par l'enseignant, ou extrait de son PDF. Les cours
+    PDF publies avant l'extraction a l'upload sont lus une fois, a la premiere demande, puis
+    memorises (texte_extrait vide = PDF sans texte exploitable, on ne reessaie pas)."""
+    if cours.contenu_texte:
+        return cours.contenu_texte
+    if cours.format != FormatCours.PDF or not cours.lulufiles_file_id:
+        return ""
+    if cours.texte_extrait is None:
+        try:
+            lien = files_client.get_signed_link(cours.lulufiles_file_id)
+            cours.texte_extrait = extraire_texte_pdf(telecharger_borne(lien, MAX_TAILLE_COURS_OCTETS))
+        except DocumentIllisibleError:
+            cours.texte_extrait = ""
+        except (FileStorageError, httpx.HTTPError):
+            return ""  # indisponibilite passagere : nouvel essai a la prochaine demande
+        db.commit()
+    return cours.texte_extrait
+
+
 def _cours_lisible(db: Session, utilisateur: Utilisateur, cours_id: str) -> Cours:
     cours = db.get(Cours, cours_id)
     if cours is None:
@@ -176,9 +199,15 @@ def publier_cours(
     _verifier_enseignant_rattache(db, enseignant, classe.id)
 
     lulufiles_file_id = None
+    texte_extrait = None
     if fichier is not None:
         limite = MAX_TAILLE_COURS_VIDEO_OCTETS if format == FormatCours.VIDEO else MAX_TAILLE_COURS_OCTETS
         contenu = lire_upload_borne(fichier, limite, _TYPES_PAR_FORMAT.get(format))
+        if format == FormatCours.PDF:
+            try:
+                texte_extrait = extraire_texte_pdf(contenu)
+            except DocumentIllisibleError:
+                texte_extrait = ""
         try:
             lulufiles_file_id = files_client.upload(
                 contenu, fichier.filename or titre, fichier.content_type or "application/octet-stream"
@@ -196,6 +225,7 @@ def publier_cours(
         format=format,
         contenu_texte=contenu_texte,
         lulufiles_file_id=lulufiles_file_id,
+        texte_extrait=texte_extrait,
     )
     db.add(cours)
     db.commit()
@@ -252,23 +282,26 @@ def creer_quiz(
     payload: QuizCreate,
     db: Session = Depends(get_db),
     llm_client: FreeLLMClient = Depends(get_llm_client),
+    files_client: LuluFilesClient = Depends(get_files_client),
     enseignant: Utilisateur = Depends(get_current_active_user),
 ) -> Quiz:
-    """UC-07 : les questions sont generees par le LLM a partir du contenu texte du cours."""
+    """UC-07 : les questions sont generees par le LLM a partir du contenu texte du cours
+    (saisi, ou extrait du PDF)."""
     cours = db.get(Cours, cours_id)
     if cours is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
     if cours.enseignant_id != enseignant.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce cours ne vous appartient pas.")
-    if not cours.contenu_texte:
+    contenu = texte_du_cours(db, cours, files_client)
+    if not contenu:
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "contenu_texte_requis",
-            "Le cours doit avoir un contenu_texte pour generer un quiz.",
+            "Le cours doit avoir un contenu texte (saisi ou dans un PDF lisible) pour generer un quiz.",
         )
 
     try:
-        questions_generees = llm_client.generer_quiz(cours.contenu_texte, payload.nombre_questions)
+        questions_generees = llm_client.generer_quiz(contenu, payload.nombre_questions)
     except QuizGenerationError as exc:
         raise api_error(
             status.HTTP_502_BAD_GATEWAY, "generation_echouee", "Impossible de generer le quiz, veuillez reessayer."
@@ -418,6 +451,7 @@ def poser_question_el_professor(
     payload: QuestionElProfessorCreate,
     db: Session = Depends(get_db),
     llm_client: FreeLLMClient = Depends(get_llm_client),
+    files_client: LuluFilesClient = Depends(get_files_client),
     eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
 ) -> SessionElProfessor:
     session = db.get(SessionElProfessor, session_id)
@@ -425,11 +459,17 @@ def poser_question_el_professor(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Session introuvable.")
     if session.eleve_utilisateur_id != eleve_utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette session ne vous appartient pas.")
+    if session.cours_id is None:
+        raise api_error(
+            status.HTTP_409_CONFLICT, "session_generale", "Cette conversation s'utilise depuis la page El Professor."
+        )
     cours = _cours_lisible(db, eleve_utilisateur, session.cours_id)
 
     historique = [{"role": m.role.value, "contenu": m.contenu} for m in session.messages]
     try:
-        reponse = llm_client.repondre_question_el_professor(cours.contenu_texte or "", historique, payload.question)
+        reponse = llm_client.repondre_question_el_professor(
+            texte_du_cours(db, cours, files_client), historique, payload.question
+        )
     except ElProfessorError as exc:
         raise api_error(
             status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une reponse, veuillez reessayer."
@@ -927,7 +967,7 @@ def lister_alertes_el_professor_de_mon_enfant(
         db.query(AlerteElProfessor)
         .filter(
             AlerteElProfessor.eleve_utilisateur_id == eleve_utilisateur_id,
-            AlerteElProfessor.origine != OrigineAlerteElProfessor.FAMILLE,
+            AlerteElProfessor.origine.notin_([OrigineAlerteElProfessor.FAMILLE, OrigineAlerteElProfessor.ELEVE]),
         )
         .order_by(AlerteElProfessor.created_at.desc())
         .all()

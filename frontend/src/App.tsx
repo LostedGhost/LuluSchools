@@ -27,7 +27,6 @@ import { DevoirsEnfantPage } from "./pages/tuteur/DevoirsEnfantPage";
 import { MarketplaceEnfantPage } from "./pages/tuteur/MarketplaceEnfantPage";
 import { SessionsLiveEnfantPage } from "./pages/tuteur/SessionsLiveEnfantPage";
 import { ElProfessorTuteurPage } from "./pages/tuteur/ElProfessorTuteurPage";
-import { ElProfessorFamillePage as TuteurElProfessorFamillePage } from "./pages/tuteur/ElProfessorFamillePage";
 import { CoffreFortPage } from "./pages/tuteur/CoffreFortPage";
 import { RadarFamilialPage } from "./pages/tuteur/RadarFamilialPage";
 import { PasseportEnfantPage } from "./pages/tuteur/PasseportEnfantPage";
@@ -42,7 +41,7 @@ import { BulletinPage } from "./pages/eleve/BulletinPage";
 import { ActesPage } from "./pages/eleve/ActesPage";
 import { CoursDirectPage } from "./pages/eleve/CoursDirectPage";
 import { ServicesScolairesPage as EleveServicesScolairesPage } from "./pages/eleve/ServicesScolairesPage";
-import { ElProfessorFamillePage as EleveElProfessorFamillePage } from "./pages/eleve/ElProfessorFamillePage";
+import { ElProfessorElevePage } from "./pages/eleve/ElProfessorElevePage";
 import { PasseportPage } from "./pages/eleve/PasseportPage";
 
 import { EnseignantDashboard } from "./pages/enseignant/EnseignantDashboard";
@@ -225,7 +224,7 @@ function App() {
               path="/tuteur/el-professor-famille"
               element={
                 <RequireAuth roles={["tuteur"]}>
-                  <TuteurElProfessorFamillePage />
+                  <ElProfessorTuteurPage ongletInitial="famille" />
                 </RequireAuth>
               }
             />
@@ -362,10 +361,22 @@ function App() {
               }
             />
             <Route
+              path="/eleve/el-professor"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <EleveProfileProvider>
+                    <ElProfessorElevePage />
+                  </EleveProfileProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
               path="/eleve/el-professor-famille"
               element={
                 <RequireAuth roles={["eleve"]}>
-                  <EleveElProfessorFamillePage />
+                  <EleveProfileProvider>
+                    <ElProfessorElevePage ongletInitial="famille" />
+                  </EleveProfileProvider>
                 </RequireAuth>
               }
             />

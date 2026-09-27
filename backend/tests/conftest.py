@@ -17,6 +17,7 @@ from app.core.llm import (
     DigestFamilleError,
     DocumentScoringError,
     ElProfessorError,
+    SyntheseVocaleError,
     QuizGenerationError,
     ResumeSessionLiveError,
     get_llm_client,
@@ -167,6 +168,13 @@ class FakeLLMClient:
         self.echec_conseil_famille = False
         self.reponse_digest_famille = "Cette semaine, votre enfant a bien avance."
         self.echec_digest_famille = False
+        # El Professor en flux : morceaux diffuses, messages recus (pour inspecter la consigne
+        # et les pieces jointes), echec simule, synthese vocale.
+        self.morceaux_el_professor = ["Voici ", "une ", "explication."]
+        self.echec_flux_el_professor = False
+        self.messages_flux_el_professor: list[list[dict]] = []
+        self.audio_synthese = b"RIFF-audio-simule"
+        self.echec_synthese_vocale = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -227,6 +235,17 @@ class FakeLLMClient:
         if self.echec_conseil_famille:
             raise ElProfessorError("echec simule")
         return self.reponse_conseil_famille
+
+    def diffuser_el_professor(self, messages: list[dict]):
+        self.messages_flux_el_professor.append(messages)
+        if self.echec_flux_el_professor:
+            raise ElProfessorError("echec simule")
+        yield from self.morceaux_el_professor
+
+    def synthese_vocale(self, texte: str) -> bytes:
+        if self.echec_synthese_vocale:
+            raise SyntheseVocaleError("echec simule")
+        return self.audio_synthese
 
     def generer_digest_famille(self, eleve_nom: str, sources: list[str]) -> str:
         if self.echec_digest_famille:

@@ -1,201 +1,248 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   alertesElProfessorDeMonEnfant,
   listerMesSessionsElProfessorTuteur,
   ouvrirSessionElProfessorTuteur,
-  poserQuestionElProfessorTuteur,
 } from "../../api/el_professor_tuteur";
+import { listerMesSessionsElProfessorFamille, ouvrirSessionElProfessorFamille } from "../../api/el_professor_famille";
 import { messageErreur } from "../../api/client";
 import { useMesEnfants } from "../../tuteur/useMesEnfants";
-import type { AlerteElProfessorOut, SessionElProfessorTuteurOut } from "../../types/api";
-import { Btn, Card, EmptyState, ErrorBanner, Field, SectionHead, Select, SkeletonCard, TextArea } from "../../components/ui";
-import { Bot, Plus, Send, TriangleAlert, Users } from "lucide-react";
+import { ElProfessorChat, type ConversationChat } from "../../components/el_professor/ElProfessorChat";
+import { OngletsElProfessor } from "../../components/el_professor/OngletsElProfessor";
+import { Btn, Card, EmptyState, ErrorBanner, Field, Select, SkeletonCard, TextInput } from "../../components/ui";
+import type { AlerteElProfessorOut, SessionElProfessorFamilleOut, SessionElProfessorTuteurOut } from "../../types/api";
+import { TriangleAlert, Users } from "lucide-react";
 
-export function ElProfessorTuteurPage() {
-  const { enfants, chargement: chargementEnfants, erreur: erreurEnfants } = useMesEnfants();
-  const [sessions, setSessions] = useState<SessionElProfessorTuteurOut[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [alertes, setAlertes] = useState<AlerteElProfessorOut[]>([]);
-  const [chargement, setChargement] = useState(true);
-  const [erreur, setErreur] = useState<string | null>(null);
-  const [enCours, setEnCours] = useState(false);
+const SUGGESTIONS = [
+  "Comment aider mon enfant à mieux s'organiser pour ses devoirs ?",
+  "Mon enfant manque de motivation, que puis-je faire ?",
+  "Comment accompagner son orientation ?",
+];
 
-  const [nouvelEleveId, setNouvelEleveId] = useState("");
-  const [nouveauSujet, setNouveauSujet] = useState("");
-  const [question, setQuestion] = useState("");
+const SUGGESTIONS_FAMILLE = [
+  "Comment nous organiser ensemble pour les révisions ?",
+  "Quels objectifs nous fixer pour ce trimestre ?",
+];
 
-  useEffect(() => {
-    listerMesSessionsElProfessorTuteur()
-      .then((res) => {
-        setSessions(res.data);
-        if (res.data.length > 0) setSessionId(res.data[0].id);
-      })
-      .catch((err) => setErreur(messageErreur(err)))
-      .finally(() => setChargement(false));
-  }, []);
-
-  useEffect(() => {
-    if (enfants.length > 0 && !nouvelEleveId) setNouvelEleveId(enfants[0].eleve_utilisateur_id ?? "");
-  }, [enfants, nouvelEleveId]);
-
-  useEffect(() => {
-    if (!nouvelEleveId) return;
-    alertesElProfessorDeMonEnfant(nouvelEleveId)
-      .then((res) => setAlertes(res.data))
-      .catch(() => undefined);
-  }, [nouvelEleveId]);
-
-  const ouvrirNouvelleSession = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!nouvelEleveId) return;
-    setErreur(null);
-    try {
-      const res = await ouvrirSessionElProfessorTuteur(nouvelEleveId, nouveauSujet.trim() || undefined);
-      setSessions((prev) => [res.data, ...prev]);
-      setSessionId(res.data.id);
-      setNouveauSujet("");
-    } catch (err) {
-      setErreur(messageErreur(err, "Impossible d'ouvrir cette session."));
-    }
+function versConversation(s: SessionElProfessorTuteurOut): ConversationChat {
+  return {
+    id: s.id,
+    sujet: s.sujet,
+    titreParDefaut: "Nouvelle conversation",
+    reference: s.eleve_utilisateur_id,
+    creeLe: s.created_at,
+    messages: s.messages,
   };
+}
 
-  const poserQuestion = async (e: FormEvent) => {
+function versConversationFamille(s: SessionElProfessorFamilleOut): ConversationChat {
+  return {
+    id: s.id,
+    sujet: s.sujet,
+    titreParDefaut: "Fil familial",
+    reference: s.eleve_utilisateur_id,
+    creeLe: s.created_at,
+    messages: s.messages,
+    enAttente: s.rejointe_le === null,
+  };
+}
+
+function FormulaireNouvelle({
+  enfants,
+  libelleAction,
+  onCreer,
+}: {
+  enfants: { id: string; eleve_utilisateur_id: string | null; eleve_prenom: string; eleve_nom: string }[];
+  libelleAction: string;
+  onCreer: (eleveId: string, sujet: string | undefined) => Promise<void>;
+}) {
+  const avecCompte = enfants.filter((e) => e.eleve_utilisateur_id);
+  const [eleveId, setEleveId] = useState(avecCompte[0]?.eleve_utilisateur_id ?? "");
+  const [sujet, setSujet] = useState("");
+  const [enCours, setEnCours] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  if (avecCompte.length === 0) {
+    return <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>Aucun enfant avec un compte élève actif.</p>;
+  }
+
+  const soumettre = async (e: FormEvent) => {
     e.preventDefault();
-    if (!sessionId || !question.trim()) return;
-    setErreur(null);
     setEnCours(true);
+    setErreur(null);
     try {
-      const res = await poserQuestionElProfessorTuteur(sessionId, question.trim());
-      setSessions((prev) => prev.map((s) => (s.id === sessionId ? res.data : s)));
-      setQuestion("");
+      await onCreer(eleveId, sujet.trim() || undefined);
     } catch (err) {
-      setErreur(messageErreur(err, "Impossible d'obtenir une réponse."));
+      setErreur(messageErreur(err, "Impossible d'ouvrir cette conversation."));
     } finally {
       setEnCours(false);
     }
   };
 
-  const sessionCourante = sessions.find((s) => s.id === sessionId) ?? null;
+  return (
+    <form onSubmit={soumettre} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <ErrorBanner>{erreur}</ErrorBanner>
+      <Field label="Enfant concerné">
+        <Select value={eleveId} onChange={(e) => setEleveId(e.target.value)}>
+          {avecCompte.map((e) => (
+            <option key={e.id} value={e.eleve_utilisateur_id ?? ""}>
+              {e.eleve_prenom} {e.eleve_nom}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Sujet (optionnel)">
+        <TextInput value={sujet} maxLength={200} onChange={(e) => setSujet(e.target.value)} placeholder="Ex. Motivation en baisse" />
+      </Field>
+      <Btn type="submit" size="sm" loading={enCours}>
+        {libelleAction}
+      </Btn>
+    </form>
+  );
+}
+
+export function ElProfessorTuteurPage({ ongletInitial = "perso" }: { ongletInitial?: "perso" | "famille" }) {
+  const { enfants, chargement: chargementEnfants, erreur: erreurEnfants } = useMesEnfants();
+  const [params] = useSearchParams();
+  const [onglet, setOnglet] = useState<"perso" | "famille">(params.get("onglet") === "famille" ? "famille" : ongletInitial);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [alertes, setAlertes] = useState<AlerteElProfessorOut[]>([]);
+
+  const [conversations, setConversations] = useState<ConversationChat[]>([]);
+  const [famille, setFamille] = useState<ConversationChat[]>([]);
+  const [chargement, setChargement] = useState(true);
+  const [chargementFamille, setChargementFamille] = useState(true);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [familleActiveId, setFamilleActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    listerMesSessionsElProfessorTuteur()
+      .then((res) => setConversations(res.data.map(versConversation)))
+      .catch((err) => setErreur(messageErreur(err)))
+      .finally(() => setChargement(false));
+    listerMesSessionsElProfessorFamille()
+      .then((res) => setFamille(res.data.map(versConversationFamille)))
+      .catch(() => undefined)
+      .finally(() => setChargementFamille(false));
+  }, []);
+
+  // Les prénoms des enfants arrivent à part : libellés calculés à l'affichage.
+  const prenoms = useMemo(() => {
+    const table = new Map<string, string>();
+    enfants.forEach((e) => e.eleve_utilisateur_id && table.set(e.eleve_utilisateur_id, e.eleve_prenom));
+    return table;
+  }, [enfants]);
+  const conversationsAffichees = useMemo(
+    () => conversations.map((c) => ({ ...c, contexte: (c.reference && prenoms.get(c.reference)) || null })),
+    [conversations, prenoms],
+  );
+  const familleAffichee = useMemo(
+    () =>
+      famille.map((c) => {
+        const prenom = (c.reference && prenoms.get(c.reference)) || "votre enfant";
+        return {
+          ...c,
+          titreParDefaut: `Fil avec ${prenom}`,
+          contexte: c.enAttente ? `En attente de ${prenom}` : `Avec ${prenom}`,
+        };
+      }),
+    [famille, prenoms],
+  );
+
+  useEffect(() => {
+    const ids = enfants.map((e) => e.eleve_utilisateur_id).filter((id): id is string => !!id);
+    Promise.all(ids.map((id) => alertesElProfessorDeMonEnfant(id).then((r) => r.data).catch(() => [])))
+      .then((listes) => setAlertes(listes.flat().filter((a) => !a.traite)))
+      .catch(() => undefined);
+  }, [enfants]);
+
+  const nomEnfant = (id: string | null) => {
+    const enfant = enfants.find((e) => e.eleve_utilisateur_id === id);
+    return enfant ? `${enfant.eleve_prenom} ${enfant.eleve_nom}` : "votre enfant";
+  };
 
   return (
     <div className="page-content">
-      <SectionHead
-        eyebrow="Espace Tuteur"
-        title="El Professor"
-        desc="Un conseil sur la scolarité, le comportement ou l'orientation de votre enfant."
-      />
+      <div style={{ marginBottom: "16px" }}>
+        <p className="text-eyebrow">Espace Tuteur</p>
+        <h1 className="text-headline" style={{ color: "var(--ink)", margin: 0 }}>
+          El Professor
+        </h1>
+        <p className="text-sm" style={{ color: "var(--ink-soft)", margin: "4px 0 0" }}>
+          Un conseil sur la scolarité, le comportement ou l'orientation de votre enfant — seul, ou dans un fil partagé avec lui.
+        </p>
+      </div>
+      <OngletsElProfessor onglet={onglet} onChange={setOnglet} libellePerso="Mes conversations" libelleFamille="Avec mon enfant" />
       <ErrorBanner>{erreurEnfants ?? erreur}</ErrorBanner>
+
+      {alertes.length > 0 && (
+        <Card style={{ marginBottom: "16px", borderColor: "var(--action-deep)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", color: "var(--action-deep)", fontWeight: 700 }}>
+            <TriangleAlert size={16} /> Alertes de sécurité transmises à l'établissement
+          </div>
+          {alertes.map((a) => (
+            <p key={a.id} style={{ fontSize: "var(--text-sm)", margin: "0 0 6px" }}>
+              <strong>{nomEnfant(a.eleve_utilisateur_id)}</strong> — {a.motif}
+            </p>
+          ))}
+        </Card>
+      )}
 
       {chargementEnfants ? (
         <SkeletonCard />
       ) : enfants.length === 0 ? (
-        <EmptyState icon={<Users size={24} />} title="Aucun enfant inscrit" />
+        <EmptyState icon={<Users size={24} />} title="Aucun enfant inscrit" desc="El Professor vous conseille à propos d'un enfant inscrit." />
+      ) : onglet === "perso" ? (
+        <ElProfessorChat
+          persona="tuteur"
+          roleUtilisateur="tuteur"
+          conversations={conversationsAffichees}
+          setConversations={setConversations}
+          chargement={chargement}
+          activeId={activeId}
+          setActiveId={setActiveId}
+          suggestions={SUGGESTIONS}
+          formulaireNouvelle={(fermer) => (
+            <FormulaireNouvelle
+              enfants={enfants}
+              libelleAction="Commencer"
+              onCreer={async (eleveId, sujet) => {
+                const res = await ouvrirSessionElProfessorTuteur(eleveId, sujet);
+                setConversations((prec) => [versConversation(res.data), ...prec]);
+                setActiveId(res.data.id);
+                fermer();
+              }}
+            />
+          )}
+        />
       ) : (
-        <>
-          <Card variant="soft" style={{ marginBottom: "24px" }}>
-            <form onSubmit={ouvrirNouvelleSession} style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div style={{ minWidth: "220px" }}>
-                <Field label="Enfant concerné">
-                  <Select value={nouvelEleveId} onChange={(e) => setNouvelEleveId(e.target.value)}>
-                    {enfants.map((i) => (
-                      <option key={i.id} value={i.eleve_utilisateur_id ?? ""}>
-                        {i.eleve_prenom} {i.eleve_nom}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
-              <div style={{ flex: 1, minWidth: "200px" }}>
-                <Field label="Sujet (optionnel)">
-                  <TextArea rows={1} value={nouveauSujet} onChange={(e) => setNouveauSujet(e.target.value)} placeholder="Ex. Motivation en baisse" />
-                </Field>
-              </div>
-              <Btn type="submit" variant="primary" size="sm" leftIcon={<Plus size={14} />}>
-                Nouvelle conversation
-              </Btn>
-            </form>
-          </Card>
-
-          {alertes.length > 0 && (
-            <Card style={{ marginBottom: "24px", borderColor: "var(--action-deep)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", color: "var(--action-deep)", fontWeight: 700 }}>
-                <TriangleAlert size={16} /> Alertes de sécurité
-              </div>
-              {alertes.map((a) => (
-                <p key={a.id} style={{ fontSize: "var(--text-sm)", margin: "0 0 6px" }}>{a.motif}</p>
-              ))}
-            </Card>
+        <ElProfessorChat
+          persona="famille"
+          roleUtilisateur="tuteur"
+          conversations={familleAffichee}
+          setConversations={setFamille}
+          chargement={chargementFamille}
+          activeId={familleActiveId}
+          setActiveId={setFamilleActiveId}
+          suggestions={SUGGESTIONS_FAMILLE}
+          libelleAuteur={(role) => (role === "eleve" ? "Votre enfant" : null)}
+          ecritureBloquee={(c) =>
+            c.enAttente ? "Votre enfant doit d'abord accepter l'invitation, depuis son espace El Professor." : null
+          }
+          formulaireNouvelle={(fermer) => (
+            <FormulaireNouvelle
+              enfants={enfants}
+              libelleAction="Inviter mon enfant"
+              onCreer={async (eleveId, sujet) => {
+                const res = await ouvrirSessionElProfessorFamille(eleveId, sujet);
+                setFamille((prec) => [versConversationFamille(res.data), ...prec]);
+                setFamilleActiveId(res.data.id);
+                fermer();
+              }}
+            />
           )}
-
-          {chargement ? (
-            <SkeletonCard />
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "20px" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {sessions.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setSessionId(s.id)}
-                    style={{
-                      textAlign: "left",
-                      padding: "8px 10px",
-                      borderRadius: "var(--radius-sm)",
-                      border: "none",
-                      cursor: "pointer",
-                      background: s.id === sessionId ? "var(--primary-tint)" : "var(--surface-2)",
-                      fontSize: "var(--text-sm)",
-                    }}
-                  >
-                    {s.sujet || "Conversation"}
-                  </button>
-                ))}
-              </div>
-
-              <Card>
-                {!sessionCourante ? (
-                  <p style={{ color: "var(--ink-faint)", fontSize: "var(--text-sm)" }}>Ouvrez une nouvelle conversation pour commencer.</p>
-                ) : (
-                  <>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px", maxHeight: "420px", overflowY: "auto" }}>
-                      {sessionCourante.messages.length === 0 && (
-                        <p style={{ color: "var(--ink-faint)", fontSize: "var(--text-sm)", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Bot size={16} /> Posez votre première question.
-                        </p>
-                      )}
-                      {sessionCourante.messages.map((m) => (
-                        <div
-                          key={m.id}
-                          style={{
-                            alignSelf: m.role === "tuteur" ? "flex-end" : "flex-start",
-                            maxWidth: "85%",
-                            background: m.role === "tuteur" ? "var(--primary-tint)" : "var(--magic-tint)",
-                            borderRadius: "var(--radius-md)",
-                            padding: "8px 12px",
-                            fontSize: "var(--text-sm)",
-                            whiteSpace: "pre-wrap",
-                          }}
-                        >
-                          {m.contenu.includes("⚠️") && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--action-deep)", fontWeight: 700, marginBottom: "4px" }}>
-                              <TriangleAlert size={14} /> Situation sensible détectée
-                            </div>
-                          )}
-                          {m.contenu}
-                        </div>
-                      ))}
-                    </div>
-                    <form onSubmit={poserQuestion} style={{ display: "flex", gap: "8px" }}>
-                      <TextArea rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Votre question..." style={{ flex: 1 }} />
-                      <Btn type="submit" variant="primary" loading={enCours} leftIcon={<Send size={14} />}>
-                        Envoyer
-                      </Btn>
-                    </form>
-                  </>
-                )}
-              </Card>
-            </div>
-          )}
-        </>
+        />
       )}
     </div>
   );
