@@ -59,7 +59,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const requeteOriginale = error.config as RequeteAvecRetry | undefined;
-    if (error.response?.status === 401 && requeteOriginale && !requeteOriginale._retry) {
+    // Un 401 sur /auth/* (mauvais mot de passe, code OTP errone...) est une reponse
+    // metier a afficher sur place : jamais un motif de rafraichissement ni de redirection.
+    const estAppelAuth = requeteOriginale?.url?.startsWith("/auth/") ?? false;
+    if (error.response?.status === 401 && requeteOriginale && !requeteOriginale._retry && !estAppelAuth) {
       requeteOriginale._retry = true;
       if (!refreshEnCours) {
         refreshEnCours = rafraichirToken().finally(() => {

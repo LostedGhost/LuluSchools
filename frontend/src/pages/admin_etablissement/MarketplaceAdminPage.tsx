@@ -8,9 +8,15 @@ import {
   reverserVendeur,
   signalementsMarketplaceEnAttente,
   traiterSignalementAnnonce,
+  transactionsAReverser,
 } from "../../api/marketplace";
 import { messageErreur } from "../../api/client";
-import type { AnnonceMarketplaceOut, ContestationMarketplaceAEtrancherOut, SignalementAnnonceOut } from "../../types/api";
+import type {
+  AnnonceMarketplaceOut,
+  ContestationMarketplaceAEtrancherOut,
+  SignalementAnnonceOut,
+  TransactionAReverserOut,
+} from "../../types/api";
 import {
   Badge,
   Btn,
@@ -47,6 +53,7 @@ export function MarketplaceAdminPage() {
   const [signalements, setSignalements] = useState<SignalementAnnonceOut[]>([]);
   const [annonces, setAnnonces] = useState<AnnonceMarketplaceOut[]>([]);
   const [contestationsEnAttente, setContestationsEnAttente] = useState<ContestationMarketplaceAEtrancherOut[]>([]);
+  const [aReverser, setAReverser] = useState<TransactionAReverserOut[]>([]);
   const [decisionParId, setDecisionParId] = useState<Record<string, string>>({});
   const [motifRetraitParId, setMotifRetraitParId] = useState<Record<string, string>>({});
   const [chargement, setChargement] = useState(true);
@@ -64,11 +71,13 @@ export function MarketplaceAdminPage() {
       listerAnnonces(etablissement.id, { statut: "disponible", page_size: 60 }),
       listerAnnonces(etablissement.id, { statut: "reservee", page_size: 60 }),
       contestationsMarketplaceEnAttente(etablissement.id),
+      transactionsAReverser(etablissement.id),
     ])
-      .then(([resSignalements, resDisponibles, resReservees, resContestations]) => {
+      .then(([resSignalements, resDisponibles, resReservees, resContestations, resAReverser]) => {
         setSignalements(resSignalements.data);
         setAnnonces([...resDisponibles.data.items, ...resReservees.data.items]);
         setContestationsEnAttente(resContestations.data);
+        setAReverser(resAReverser.data);
       })
       .catch((err) => setErreur(messageErreur(err)))
       .finally(() => setChargement(false));
@@ -112,9 +121,8 @@ export function MarketplaceAdminPage() {
     }
   };
 
-  // --- Litige et reversement. Les contestations en attente sont listées ci-dessous
-  // (contestationsMarketplaceEnAttente) ; le reversement au vendeur reste manuel
-  // (aucune liste de transactions confirmées par établissement pour l'instant).
+  // --- Litige et reversement : contestations en attente et transactions confirmées
+  // (y compris tacitement) listées ci-dessous ; le virement Mobile Money reste manuel (ADR-008).
   const [contestationId, setContestationId] = useState("");
   const [motifDecision, setMotifDecision] = useState("");
   const [enCoursDecision, setEnCoursDecision] = useState<"acceptee" | "rejetee" | null>(null);
@@ -167,6 +175,7 @@ export function MarketplaceAdminPage() {
       setSuccesLitige("Transaction marquée comme payée au vendeur.");
       setTransactionId("");
       setReferencePaiement("");
+      charger();
     } catch (err) {
       setErreurLitige(messageErreur(err, "Impossible de reverser cette transaction. Vérifiez qu'elle est bien confirmée."));
     } finally {
@@ -290,6 +299,44 @@ export function MarketplaceAdminPage() {
               <span style={{ color: "var(--ink-faint)", fontSize: "var(--text-xs)", flexShrink: 0 }}>
                 {new Date(c.created_at).toLocaleDateString("fr-FR")}
               </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {aReverser.length > 0 && (
+        <div className="space-y-3 mb-6">
+          <p style={{ margin: 0, fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--ink)" }}>
+            Vendeurs à payer ({aReverser.length}) — cliquez pour préremplir le reversement
+          </p>
+          {aReverser.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTransactionId(t.id)}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "12px",
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: "var(--radius-sm)",
+                border: transactionId === t.id ? "1px solid var(--primary)" : "1px solid var(--border)",
+                background: transactionId === t.id ? "var(--primary-tint)" : "var(--surface-2)",
+                cursor: "pointer",
+                textAlign: "left",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              <span>
+                <strong>{t.annonce_titre}</strong> ({t.prix_paye.toLocaleString("fr-FR")} FCFA) — {t.vendeur_prenom} {t.vendeur_nom}
+                {t.vendeur_telephone ? ` · ${t.vendeur_telephone}` : ""}
+              </span>
+              {t.date_remise_declaree && (
+                <span style={{ color: "var(--ink-faint)", fontSize: "var(--text-xs)", flexShrink: 0 }}>
+                  remis le {new Date(t.date_remise_declaree).toLocaleDateString("fr-FR")}
+                </span>
+              )}
             </button>
           ))}
         </div>

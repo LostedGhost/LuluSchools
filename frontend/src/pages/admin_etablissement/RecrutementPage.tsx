@@ -10,9 +10,18 @@ import {
   noterDocumentManuellement,
   obtenirLienDocumentCandidature,
   proposerReconduction,
+  rendreVerdictCasier,
+  telechargerCasierJudiciaire,
 } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
-import type { CandidatureOut, ChampFormulaire, ContratAvecEnseignantOut, CritereDocument, PosteOut } from "../../types/api";
+import type {
+  CandidatureOut,
+  ChampFormulaire,
+  ContratAvecEnseignantOut,
+  CritereDocument,
+  PosteOut,
+  StatutVerificationCasier,
+} from "../../types/api";
 import {
   Badge,
   Btn,
@@ -28,7 +37,7 @@ import {
   TextInput,
 } from "../../components/ui";
 import { FormulaireBuilder } from "../../components/FormulaireBuilder";
-import { Briefcase, ExternalLink, FileSignature, FileWarning, Plus, RefreshCw, Trash2, Users } from "lucide-react";
+import { Briefcase, ExternalLink, FileSignature, FileWarning, Plus, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react";
 import { estRempli, erreurDateFuture } from "../../utils/validation";
 
 const RECONDUCTION_FENETRE_JOURS = 30;
@@ -37,6 +46,18 @@ function dansLaFenetreDeReconduction(dateFin: string): boolean {
   const jours = Math.ceil((new Date(dateFin).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   return jours <= RECONDUCTION_FENETRE_JOURS;
 }
+
+const TONE_CASIER: Record<StatutVerificationCasier, "success" | "error" | "pending"> = {
+  conforme: "success",
+  non_conforme: "error",
+  en_attente: "pending",
+};
+
+const LIBELLE_CASIER: Record<StatutVerificationCasier, string> = {
+  conforme: "Conforme",
+  non_conforme: "Non conforme",
+  en_attente: "À vérifier",
+};
 
 const TONE_CANDIDATURE: Record<CandidatureOut["statut"], "success" | "error" | "pending"> = {
   retenue: "success",
@@ -69,6 +90,7 @@ export function RecrutementPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [lienEnCoursId, setLienEnCoursId] = useState<string | null>(null);
+  const [casierEnCoursId, setCasierEnCoursId] = useState<string | null>(null);
   const [titreErreur, setTitreErreur] = useState<string | null>(null);
   const [criteresErreurs, setCriteresErreurs] = useState<Record<number, string>>({});
   const [reconductionOuvertePour, setReconductionOuvertePour] = useState<string | null>(null);
@@ -201,6 +223,38 @@ export function RecrutementPage() {
       .then((res) => setCandidaturesPoste(res.data))
       .catch((err) => setErreur(messageErreur(err)))
       .finally(() => setChargementCandidatures(false));
+  };
+
+  const consulterCasier = async (candidatureId: string) => {
+    setCasierEnCoursId(`voir-${candidatureId}`);
+    setErreur(null);
+    try {
+      const res = await telechargerCasierJudiciaire(candidatureId);
+      const url = URL.createObjectURL(res.data);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'ouvrir le casier judiciaire."));
+    } finally {
+      setCasierEnCoursId(null);
+    }
+  };
+
+  const trancherCasier = async (candidatureId: string, conforme: boolean) => {
+    const confirmation = conforme
+      ? "Confirmer que le casier est CONFORME ? Le document sera définitivement supprimé, seul le statut sera conservé."
+      : "Confirmer que le casier est NON CONFORME ? La candidature sera rejetée et le document définitivement supprimé.";
+    if (!window.confirm(confirmation)) return;
+    setCasierEnCoursId(`verdict-${candidatureId}`);
+    setErreur(null);
+    try {
+      await rendreVerdictCasier(candidatureId, conforme);
+      if (posteSelectionne) voirCandidatures(posteSelectionne);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'enregistrer le verdict."));
+    } finally {
+      setCasierEnCoursId(null);
+    }
   };
 
   const creerLeContrat = async (candidatureId: string) => {
@@ -396,7 +450,57 @@ export function RecrutementPage() {
                                   ))}
                                 </div>
                               )}
-                              {c.statut === "en_evaluation" && c.score !== null && (
+                              {c.statut_casier_judiciaire && (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    alignItems: "center",
+                                    gap: "var(--space-2)",
+                                    marginBottom: "var(--space-2)",
+                                    fontSize: "var(--text-sm)",
+                                  }}
+                                >
+                                  <ShieldCheck size={16} aria-hidden style={{ color: "var(--ink-faint)" }} />
+                                  <span>Casier judiciaire :</span>
+                                  <Badge tone={TONE_CASIER[c.statut_casier_judiciaire]}>{LIBELLE_CASIER[c.statut_casier_judiciaire]}</Badge>
+                                  {c.statut_casier_judiciaire === "en_attente" && (
+                                    <>
+                                      <Btn
+                                        variant="ghost"
+                                        size="sm"
+                                        loading={casierEnCoursId === `voir-${c.id}`}
+                                        onClick={() => consulterCasier(c.id)}
+                                        rightIcon={<ExternalLink size={12} />}
+                                      >
+                                        Consulter (confidentiel)
+                                      </Btn>
+                                      <Btn
+                                        variant="primary"
+                                        size="sm"
+                                        loading={casierEnCoursId === `verdict-${c.id}`}
+                                        onClick={() => trancherCasier(c.id, true)}
+                                      >
+                                        Conforme
+                                      </Btn>
+                                      <Btn
+                                        variant="ghost"
+                                        size="sm"
+                                        loading={casierEnCoursId === `verdict-${c.id}`}
+                                        onClick={() => trancherCasier(c.id, false)}
+                                      >
+                                        Non conforme
+                                      </Btn>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {c.statut === "en_evaluation" && c.score !== null && c.statut_casier_judiciaire !== "conforme" && (
+                                <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--ink-faint)" }}>
+                                  Le contrat ne peut être créé qu'après vérification du casier judiciaire (conforme).
+                                </p>
+                              )}
+                              {c.statut === "en_evaluation" && c.score !== null && c.statut_casier_judiciaire === "conforme" && (
                                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "var(--space-2)" }}>
                                   <Field label="Syllabus">
                                     <TextInput

@@ -12,6 +12,7 @@ export function estEmailValide(valeur: string): boolean {
 /** 8+ caracteres, au moins 1 majuscule et 1 chiffre (regle affichee partout dans l'UI). */
 export function erreurMotDePasse(valeur: string): string | null {
   if (valeur.length < 8) return "8 caracteres minimum.";
+  if (valeur.length > 128) return "128 caracteres maximum.";
   if (!/[A-Z]/.test(valeur)) return "Au moins une majuscule.";
   if (!/[0-9]/.test(valeur)) return "Au moins un chiffre.";
   return null;

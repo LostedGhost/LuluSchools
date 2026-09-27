@@ -15,6 +15,7 @@ const CartesPage = lazy(() => import("./pages/CartesPage").then((m) => ({ defaul
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
+import { MotDePasseOubliePage } from "./pages/MotDePasseOubliePage";
 import { DashboardRedirect } from "./pages/DashboardRedirect";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
@@ -130,6 +131,14 @@ function App() {
               element={
                 <RedirectIfAuthenticated>
                   <SignupPage role="enseignant" />
+                </RedirectIfAuthenticated>
+              }
+            />
+            <Route
+              path="/mot-de-passe-oublie"
+              element={
+                <RedirectIfAuthenticated>
+                  <MotDePasseOubliePage />
                 </RedirectIfAuthenticated>
               }
             />

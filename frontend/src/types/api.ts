@@ -270,6 +270,17 @@ export interface CandidatureOut {
   enseignant_nom: string;
   enseignant_prenom: string;
   documents: DocumentCandidatureOut[];
+  statut_casier_judiciaire: StatutVerificationCasier | null;
+}
+
+export type StatutVerificationCasier = "en_attente" | "conforme" | "non_conforme";
+
+export interface VerificationCasierOut {
+  candidature_id: string;
+  statut: StatutVerificationCasier;
+  date_verification: string | null;
+  date_suppression_prevue: string | null;
+  document_disponible: boolean;
 }
 
 export interface EnseignantSigneOut {
@@ -838,6 +849,16 @@ export interface ContestationMarketplaceAEtrancherOut extends ContestationMarket
   created_at: string;
   annonce_titre: string;
   prix_paye: number;
+}
+
+export interface TransactionAReverserOut {
+  id: string;
+  annonce_titre: string;
+  prix_paye: number;
+  vendeur_nom: string;
+  vendeur_prenom: string;
+  vendeur_telephone: string | null;
+  date_remise_declaree: string | null;
 }
 
 /* ═══════════════════════════════════════════════════════════════

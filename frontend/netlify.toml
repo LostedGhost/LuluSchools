@@ -26,3 +26,14 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# En-tetes de securite, identiques a vercel.json (pas de CSP : le widget Kkiapay et les
+# ressources de la landing page doivent d'abord etre inventories).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), microphone=(self), geolocation=(self), payment=(self)"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
