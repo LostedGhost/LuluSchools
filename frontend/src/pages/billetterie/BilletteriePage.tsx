@@ -137,7 +137,7 @@ export function BilletteriePage() {
                     </div>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       {b.statut === "achete" && !b.paiement_confirme && b.prix_paye > 0 && (
-                        <KkiapayButton montant={b.prix_paye} reference={b.id} onSucces={(txId) => payer(b.id, txId)} disabled={actionEnCoursId === b.id} />
+                        <KkiapayButton montant={b.prix_paye} reference={b.id} typeRessource="billet" onSucces={(txId) => payer(b.id, txId)} disabled={actionEnCoursId === b.id} />
                       )}
                       {(b.paiement_confirme || b.prix_paye === 0) && (
                         <Btn variant="ghost" size="sm" loading={actionEnCoursId === b.id} onClick={() => telecharger(b.id)} leftIcon={<Download size={14} />}>

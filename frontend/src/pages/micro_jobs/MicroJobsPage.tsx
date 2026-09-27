@@ -228,6 +228,7 @@ export function MicroJobsPage() {
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <KkiapayButton
               montant={offreEnAttentePaiement.prix}
+              typeRessource="offre_micro_job"
               reference={offreEnAttentePaiement.id}
               onSucces={(txId) => payerOffre(offreEnAttentePaiement.id, txId)}
               disabled={actionEnCoursId === offreEnAttentePaiement.id}

@@ -253,7 +253,7 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                   </div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     {t.statut === "achete" && !t.paiement_confirme && (
-                      <KkiapayButton montant={t.prix_paye} reference={t.id} onSucces={(txId) => payerTransport(t.id, txId)} disabled={actionTicketId === t.id} />
+                      <KkiapayButton montant={t.prix_paye} reference={t.id} typeRessource="ticket_transport" onSucces={(txId) => payerTransport(t.id, txId)} disabled={actionTicketId === t.id} />
                     )}
                     {t.paiement_confirme && (
                       <Btn variant="ghost" size="sm" loading={actionTicketId === t.id} onClick={() => telechargerTransport(t.id)} leftIcon={<Download size={14} />}>
@@ -316,7 +316,7 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
                   </div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     {t.statut === "achete" && !t.paiement_confirme && (
-                      <KkiapayButton montant={t.prix_paye} reference={t.id} onSucces={(txId) => payerCantine(t.id, txId)} disabled={actionTicketId === t.id} />
+                      <KkiapayButton montant={t.prix_paye} reference={t.id} typeRessource="ticket_cantine" onSucces={(txId) => payerCantine(t.id, txId)} disabled={actionTicketId === t.id} />
                     )}
                     {t.paiement_confirme && (
                       <Btn variant="ghost" size="sm" loading={actionTicketId === t.id} onClick={() => telechargerCantine(t.id)} leftIcon={<Download size={14} />}>

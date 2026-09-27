@@ -189,6 +189,7 @@ export function ActesPage() {
                       {demande.statut === "soumise" && !demande.paiement_confirme && type && (
                         <KkiapayButton
                           montant={type.prix}
+                          typeRessource="acte"
                           reference={demande.id}
                           onSucces={(transactionId) => payer(demande.id, transactionId)}
                         />

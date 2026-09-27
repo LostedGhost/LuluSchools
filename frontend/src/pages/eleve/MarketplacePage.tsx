@@ -368,6 +368,7 @@ export function MarketplacePage() {
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <KkiapayButton
               montant={transactionEnAttentePaiement.prix_paye}
+              typeRessource="transaction_marketplace"
               reference={transactionEnAttentePaiement.id}
               onSucces={(txId) => payerTransaction(transactionEnAttentePaiement.id, txId)}
               disabled={actionEnCoursId === transactionEnAttentePaiement.id}
