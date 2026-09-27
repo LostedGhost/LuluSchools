@@ -44,7 +44,7 @@ from app.modules.evaluations.schemas import (
     ValiderPassageRequest,
 )
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
-from app.modules.inscriptions.models import Eleve
+from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.pedagogie.router import _verifier_eleve_inscrit, _verifier_enseignant_rattache
 
 MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS = 20 * 1024 * 1024
@@ -218,8 +218,6 @@ def obtenir_lien_bareme_document(
 def _verifier_tuteur_a_un_enfant_dans_la_classe(db: Session, tuteur_id: str, classe_id: str) -> None:
     """UC-31 : un tuteur suit les devoirs de SON enfant, jamais d'une classe au hasard -
     meme garde-fou que cours_direct._verifier_tuteur_a_un_enfant_dans_la_classe."""
-    from app.modules.inscriptions.models import Inscription, StatutInscription
-
     a_un_enfant = (
         db.query(Inscription)
         .join(Eleve, Eleve.id == Inscription.eleve_id)
@@ -882,6 +880,14 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
     matiere (UC-09). Un devoir compte des qu'il est corrige (meme avant son echeance
     formelle) ; sans soumission, il ne compte comme 0 qu'une fois l'echeance passee -
     avant, on n'a simplement pas encore de resultat a inclure."""
+    existant = (
+        db.query(Bulletin)
+        .filter(Bulletin.eleve_id == eleve.id, Bulletin.classe_id == classe_id, Bulletin.periode == periode)
+        .first()
+    )
+    if existant is not None and existant.valide_par_conseil:
+        return existant  # fige des la deliberation : une correction ulterieure ne le modifie plus
+
     classe = db.get(Classe, classe_id)
     # UC-26.1 : une evaluation FORMATIVE ne compte jamais dans la moyenne officielle du
     # bulletin - seules les SOMMATIVES sont incluses.
@@ -957,19 +963,34 @@ def obtenir_bulletin(
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Eleve introuvable.")
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
 
     if utilisateur.role == RoleUtilisateur.ELEVE and utilisateur.id != eleve_utilisateur_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce bulletin ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.TUTEUR and eleve.tuteur_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
-        classe = db.get(Classe, classe_id)
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
-        classe = db.get(Classe, classe_id)
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+
+    # Le bulletin est ecrit en base et remonte dans le dossier scolaire national de
+    # l'eleve (vie scolaire) : jamais pour une classe dans laquelle il n'est pas inscrit.
+    inscrit = (
+        db.query(Inscription)
+        .filter(
+            Inscription.eleve_id == eleve.id,
+            Inscription.classe_id == classe_id,
+            Inscription.statut == StatutInscription.VALIDEE,
+        )
+        .first()
+    )
+    if inscrit is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cet eleve n'est pas inscrit dans cette classe.")
 
     return _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
 

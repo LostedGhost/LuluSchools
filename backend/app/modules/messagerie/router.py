@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
 from app.modules.controle_acces.router import verifier_admin_de_l_etablissement
-from app.modules.etablissements.models import AdminEtablissement, Classe
+from app.modules.etablissements.models import AdminEtablissement, AffectationEnseignant, Classe
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.messagerie.models import (
@@ -22,7 +22,6 @@ from app.modules.messagerie.schemas import (
     SignalementOut,
     TraiterSignalementRequest,
 )
-from app.modules.recrutement.models import Contrat, StatutContrat
 
 router = APIRouter(tags=["messagerie"])
 
@@ -58,15 +57,13 @@ def _classes_ou_tuteur_a_un_enfant_inscrit(db: Session, tuteur_id: str) -> list[
 
 
 def _classes_ou_enseignant_est_rattache(db: Session, enseignant_id: str) -> list[str]:
-    etablissement_ids = [
-        c.etablissement_id
-        for c in db.query(Contrat)
-        .filter(Contrat.enseignant_id == enseignant_id, Contrat.statut == StatutContrat.SIGNE)
-        .all()
+    """Groupes des seules classes effectivement affectees a l'enseignant (meme regle que
+    pedagogie/evaluations) - un contrat avec l'etablissement ne donne pas acces aux
+    echanges de toutes ses classes (minimisation des donnees d'eleves mineurs)."""
+    return [
+        a.classe_id
+        for a in db.query(AffectationEnseignant).filter(AffectationEnseignant.enseignant_id == enseignant_id).all()
     ]
-    if not etablissement_ids:
-        return []
-    return [c.id for c in db.query(Classe).filter(Classe.etablissement_id.in_(etablissement_ids)).all()]
 
 
 def _mes_classe_ids(db: Session, utilisateur: Utilisateur) -> list[str]:

@@ -193,6 +193,11 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
     # ---------------------------------------------------------------
     # 6. UC-05 : contrat + signature par tracé manuel (canvas), puis reconduction (UC-05b)
     # ---------------------------------------------------------------
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=admin_headers,
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={

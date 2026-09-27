@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.inscriptions.models import Nationalite, StatutInscription
 
@@ -8,10 +8,10 @@ from app.modules.inscriptions.models import Nationalite, StatutInscription
 class InscriptionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    nom: str
-    prenom: str
+    nom: str = Field(min_length=1, max_length=100)
+    prenom: str = Field(min_length=1, max_length=100)
     date_naissance: date
-    classe_id: str
+    classe_id: str = Field(max_length=36)
     nationalite: Nationalite = Nationalite.NATIONALE
     consentement_parental_donne: bool = False
 
@@ -30,7 +30,7 @@ class InscriptionOut(BaseModel):
 class RejetInscriptionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    motif: str
+    motif: str = Field(min_length=1, max_length=2000)
 
 
 class InscriptionAvecEleveOut(InscriptionOut):

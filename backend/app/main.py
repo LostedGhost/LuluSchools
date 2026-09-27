@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -37,7 +38,41 @@ from app.modules.vie_scolaire.router import router as vie_scolaire_router
 from app.modules.visites_virtuelles.router import router as visites_virtuelles_router
 from app.system.router import router as system_router
 
-app = FastAPI(title="LuluSchools API", version="0.1.0")
+
+
+def _purger_casiers_expires_tache() -> None:
+    from app.core.database import SessionLocal
+    from app.modules.recrutement.router import purger_casiers_expires
+
+    db = SessionLocal()
+    try:
+        nombre = purger_casiers_expires(db)
+        if nombre:
+            logger.info("purge casiers judiciaires : %s contenu(s) expire(s) supprime(s)", nombre)
+    except Exception:
+        logger.exception("purge des casiers judiciaires expires en echec")
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Taches periodiques (APScheduler en process, ADR-001) uniquement en production :
+    la suite de tests ne doit jamais toucher la vraie base."""
+    planificateur = None
+    if settings.environment == "production":
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        planificateur = BackgroundScheduler(timezone="UTC")
+        planificateur.add_job(_purger_casiers_expires_tache, "interval", hours=6)
+        planificateur.start()
+        _purger_casiers_expires_tache()
+    yield
+    if planificateur is not None:
+        planificateur.shutdown(wait=False)
+
+
+app = FastAPI(title="LuluSchools API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

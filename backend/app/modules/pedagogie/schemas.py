@@ -102,7 +102,7 @@ class SessionElProfessorOut(BaseModel):
 class QuestionElProfessorCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    question: str
+    question: str = Field(min_length=1, max_length=4000)
 
 
 class MasquerContenuRequest(BaseModel):

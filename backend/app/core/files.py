@@ -1,10 +1,47 @@
 import httpx
+from fastapi import UploadFile, status
 
 from app.core.config import settings
+from app.core.deps import api_error
+
+MO = 1024 * 1024
+TYPES_IMAGE = frozenset({"image/png", "image/jpeg", "image/webp"})
+TYPES_DOCUMENT = TYPES_IMAGE | {"application/pdf"}
+_TAILLE_BLOC = 1024 * 1024
 
 
 class FileStorageError(Exception):
     """Levee quand LuluFiles refuse ou ne peut pas traiter une operation sur un fichier."""
+
+
+def lire_upload_borne(fichier: UploadFile, max_octets: int, types_autorises: frozenset[str] | set[str] | None = None) -> bytes:
+    """Lit un fichier televerse par blocs, sans jamais charger plus que `max_octets` en
+    memoire (le plan Render gratuit n'a que 512 Mo), et refuse un type non attendu.
+    Synchrone : a appeler depuis un endpoint `def` (execute dans le pool de threads)."""
+    type_contenu = (fichier.content_type or "").split(";")[0].strip().lower()
+    if types_autorises is not None and type_contenu not in types_autorises:
+        raise api_error(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "type_fichier_refuse",
+            f"Type de fichier non accepte ({type_contenu or 'inconnu'}). Types acceptes : {', '.join(sorted(types_autorises))}.",
+        )
+    morceaux: list[bytes] = []
+    total = 0
+    while True:
+        bloc = fichier.file.read(_TAILLE_BLOC)
+        if not bloc:
+            break
+        total += len(bloc)
+        if total > max_octets:
+            raise api_error(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                "fichier_trop_volumineux",
+                f"Fichier limite a {max_octets // MO} Mo.",
+            )
+        morceaux.append(bloc)
+    if total == 0:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "fichier_vide", "Le fichier recu est vide.")
+    return b"".join(morceaux)
 
 
 class LuluFilesClient:
@@ -29,7 +66,10 @@ class LuluFilesClient:
         if response.status_code not in (201, 202):
             raise FileStorageError(f"LuluFiles a refuse l'upload (statut {response.status_code}).")
 
-        return response.json()["id"]
+        try:
+            return response.json()["id"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise FileStorageError("Reponse LuluFiles inattendue a l'upload.") from exc
 
     def get_signed_link(self, file_id: str, disposition: str = "attachment") -> str:
         try:
@@ -45,7 +85,10 @@ class LuluFilesClient:
         if response.status_code != 200:
             raise FileStorageError(f"LuluFiles a refuse la demande de lien (statut {response.status_code}).")
 
-        return self._base_url + response.json()["url"]
+        try:
+            return self._base_url + response.json()["url"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise FileStorageError("Reponse LuluFiles inattendue a la demande de lien.") from exc
 
 
 def get_files_client() -> LuluFilesClient:

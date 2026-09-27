@@ -158,6 +158,11 @@ def test_contrat_puis_signature(client, fake_llm_client, enseignant_headers, eta
     fake_llm_client.score_par_defaut = 85.0
     candidature = _postuler(client, enseignant_headers, poste["id"]).json()
 
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={
@@ -201,6 +206,11 @@ def test_lien_signature_refuse_avant_signature(client, fake_llm_client, enseigna
     poste = _creer_poste(client, etablissement_avec_classe["admin_headers"], etablissement_avec_classe["etablissement"]["id"])
     fake_llm_client.score_par_defaut = 85.0
     candidature = _postuler(client, enseignant_headers, poste["id"]).json()
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={"syllabus": "Programme", "date_fin": (date.today() + timedelta(days=300)).isoformat()},
@@ -257,6 +267,11 @@ def _creer_contrat_signe(client, fake_llm_client, enseignant_headers, etablissem
     )
     fake_llm_client.score_par_defaut = 85.0
     candidature = _postuler(client, enseignant_headers, poste["id"]).json()
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={"syllabus": "Programme initial", "date_fin": date_fin.isoformat()},
@@ -356,6 +371,11 @@ def test_lister_postes_mes_candidatures_et_mes_contrats(
     assert any(c["id"] == candidature["id"] for c in mes_candidatures.json())
 
     client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=etablissement_avec_classe["admin_headers"],
+    )
+    client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={"syllabus": "Programme", "date_fin": "2027-06-30"},
         headers=etablissement_avec_classe["admin_headers"],
@@ -381,6 +401,11 @@ def test_tuteur_et_eleve_n_ont_aucun_acces_aux_endpoints_de_recrutement(
     candidature = _postuler_et_relire(client, ctx["enseignant_headers"], poste["id"]).json()
     document_id = candidature["documents"][0]["id"]
 
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=ctx["admin_headers"],
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={"syllabus": "Programme", "date_fin": (date.today() + timedelta(days=300)).isoformat()},

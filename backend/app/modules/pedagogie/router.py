@@ -106,6 +106,52 @@ def _verifier_eleve_inscrit(db: Session, eleve_utilisateur_id: str, classe_id: s
     return eleve
 
 
+def _verifier_tuteur_a_un_enfant_dans_la_classe(db: Session, tuteur_id: str, classe_id: str) -> None:
+    a_un_enfant = (
+        db.query(Inscription)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .filter(
+            Eleve.tuteur_id == tuteur_id,
+            Inscription.classe_id == classe_id,
+            Inscription.statut == StatutInscription.VALIDEE,
+        )
+        .first()
+        is not None
+    )
+    if not a_un_enfant:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Aucun de vos enfants n'est inscrit dans cette classe.")
+
+
+def _verifier_lecture_contenus_classe(db: Session, utilisateur: Utilisateur, classe_id: str) -> bool:
+    """Portee de lecture des contenus pedagogiques d'une classe, par role. Renvoie True si
+    l'appelant voit aussi les contenus masques par le Ministere (enseignant/A+/A++), False
+    pour l'eleve et son tuteur, qui ne voient que ce qui est publie."""
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    if utilisateur.role == RoleUtilisateur.ELEVE:
+        _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
+        return False
+    if utilisateur.role == RoleUtilisateur.TUTEUR:
+        _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, classe_id)
+        return False
+    if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
+        _verifier_enseignant_rattache(db, utilisateur, classe_id)
+        return True
+    verifier_portee_etablissement(db, utilisateur, classe.etablissement_id)
+    return True
+
+
+def _cours_lisible(db: Session, utilisateur: Utilisateur, cours_id: str) -> Cours:
+    cours = db.get(Cours, cours_id)
+    if cours is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
+    voit_masques = _verifier_lecture_contenus_classe(db, utilisateur, cours.classe_id)
+    if cours.masque_par_id is not None and not voit_masques:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
+    return cours
+
+
 @router.post("/classes/{classe_id}/cours", response_model=CoursOut, status_code=status.HTTP_201_CREATED)
 def publier_cours(
     classe_id: str,
@@ -162,10 +208,9 @@ def lister_cours(
     classe_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Cours]:
     requete = db.query(Cours).filter(Cours.classe_id == classe_id)
-    if utilisateur.role == RoleUtilisateur.ELEVE:
-        _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
-        # UC-37/53 (lot admin ministeriel) : un cours masque par le Ministere reste visible
-        # a l'enseignant/A+/A++ (pour savoir ce qui a ete masque), jamais a l'eleve.
+    # UC-37/53 (lot admin ministeriel) : un cours masque par le Ministere reste visible
+    # a l'enseignant/A+/A++ (pour savoir ce qui a ete masque), jamais a l'eleve/tuteur.
+    if not _verifier_lecture_contenus_classe(db, utilisateur, classe_id):
         requete = requete.filter(Cours.masque_par_id.is_(None))
     return requete.all()
 
@@ -180,13 +225,7 @@ def obtenir_lien_fichier_cours(
     """Bug reel corrige : `Cours.lulufiles_file_id` etait stocke a l'upload (UC-06) mais
     jamais transforme en lien consultable - un cours pdf/audio/video n'avait aucun moyen
     d'etre effectivement lu par un eleve. Meme controle d'acces que lister_cours."""
-    cours = db.get(Cours, cours_id)
-    if cours is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
-    if utilisateur.role == RoleUtilisateur.ELEVE:
-        _verifier_eleve_inscrit(db, utilisateur.id, cours.classe_id)
-    elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
-        _verifier_enseignant_rattache(db, utilisateur, cours.classe_id)
+    cours = _cours_lisible(db, utilisateur, cours_id)
     if not cours.lulufiles_file_id:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce cours n'a pas de fichier associe.")
 
@@ -203,11 +242,7 @@ def obtenir_lien_fichier_cours(
 def lister_quiz(
     cours_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Quiz]:
-    cours = db.get(Cours, cours_id)
-    if cours is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
-    if utilisateur.role == RoleUtilisateur.ELEVE:
-        _verifier_eleve_inscrit(db, utilisateur.id, cours.classe_id)
+    _cours_lisible(db, utilisateur, cours_id)
     return db.query(Quiz).filter(Quiz.cours_id == cours_id).all()
 
 
@@ -264,8 +299,7 @@ def obtenir_quiz(
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Quiz introuvable.")
-    cours = db.get(Cours, quiz.cours_id)
-    _verifier_eleve_inscrit(db, eleve_utilisateur.id, cours.classe_id)
+    _cours_lisible(db, eleve_utilisateur, quiz.cours_id)
     return quiz
 
 
@@ -280,7 +314,7 @@ def tenter_quiz(
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Quiz introuvable.")
-    cours = db.get(Cours, quiz.cours_id)
+    cours = _cours_lisible(db, eleve_utilisateur, quiz.cours_id)
     eleve = _verifier_eleve_inscrit(db, eleve_utilisateur.id, cours.classe_id)
 
     questions = sorted(quiz.questions, key=lambda q: q.ordre)
@@ -335,10 +369,7 @@ def ouvrir_session_el_professor(
     eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
 ) -> SessionElProfessor:
     """UC-14 : upsert, une seule session par (eleve, cours)."""
-    cours = db.get(Cours, cours_id)
-    if cours is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
-    _verifier_eleve_inscrit(db, eleve_utilisateur.id, cours.classe_id)
+    _cours_lisible(db, eleve_utilisateur, cours_id)
 
     session = (
         db.query(SessionElProfessor)
@@ -394,7 +425,7 @@ def poser_question_el_professor(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Session introuvable.")
     if session.eleve_utilisateur_id != eleve_utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette session ne vous appartient pas.")
-    cours = db.get(Cours, session.cours_id)
+    cours = _cours_lisible(db, eleve_utilisateur, session.cours_id)
 
     historique = [{"role": m.role.value, "contenu": m.contenu} for m in session.messages]
     try:

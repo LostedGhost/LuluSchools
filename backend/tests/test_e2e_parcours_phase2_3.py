@@ -128,6 +128,11 @@ def test_parcours_complet_des_phases_2_et_3(
         ],
         headers=enseignant_headers,
     ).json()
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=admin_headers,
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={"syllabus": "Histoire du Benin", "date_fin": (date.today() + timedelta(days=300)).isoformat()},

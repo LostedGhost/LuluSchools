@@ -131,7 +131,7 @@ class CaptureTableauOut(BaseModel):
 class MessageSessionLiveCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    contenu: str
+    contenu: str = Field(min_length=1, max_length=2000)
 
 
 class MessageSessionLiveOut(BaseModel):

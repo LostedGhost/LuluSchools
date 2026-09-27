@@ -100,6 +100,11 @@ def _provisionner_enseignant_sous_contrat(client, fake_email_client, fake_llm_cl
         ],
         headers=enseignant_headers,
     ).json()
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=admin_headers,
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={"syllabus": "Programme", "date_fin": "2027-06-30"},

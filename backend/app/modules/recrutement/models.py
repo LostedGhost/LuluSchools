@@ -125,6 +125,10 @@ class Candidature(Base):
     def enseignant_prenom(self) -> str:
         return self.enseignant.utilisateur.prenom
 
+    @property
+    def statut_casier_judiciaire(self) -> "StatutVerificationCasier | None":
+        return self.verification_casier.statut if self.verification_casier is not None else None
+
 
 class DocumentCandidature(Base):
     __tablename__ = "documents_candidature"
@@ -165,6 +169,10 @@ class VerificationCasierJudiciaire(Base):
     date_suppression_prevue: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+    @property
+    def document_disponible(self) -> bool:
+        return self.contenu_chiffre is not None
 
     candidature: Mapped[Candidature] = relationship(back_populates="verification_casier")
 
