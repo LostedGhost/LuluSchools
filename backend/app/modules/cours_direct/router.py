@@ -734,7 +734,7 @@ async def canal_temps_reel_session_live(
         utilisateur = db.get(Utilisateur, payload.get("sub")) if payload.get("type") == "access" else None
     except Exception:
         utilisateur = None
-    if utilisateur is None:
+    if utilisateur is None or not utilisateur.actif or utilisateur.mot_de_passe_temporaire:
         await websocket.close(code=4401)
         return
 

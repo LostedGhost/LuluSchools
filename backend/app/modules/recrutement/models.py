@@ -105,6 +105,8 @@ class Candidature(Base):
     statut: Mapped[StatutCandidature] = mapped_column(Enum(StatutCandidature))
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # Point de depart du delai de contestation (Art. 401) : la date du rejet, pas du depot.
+    rejetee_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     documents: Mapped[list["DocumentCandidature"]] = relationship(back_populates="candidature")
     verification_casier: Mapped["VerificationCasierJudiciaire | None"] = relationship(
@@ -139,9 +141,8 @@ class DocumentCandidature(Base):
 
 class VerificationCasierJudiciaire(Base):
     """Ecarte du pipeline de notation IA generique (Art. 395 - regime restreint des
-    donnees penales) : jamais sur LuluFiles/Telegram, acces reserve aux personnes
-    designees par l'A+ (a appliquer au niveau de l'endpoint de lecture, pas encore
-    construit - voir rapport final). Contenu chiffre (Fernet, cle hors depot) stocke en
+    donnees penales) : jamais sur LuluFiles/Telegram, lecture reservee a l'administration
+    de l'etablissement recruteur (voir recrutement/router.py, casier-judiciaire). Contenu chiffre (Fernet, cle hors depot) stocke en
     base plutot que sur disque local : le plan Render gratuit ne fournit pas de disque
     persistant (voir render.yaml / ADR-006), donc un fichier local serait perdu a chaque
     redemarrage du service (veille apres 15 min d'inactivite incluse)."""
@@ -150,7 +151,9 @@ class VerificationCasierJudiciaire(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     candidature_id: Mapped[str] = mapped_column(ForeignKey("candidatures.id"), unique=True)
-    contenu_chiffre: Mapped[bytes] = mapped_column(LargeBinary)
+    # None une fois purge (verdict rendu ou echeance de retention depassee) : seul le
+    # statut est conserve durablement (Art. 395).
+    contenu_chiffre: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     nom_fichier: Mapped[str] = mapped_column(String(255))
     statut: Mapped[StatutVerificationCasier] = mapped_column(
         Enum(StatutVerificationCasier), default=StatutVerificationCasier.EN_ATTENTE

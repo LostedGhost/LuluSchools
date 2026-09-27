@@ -7,7 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.database import Base, get_db, get_session_factory
+from app.core.rate_limit import limiteur
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
 from app.core.llm import (
@@ -22,6 +24,25 @@ from app.core.llm import (
 from app.core.security import create_access_token, decode_token, hash_password
 from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
+
+
+@pytest.fixture(autouse=True)
+def _limitation_debit_desactivee():
+    """Les fixtures ouvrent des dizaines de sessions depuis la meme IP de test : la
+    limitation de debit est desactivee par defaut et reactivee explicitement par les
+    tests qui la verifient (fixture `limitation_debit`)."""
+    settings.rate_limit_enabled = False
+    limiteur.reinitialiser()
+    yield
+    settings.rate_limit_enabled = False
+    limiteur.reinitialiser()
+
+
+@pytest.fixture()
+def limitation_debit():
+    settings.rate_limit_enabled = True
+    limiteur.reinitialiser()
+    yield
 
 
 @pytest.fixture()
@@ -69,6 +90,11 @@ class FakeEmailClient:
         if self.should_fail:
             raise EmailDeliveryError("echec simule")
         self.sent.append({"to_email": to_email, "to_name": to_name, "subject": subject, "message": message})
+
+    def send_password_reset_email(self, to_email: str, to_name: str, login_id: str, code: str) -> None:
+        if self.should_fail:
+            raise EmailDeliveryError("echec simule")
+        self.sent.append({"to_email": to_email, "to_name": to_name, "reset_login_id": login_id, "reset_code": code})
 
 
 @pytest.fixture()

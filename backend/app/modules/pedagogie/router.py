@@ -10,7 +10,6 @@ from app.core.database import get_db
 from app.core.deps import (
     api_error,
     get_current_active_user,
-    get_current_user,
     require_roles,
     verifier_portee_etablissement,
 )
@@ -160,7 +159,7 @@ def publier_cours(
 
 @router.get("/classes/{classe_id}/cours", response_model=list[CoursOut])
 def lister_cours(
-    classe_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_user)
+    classe_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Cours]:
     requete = db.query(Cours).filter(Cours.classe_id == classe_id)
     if utilisateur.role == RoleUtilisateur.ELEVE:
@@ -202,7 +201,7 @@ def obtenir_lien_fichier_cours(
 
 @router.get("/cours/{cours_id}/quiz", response_model=list[QuizOut])
 def lister_quiz(
-    cours_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_user)
+    cours_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Quiz]:
     cours = db.get(Cours, cours_id)
     if cours is None:

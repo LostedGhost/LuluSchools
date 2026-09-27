@@ -10,7 +10,6 @@ from app.core.database import get_db, get_session_factory
 from app.core.deps import (
     api_error,
     get_current_active_user,
-    get_current_user,
     require_roles,
     verifier_portee_etablissement,
 )
@@ -117,7 +116,7 @@ def creer_poste(
 
 @router.get("/postes/{poste_id}", response_model=PosteOut)
 def obtenir_poste(
-    poste_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_user)
+    poste_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> Poste:
     poste = db.get(Poste, poste_id)
     if poste is None:
@@ -127,7 +126,7 @@ def obtenir_poste(
 
 @router.get("/etablissements/{etablissement_id}/postes", response_model=list[PosteOut])
 def lister_postes(
-    etablissement_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_user)
+    etablissement_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Poste]:
     """Sans cette liste, un enseignant candidat n'a aucun moyen de decouvrir les postes
     ouverts d'un etablissement sans deja en connaitre les id (UC-04)."""
@@ -438,7 +437,7 @@ def noter_document_manuellement(
 
 @router.get("/candidatures/{candidature_id}", response_model=CandidatureOut)
 def obtenir_candidature(
-    candidature_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_user)
+    candidature_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> Candidature:
     candidature = db.get(Candidature, candidature_id)
     if candidature is None:
@@ -472,7 +471,7 @@ def obtenir_lien_document_candidature(
     document_id: str,
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
-    utilisateur: Utilisateur = Depends(get_current_user),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> LienFichierOut:
     """Bug reel corrige : ni le candidat ni l'A+ n'avaient jusqu'ici de moyen de
     consulter le document lui-meme (seule la note IA etait exposee) - rend l'ecran de
@@ -657,7 +656,7 @@ def obtenir_lien_signature_contrat(
     contrat_id: str,
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
-    utilisateur: Utilisateur = Depends(get_current_user),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> LienFichierOut:
     contrat = db.get(Contrat, contrat_id)
     if contrat is None:

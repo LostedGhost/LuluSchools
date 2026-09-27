@@ -45,5 +45,21 @@ class Settings(BaseSettings):
 
     cors_allow_origins: list[str] = ["http://localhost:5173"]
 
+    # Desactive uniquement par la suite de tests (tests/conftest.py), jamais en production.
+    rate_limit_enabled: bool = True
+
+    def verifier_configuration_production(self) -> None:
+        if self.environment != "production":
+            return
+        if self.jwt_secret_key in ("", "change-me") or len(self.jwt_secret_key) < 32:
+            raise RuntimeError("JWT_SECRET_KEY absent ou trop faible : refus de demarrer en production.")
+        if not self.kkiapay_secret:
+            raise RuntimeError("KKIAPAY_SECRET absent : le webhook de paiement serait inutilisable.")
+        if "casier_judiciaire_encryption_key" not in self.model_fields_set or len(self.casier_judiciaire_encryption_key) < 16:
+            raise RuntimeError(
+                "CASIER_JUDICIAIRE_ENCRYPTION_KEY absent : les casiers chiffres deviendraient illisibles au redemarrage."
+            )
+
 
 settings = Settings()
+settings.verifier_configuration_production()

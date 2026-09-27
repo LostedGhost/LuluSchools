@@ -8,7 +8,6 @@ from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.deps import (
     api_error,
     get_current_active_user,
-    get_current_user,
     require_roles,
     verifier_portee_etablissement,
 )
@@ -143,7 +142,7 @@ def creer_etablissement(
 
 @router.get("", response_model=list[EtablissementOut])
 def lister_etablissements(
-    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_user)
+    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Etablissement]:
     return db.query(Etablissement).all()
 
@@ -291,7 +290,7 @@ def annuaire_public(
 def obtenir_etablissement(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    _utilisateur: Utilisateur = Depends(get_current_user),
+    _utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> Etablissement:
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
@@ -516,7 +515,7 @@ def lister_classes(
     etablissement_id: str,
     annee_academique: str | None = None,
     db: Session = Depends(get_db),
-    _utilisateur: Utilisateur = Depends(get_current_user),
+    _utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> list[Classe]:
     """UC-45/60 : `annee_academique` optionnel - un client qui veut voir toutes les
     annees (ex. pour peupler un selecteur d'historique) omet le filtre."""
