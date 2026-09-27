@@ -123,7 +123,7 @@ function dateCourte(iso: string): string {
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
-/** Texte lisible à voix haute : sans syntaxe Markdown ni LaTeX, borné à 2 500 caractères. */
+/** Texte lisible à voix haute : sans syntaxe Markdown ni LaTeX, jamais tronqué. */
 function texteAPrononcer(contenu: string): string {
   const brut = contenu
     .replace(/```[\s\S]*?```/g, " ")
@@ -135,10 +135,7 @@ function texteAPrononcer(contenu: string): string {
     .replace(/\u26A0\uFE0F?|\u{1F49B}/gu, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (brut.length <= 2500) return brut;
-  const coupe = brut.slice(0, 2500);
-  const finPhrase = coupe.lastIndexOf(". ");
-  return finPhrase > 1500 ? coupe.slice(0, finPhrase + 1) : coupe;
+  return brut;
 }
 
 /* Dictée vocale : API Web Speech du navigateur (FreeLLM ne transcrit pas l'audio). */
@@ -777,7 +774,6 @@ export function ElProfessorChat({
                     ref={zoneTexteRef}
                     rows={1}
                     value={question}
-                    maxLength={4000}
                     onChange={(e) => setQuestion(e.target.value)}
                     onKeyDown={toucheClavier}
                     onPaste={coller}

@@ -81,8 +81,9 @@ router = APIRouter(tags=["el-professor"])
 
 MAX_TAILLE_PIECE_JOINTE = 10 * 1024 * 1024
 # FreeLLM agrege des offres gratuites (voir ADR-002) : sans plafond, un seul compte pourrait
-# epuiser le quota journalier de toute la plateforme.
-_QUESTIONS_PAR_HEURE = 60
+# epuiser le quota journalier de toute la plateforme. Decision du 2026-09-27 : 1000 messages
+# par jour et par compte (fenetre glissante de 24 h).
+_MESSAGES_PAR_JOUR = 1000
 _LECTURES_VOCALES_PAR_HEURE = 30
 
 _ALERTE_ADULTE = (
@@ -282,7 +283,7 @@ def _evenement(nom: str, donnees: dict) -> str:
 def poser_question_en_flux(
     persona: str,
     session_id: str,
-    question: str = Form(..., min_length=1, max_length=4000),
+    question: str = Form(..., min_length=1),
     fichier: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     session_factory: sessionmaker = Depends(get_session_factory),
@@ -294,7 +295,14 @@ def poser_question_en_flux(
     messages enregistres) ou `erreur` ({message}). Rien n'est enregistre si la reponse
     echoue : l'utilisateur peut simplement renvoyer sa question."""
     session = _session_accessible(db, persona, session_id, utilisateur)
-    consommer(db, f"el_professor:{utilisateur.id}", _QUESTIONS_PAR_HEURE, 3600)
+    consommer(
+        db,
+        f"el_professor:{utilisateur.id}",
+        _MESSAGES_PAR_JOUR,
+        86400,
+        f"Vous avez atteint la limite de {_MESSAGES_PAR_JOUR} messages par jour avec El Professor. "
+        "Reessayez demain.",
+    )
     fil = _preparer_fil(db, persona, session, utilisateur, files_client)
     piece_jointe, images = _preparer_piece_jointe(fichier)
     messages = construire_messages_el_professor(

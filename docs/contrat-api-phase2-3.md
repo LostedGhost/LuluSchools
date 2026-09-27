@@ -72,10 +72,10 @@ Même structure qu'UC-11, entités et endpoints renommés :
 |---|---|---|---|
 | GET | `/el-professor/eleve/sessions` | Élève | Toutes ses conversations (cours et aide générale), avec `cours_titre`, `sujet` |
 | POST | `/el-professor/eleve/sessions` | Élève | `cours_id` (facultatif : sans lui, conversation d'aide générale, plusieurs possibles ; avec, reprise de la conversation du cours), `sujet` |
-| POST | `/el-professor/{persona}/sessions/{id}/flux` | Propriétaire | Multipart : `question` (1-4000), `fichier` facultatif (PNG/JPEG/WebP/PDF, 10 Mo). Réponse `text/event-stream` : `debut`, `delta` ({texte})…, puis `fin` (les deux messages enregistrés) ou `erreur` ({message}) — rien n'est enregistré en cas d'échec. 60 questions/heure/compte (429) |
+| POST | `/el-professor/{persona}/sessions/{id}/flux` | Propriétaire | Multipart : `question` (non vide, sans limite de longueur), `fichier` facultatif (PNG/JPEG/WebP/PDF, 10 Mo). Réponse `text/event-stream` : `debut`, `delta` ({texte})…, puis `fin` (les deux messages enregistrés) ou `erreur` ({message}) — rien n'est enregistré en cas d'échec. 1000 messages par jour et par compte (429). Aucun plafond de tokens en entrée ni en sortie (historique et documents complets) |
 | PATCH | `/el-professor/{persona}/sessions/{id}` | Propriétaire (fil familial : tuteur) | `sujet` (1-200) |
 | DELETE | `/el-professor/{persona}/sessions/{id}` | Propriétaire (fil familial : tuteur) | 204 ; les alertes déjà émises sont conservées |
-| POST | `/el-professor/synthese-vocale` | Élève, enseignant, tuteur | `texte` (1-2500) → `audio/wav` ; 30 lectures/heure/compte |
+| POST | `/el-professor/synthese-vocale` | Élève, enseignant, tuteur | `texte` (non vide, sans limite) → `audio/wav` ; 30 lectures/heure/compte |
 
 Les messages exposent `piece_jointe_nom` / `piece_jointe_type`. `AlerteElProfessorOut.origine` accepte désormais `eleve`.
 

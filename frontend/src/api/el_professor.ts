@@ -39,7 +39,7 @@ async function messageDeReponse(reponse: Response): Promise<string> {
   } catch {
     /* corps non JSON */
   }
-  if (reponse.status === 429) return "Vous avez posé beaucoup de questions : réessayez dans un moment.";
+  if (reponse.status === 429) return "Limite quotidienne de messages atteinte : réessayez demain.";
   return "El Professor n'a pas pu répondre, veuillez réessayer.";
 }
 

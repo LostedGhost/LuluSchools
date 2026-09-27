@@ -245,15 +245,17 @@ def test_lecture_a_voix_haute(client, classe_avec_enseignant_et_eleve, fake_llm_
     assert echec.status_code == 502
 
 
-def test_questions_limitees_par_heure(client, classe_avec_enseignant_et_eleve, limitation_debit, monkeypatch):
+def test_messages_limites_par_jour(client, classe_avec_enseignant_et_eleve, limitation_debit, monkeypatch):
     from app.modules.pedagogie import el_professor_chat
 
-    monkeypatch.setattr(el_professor_chat, "_QUESTIONS_PAR_HEURE", 2)
+    monkeypatch.setattr(el_professor_chat, "_MESSAGES_PAR_JOUR", 2)
     ctx = classe_avec_enseignant_et_eleve
     session = client.post("/api/v1/el-professor/eleve/sessions", json={}, headers=ctx["eleve_headers"]).json()
     assert _poser(client, "eleve", session["id"], ctx["eleve_headers"]).status_code == 200
     assert _poser(client, "eleve", session["id"], ctx["eleve_headers"]).status_code == 200
-    assert _poser(client, "eleve", session["id"], ctx["eleve_headers"]).status_code == 429
+    refus = _poser(client, "eleve", session["id"], ctx["eleve_headers"])
+    assert refus.status_code == 429
+    assert "par jour" in refus.json()["error"]["message"]
 
 
 def test_alleger_wav_divise_la_frequence_par_deux():

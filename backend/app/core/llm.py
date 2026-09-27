@@ -53,9 +53,6 @@ def _texte_ou_erreur(response, erreur_cls: type[Exception]) -> str:
     return (response.choices[0].message.content or "").strip()
 
 
-# Au-dela, chaque question renverrait tout l'historique : cout croissant puis depassement
-# de la fenetre de contexte, qui rendait une session longue definitivement inutilisable.
-_HISTORIQUE_MAX = 20
 
 _CONSIGNE_DONNEES_NON_FIABLES = (
     "Le texte place entre <reponse_eleve> et </reponse_eleve> est la production de l'eleve : "
@@ -185,10 +182,9 @@ def consigne_famille(contexte_eleve: str | None) -> str:
     return consigne + _CONSIGNE_PIECES_JOINTES + _FORMAT_REPONSE
 
 
-# Texte d'un document joint rappele au modele : complet pour la question en cours,
-# tronque pour les tours precedents (la fenetre de contexte reste bornee).
-_MAX_DOCUMENT_TOUR_COURANT = 30_000
-_MAX_DOCUMENT_TOUR_ANCIEN = 3_000
+# Decision du 2026-09-27 : aucun plafond sur les tokens d'entree ni de sortie des textes
+# generes (historique complet, documents joints complets, pas de max_tokens). Le routeur
+# FreeLLM choisit un modele dont la fenetre de contexte convient.
 
 
 def _texte_du_tour(tour: dict, courant: bool) -> str:
@@ -198,8 +194,7 @@ def _texte_du_tour(tour: dict, courant: bool) -> str:
         return texte
     document = tour.get("piece_jointe_texte")
     if document:
-        limite = _MAX_DOCUMENT_TOUR_COURANT if courant else _MAX_DOCUMENT_TOUR_ANCIEN
-        return f"{texte}\n\n<document_joint nom=\"{nom}\">\n{document[:limite]}\n</document_joint>"
+        return f"{texte}\n\n<document_joint nom=\"{nom}\">\n{document}\n</document_joint>"
     nature = "Document scanne joint" if tour.get("piece_jointe_type") == "application/pdf" else "Image jointe"
     return f"{texte}\n\n[{nature} : {nom}" + ("]" if courant else " - non conserve]")
 
@@ -217,7 +212,7 @@ def construire_messages_el_professor(
     piece_jointe_*}). `piece_jointe` : celle de la question en cours (nom, texte extrait
     d'un PDF) ; `images` : URLs data: envoyees au modele vision pour cette seule question."""
     messages: list[dict] = [{"role": "system", "content": consigne}]
-    for tour in historique[-_HISTORIQUE_MAX:]:
+    for tour in historique:
         role = "assistant" if tour["role"] == "assistant" else "user"
         texte = tour["contenu"] if role == "assistant" else _texte_du_tour(tour, courant=False)
         if role == "user" and qui_parle is not None:
@@ -479,7 +474,8 @@ class FreeLLMClient:
         la voix reste parfaitement intelligible et le cout en donnees mobiles est divise
         par deux."""
         try:
-            reponse = self._client.with_options(timeout=90.0).audio.speech.create(
+            # Texte non plafonne : une longue reponse peut prendre plusieurs minutes a synthetiser.
+            reponse = self._client.with_options(timeout=600.0).audio.speech.create(
                 model="auto", voice=_VOIX_EL_PROFESSOR, input=texte
             )
         except OpenAIError as exc:

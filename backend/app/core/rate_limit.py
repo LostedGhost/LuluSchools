@@ -31,15 +31,16 @@ def _depasse(db: Session, cle: str, maximum: int, fenetre_secondes: float) -> bo
     return (nombre or 0) >= maximum
 
 
-def verifier_limite(db: Session, cle: str, maximum: int, fenetre_secondes: float) -> None:
+_MESSAGE_PAR_DEFAUT = "Trop de tentatives. Veuillez patienter quelques minutes avant de reessayer."
+
+
+def verifier_limite(
+    db: Session, cle: str, maximum: int, fenetre_secondes: float, message: str = _MESSAGE_PAR_DEFAUT
+) -> None:
     if not settings.rate_limit_enabled:
         return
     if _depasse(db, cle[:255], maximum, fenetre_secondes):
-        raise api_error(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            "trop_de_tentatives",
-            "Trop de tentatives. Veuillez patienter quelques minutes avant de reessayer.",
-        )
+        raise api_error(status.HTTP_429_TOO_MANY_REQUESTS, "trop_de_tentatives", message)
 
 
 def enregistrer_echec(db: Session, cle: str) -> None:
@@ -55,10 +56,12 @@ def enregistrer_echec(db: Session, cle: str) -> None:
     db.commit()
 
 
-def consommer(db: Session, cle: str, maximum: int, fenetre_secondes: float) -> None:
+def consommer(
+    db: Session, cle: str, maximum: int, fenetre_secondes: float, message: str = _MESSAGE_PAR_DEFAUT
+) -> None:
     """Verifie puis compte une tentative (actions limitees a chaque appel, succes ou
     echec : inscription, renvoi de code, mot de passe oublie)."""
-    verifier_limite(db, cle, maximum, fenetre_secondes)
+    verifier_limite(db, cle, maximum, fenetre_secondes, message)
     enregistrer_echec(db, cle)
 
 

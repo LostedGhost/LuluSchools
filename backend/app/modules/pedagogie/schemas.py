@@ -107,7 +107,7 @@ class SessionElProfessorOut(BaseModel):
 class QuestionElProfessorCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    question: str = Field(min_length=1, max_length=4000)
+    question: str = Field(min_length=1)
 
 
 class MasquerContenuRequest(BaseModel):
@@ -274,4 +274,4 @@ class SessionElProfessorResumeOut(BaseModel):
 class SyntheseVocaleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    texte: str = Field(min_length=1, max_length=2500)
+    texte: str = Field(min_length=1)

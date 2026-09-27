@@ -12,17 +12,16 @@ TYPES_IMAGE = frozenset({"image/jpeg", "image/png", "image/webp"})
 TYPE_PDF = "application/pdf"
 TYPES_PIECE_JOINTE = TYPES_IMAGE | {TYPE_PDF}
 
-MAX_CARACTERES_DOCUMENT = 40_000
 # En dessous, un PDF est considere comme scanne (pages-images sans couche texte).
 _SEUIL_TEXTE_SIGNIFICATIF = 200
-MAX_PAGES_EN_IMAGES = 3
 
 
 class DocumentIllisibleError(Exception):
     """PDF corrompu, chiffre ou vide."""
 
 
-def extraire_texte_pdf(contenu: bytes, max_caracteres: int = MAX_CARACTERES_DOCUMENT) -> str:
+def extraire_texte_pdf(contenu: bytes) -> str:
+    """Texte integral du PDF (aucun plafond : decision du 2026-09-27)."""
     try:
         document = fitz.open(stream=contenu, filetype="pdf")
     except Exception as exc:  # pymupdf leve des types varies selon la corruption
@@ -30,30 +29,21 @@ def extraire_texte_pdf(contenu: bytes, max_caracteres: int = MAX_CARACTERES_DOCU
     try:
         if document.needs_pass:
             raise DocumentIllisibleError("PDF protege par mot de passe.")
-        morceaux: list[str] = []
-        total = 0
-        for page in document:
-            texte = page.get_text().strip()
-            if not texte:
-                continue
-            morceaux.append(texte)
-            total += len(texte)
-            if total >= max_caracteres:
-                break
-        return "\n\n".join(morceaux)[:max_caracteres]
+        morceaux = [page.get_text().strip() for page in document]
+        return "\n\n".join(m for m in morceaux if m)
     finally:
         document.close()
 
 
-def pages_pdf_en_images(contenu: bytes, max_pages: int = MAX_PAGES_EN_IMAGES) -> list[bytes]:
-    """Pour un PDF scanne : ses premieres pages en PNG, lisibles par un modele vision."""
+def pages_pdf_en_images(contenu: bytes) -> list[bytes]:
+    """Pour un PDF scanne : toutes ses pages en PNG, lisibles par un modele vision."""
     try:
         document = fitz.open(stream=contenu, filetype="pdf")
     except Exception as exc:
         raise DocumentIllisibleError("PDF illisible.") from exc
     try:
         images = []
-        for index in range(min(max_pages, document.page_count)):
+        for index in range(document.page_count):
             pixmap = document.load_page(index).get_pixmap(dpi=110)
             images.append(pixmap.tobytes("png"))
         return images
