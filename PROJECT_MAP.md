@@ -37,6 +37,27 @@ API backend sous préfixe `/api/v1` — contrat complet et à jour dans `docs/co
 **Phase 2/3** — étapes 1 à 6 validées (voir `SUIVI-PROJET.md`) : cas d'utilisation, diagrammes UML, contrat d'API, **backend complet** pour les 9 UC (UC-11 à UC-19) — tickets transport/cantine, contrôle d'accès, billetterie, messagerie, assistant El Professor, cours vidéo, cours en direct, visites 3D/drone, micro-jobs+séquestre — et **validation de bout en bout** (`backend/tests/test_e2e_parcours_phase2_3.py`, même principe que `test_e2e_parcours_complet.py` : un seul établissement/classe/enseignant/élève/tuteur réutilisés à travers les 9 UC dans l'ordre réel, paiement Kkiapay réellement bouclé à chaque étape payante). 8 nouveaux modules, 8 migrations (0013-0020) appliquées en réel, 124 tests au total (aucune régression). Étape 6 (frontend) : **8 des 9 UC ont une interface complète** — messagerie, El Professor, cours en direct, transport/cantine, billetterie, micro-jobs — pour les 5 rôles concernés, réutilisant le design system institutionnel (ADR-007/009) ; seul UC-19 (visites 3D/drone) reste un teaser « Bientôt disponible », par décision explicite de l'utilisateur (le choix technique de la visite 3D elle-même n'a pas encore été arbitré). Détail par module dans `backend/PROJECT_MAP.md` et `frontend/PROJECT_MAP.md`. Prochaine étape : 7 (intégration/correction des écarts) puis 8 (déploiement) pour ce lot Phase 2/3.
 
 ## Dernière synchronisation
+2026-09-27 (audit de sécurité, branche `audit/securite-approfondie`) — Audit profond du
+backend (243 endpoints), du frontend et de l'historique git : 31 constats corrigés, dont un
+bug bloquant en production invisible sous SQLite (`DISTINCT` sur colonne `json` : écran
+Recrutement de l'A+ inutilisable sur PostgreSQL), des IDOR (cours/fichiers, bulletins
+enregistrés pour n'importe quel élève), un contournement des frais d'actes, une
+réinscription qui recréait compte et matricule, un consentement parental auto-déclarable
+par un mineur, un casier judiciaire jamais vérifiable ni purgé (Art. 395), des vendeurs et
+prestataires jamais payés en cas de validation tacite, et une API qui gelait pendant chaque
+téléversement. Nouveaux parcours : renvoi d'OTP, mot de passe oublié, verdict casier, file de
+reversement marketplace. Migration `0016`. Suite de tests rejouable sur PostgreSQL
+(`LULU_TEST_DATABASE_URL`). Seconde passe le même jour (12 constats de plus) : paiements
+rattachés par `partnerId`, limitation de débit en base, CSP, migration `0017` (aucune dérive
+de schéma), tests PostgreSQL en CI, arbitrages messagerie/contrôleurs, parcours navigateur de tous les rôles (PATCH /me pour le numéro Mobile Money), puis **refonte d'El Professor en interface de chat complète**
+(flux SSE, pièces jointes image/PDF, aide générale de l'élève, synthèse vocale, migration `0018`,
+vérifiée contre le vrai FreeLLM), plafonds de tokens retirés (1000 messages/jour), et
+**seed réécrit** (`backend/scripts/seed_donnees/`, UAC toujours présente, auto-vérifié sur
+39 règles métier, `seed_render.bat` pour la base en ligne). 311 tests au vert
+sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
+dans l'historique git, secrets Render) et risques résiduels :
+`docs/audit-securite-2026-09-27.md`.
+
 2026-09-26 (Phase 6, frontend) — Étape 6 du lot Phase 6 (UC-39 à UC-70, refonte admin
 établissement) : 4 nouvelles pages (`RentreePage`, `VieScolairePage`, `ConsoleEtablissementPage`,
 et `ClassesPage` réécrite), un moteur de formulaire dynamique partagé

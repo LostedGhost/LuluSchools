@@ -8,7 +8,7 @@ from app.core.audit import journaliser_action_ministerielle
 from app.core.conversion import convertir_en_image
 from app.core.database import get_db, get_session_factory
 from app.core.deps import api_error, require_roles
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
 from app.modules.evaluations.models import (
@@ -44,7 +44,7 @@ from app.modules.evaluations.schemas import (
     ValiderPassageRequest,
 )
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
-from app.modules.inscriptions.models import Eleve
+from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.pedagogie.router import _verifier_eleve_inscrit, _verifier_enseignant_rattache
 
 MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS = 20 * 1024 * 1024
@@ -90,13 +90,20 @@ def creer_devoir(
     return devoir
 
 
+def _refuser_si_masque(devoir: Devoir) -> None:
+    """Un devoir masque par le Ministere n'existe plus pour l'eleve et son tuteur (meme
+    regle que la liste des devoirs) - y compris par lien direct ou soumission."""
+    if devoir.masque_par_id is not None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+
+
 def _verifier_proprietaire_du_devoir(db: Session, enseignant: Utilisateur, devoir: Devoir) -> None:
     if devoir.enseignant_id != enseignant.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
 
 
 @router.post("/devoirs/{devoir_id}/sujet-document", response_model=DevoirOut)
-async def televerser_sujet_document(
+def televerser_sujet_document(
     devoir_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -111,13 +118,7 @@ async def televerser_sujet_document(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     _verifier_proprietaire_du_devoir(db, enseignant, devoir)
 
-    contenu = await fichier.read()
-    if len(contenu) > MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS:
-        raise api_error(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            "fichier_trop_volumineux",
-            f"Fichier limite a {MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS // (1024 * 1024)} Mo.",
-        )
+    contenu = lire_upload_borne(fichier, MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS, TYPES_DOCUMENT)
     try:
         devoir.sujet_lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "sujet", fichier.content_type or "application/octet-stream"
@@ -143,6 +144,7 @@ def obtenir_lien_sujet_document(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, devoir.classe_id)
+        _refuser_si_masque(devoir)
     else:
         _verifier_proprietaire_du_devoir(db, utilisateur, devoir)
     if not devoir.sujet_lulufiles_file_id:
@@ -158,7 +160,7 @@ def obtenir_lien_sujet_document(
 
 
 @router.post("/devoirs/{devoir_id}/bareme-document", response_model=DevoirProprietaireOut)
-async def televerser_bareme_document(
+def televerser_bareme_document(
     devoir_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -172,13 +174,7 @@ async def televerser_bareme_document(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     _verifier_proprietaire_du_devoir(db, enseignant, devoir)
 
-    contenu = await fichier.read()
-    if len(contenu) > MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS:
-        raise api_error(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            "fichier_trop_volumineux",
-            f"Fichier limite a {MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS // (1024 * 1024)} Mo.",
-        )
+    contenu = lire_upload_borne(fichier, MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS, TYPES_DOCUMENT)
     try:
         devoir.bareme_document_lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "bareme", fichier.content_type or "application/octet-stream"
@@ -218,8 +214,6 @@ def obtenir_lien_bareme_document(
 def _verifier_tuteur_a_un_enfant_dans_la_classe(db: Session, tuteur_id: str, classe_id: str) -> None:
     """UC-31 : un tuteur suit les devoirs de SON enfant, jamais d'une classe au hasard -
     meme garde-fou que cours_direct._verifier_tuteur_a_un_enfant_dans_la_classe."""
-    from app.modules.inscriptions.models import Inscription, StatutInscription
-
     a_un_enfant = (
         db.query(Inscription)
         .join(Eleve, Eleve.id == Inscription.eleve_id)
@@ -261,8 +255,10 @@ def obtenir_devoir(
     classe = db.get(Classe, devoir.classe_id)
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, devoir.classe_id)
+        _refuser_si_masque(devoir)
     elif utilisateur.role == RoleUtilisateur.TUTEUR:
         _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, devoir.classe_id)
+        _refuser_si_masque(devoir)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     else:
@@ -344,6 +340,7 @@ def soumettre_devoir(
     if devoir is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     eleve = _verifier_eleve_inscrit(db, eleve_utilisateur.id, devoir.classe_id)
+    _refuser_si_masque(devoir)
 
     date_limite = devoir.date_limite if devoir.date_limite.tzinfo else devoir.date_limite.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) > date_limite:
@@ -393,7 +390,7 @@ def soumettre_devoir(
     response_model=SoumissionOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def soumettre_devoir_par_copie_image(
+def soumettre_devoir_par_copie_image(
     devoir_id: str,
     background_tasks: BackgroundTasks,
     fichier: UploadFile = File(...),
@@ -412,6 +409,7 @@ async def soumettre_devoir_par_copie_image(
     if devoir is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     eleve = _verifier_eleve_inscrit(db, eleve_utilisateur.id, devoir.classe_id)
+    _refuser_si_masque(devoir)
 
     date_limite = devoir.date_limite if devoir.date_limite.tzinfo else devoir.date_limite.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) > date_limite:
@@ -423,13 +421,7 @@ async def soumettre_devoir_par_copie_image(
     if db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first():
         raise api_error(status.HTTP_409_CONFLICT, "deja_soumis", "Vous avez deja soumis ce devoir.")
 
-    contenu = await fichier.read()
-    if len(contenu) > MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS:
-        raise api_error(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            "fichier_trop_volumineux",
-            f"Fichier limite a {MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS // (1024 * 1024)} Mo.",
-        )
+    contenu = lire_upload_borne(fichier, MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS, TYPES_DOCUMENT)
     try:
         copie_lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "copie", fichier.content_type or "application/octet-stream"
@@ -882,6 +874,14 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
     matiere (UC-09). Un devoir compte des qu'il est corrige (meme avant son echeance
     formelle) ; sans soumission, il ne compte comme 0 qu'une fois l'echeance passee -
     avant, on n'a simplement pas encore de resultat a inclure."""
+    existant = (
+        db.query(Bulletin)
+        .filter(Bulletin.eleve_id == eleve.id, Bulletin.classe_id == classe_id, Bulletin.periode == periode)
+        .first()
+    )
+    if existant is not None and existant.valide_par_conseil:
+        return existant  # fige des la deliberation : une correction ulterieure ne le modifie plus
+
     classe = db.get(Classe, classe_id)
     # UC-26.1 : une evaluation FORMATIVE ne compte jamais dans la moyenne officielle du
     # bulletin - seules les SOMMATIVES sont incluses.
@@ -957,19 +957,34 @@ def obtenir_bulletin(
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Eleve introuvable.")
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
 
     if utilisateur.role == RoleUtilisateur.ELEVE and utilisateur.id != eleve_utilisateur_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce bulletin ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.TUTEUR and eleve.tuteur_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
-        classe = db.get(Classe, classe_id)
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
-        classe = db.get(Classe, classe_id)
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
             raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+
+    # Le bulletin est ecrit en base et remonte dans le dossier scolaire national de
+    # l'eleve (vie scolaire) : jamais pour une classe dans laquelle il n'est pas inscrit.
+    inscrit = (
+        db.query(Inscription)
+        .filter(
+            Inscription.eleve_id == eleve.id,
+            Inscription.classe_id == classe_id,
+            Inscription.statut == StatutInscription.VALIDEE,
+        )
+        .first()
+    )
+    if inscrit is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cet eleve n'est pas inscrit dans cette classe.")
 
     return _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
 

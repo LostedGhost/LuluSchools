@@ -119,3 +119,15 @@ class ReverserVendeurRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reference_paiement: str
+
+
+class TransactionAReverserOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    annonce_titre: str
+    prix_paye: float
+    vendeur_nom: str
+    vendeur_prenom: str
+    vendeur_telephone: str | None
+    date_remise_declaree: datetime | None

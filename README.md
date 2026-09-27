@@ -43,7 +43,7 @@ détail exhaustif (règles métier, limites assumées, état de validation) dans
 | **Recrutement** | Postes, formulaire de candidature dynamique, notation de documents par IA, casier judiciaire chiffré, contrat signé par tracé canvas |
 | **Pédagogie** | Cours (texte/PDF/audio/vidéo), quiz généré par IA, vie scolaire, sessions en direct avec tableau collaboratif temps réel |
 | **Évaluations** | Devoirs formatifs/sommatifs, soumission texte ou copie photographiée corrigée par IA, référentiels de coefficients, bulletins pondérés |
-| **El Professor** | Assistant IA à 4 personas (élève, enseignant, tuteur, famille), garde-fou de sécurité avec alerte administrative |
+| **El Professor** | Assistant IA à 4 personas (élève, enseignant, tuteur, famille) : vraie interface de chat (réponses en direct, Markdown et formules, photo ou PDF joints, lecture à voix haute, dictée), aide sur un cours ou aide générale, garde-fou de sécurité avec alerte administrative |
 | **Actes académiques** | Catalogue par établissement, demande et traitement, paiement Kkiapay |
 | **Vie extra-scolaire** | Transport/cantine, billetterie d'événements, visites virtuelles 3D/drone, ticketerie unifiée avec QR codes |
 | **Économie étudiante** | Marketplace et micro-jobs réservés aux étudiants majeurs, séquestre de paiement, arbitrage de contestations |
@@ -75,7 +75,7 @@ LuluSchools/
 ├── backend/            API FastAPI (monolithe modulaire, un module = models+schemas+router)
 │   ├── app/modules/    21 modules métier (identité, établissements, pédagogie, coffre_fort, ...)
 │   ├── alembic/        migrations, une par évolution de schéma
-│   ├── scripts/        seed_admin_ministeriel.py, seed_mega.py (jeu de données grandeur nature)
+│   ├── scripts/        seed_admin_ministeriel.py, seed_mega.py + seed_donnees/ (jeu de données cohérent), verifier_seed.py, seed_render.bat
 │   ├── tests/          pytest, SQLite en mémoire, tous les services externes mockés
 │   └── PROJECT_MAP.md  carte détaillée du backend (fichier par fichier)
 ├── frontend/           application React (Vite/TS/Tailwind), une page par écran, par rôle
@@ -114,20 +114,29 @@ npm install
 npm run dev              # démarre le frontend sur http://localhost:5173 (proxy /api vers le backend local)
 ```
 
-Pour peupler la base locale avec un jeu de données réaliste (~30 établissements, ~6200
-comptes, toutes les tables applicatives) plutôt que de créer des comptes un par un :
+Pour peupler la base avec un jeu de données réaliste et cohérent (échelle 1,0 : 30
+établissements dont **l'Université d'Abomey-Calavi, toujours présente**, ~5 200 élèves,
+~8 700 comptes, toutes les tables), qui rejoue le workflow réel de chaque entité et se
+vérifie lui-même (39 règles métier) :
 
 ```bash
 cd backend
 python scripts/seed_mega.py --yes   # --scale ajuste le volume, --seed change le tirage aléatoire
 ```
 
-Tous les comptes générés partagent le mot de passe `Password1!`.
+Base en ligne (Render), depuis `cmd.exe` : `backend\scripts\seed_render.bat` (demande
+l'External Database URL et, de préférence, la `CASIER_JUDICIAIRE_ENCRYPTION_KEY` de Render).
+Tous les comptes partagent le mot de passe `Password1!` ; les comptes de démonstration
+(A++, A+ de l'UAC, étudiant, tuteur, enseignant, lycée, primaire) sont affichés à la fin.
 
 ## Tests
 
 ```bash
 cd backend && pytest                 # suite backend (aucune dépendance externe, tout est mocké)
+# même suite sur un vrai PostgreSQL (base dédiée, schéma recréé à chaque test : lent et
+# gourmand en écritures, prévoir de l'espace disque) — SQLite masque certaines erreurs
+# propres à Postgres :
+LULU_TEST_DATABASE_URL=postgresql+psycopg://user:mdp@localhost:5432/luluschools_tests pytest
 cd frontend && npx tsc -b            # vérification de types
 cd frontend && npx vite build        # build de production
 cd frontend && npx oxlint            # lint
@@ -149,6 +158,7 @@ complète : [docs/deploiement-render-vercel.md](docs/deploiement-render-vercel.m
 | Document | Contenu |
 |---|---|
 | [docs/audit-fonctionnalites-plateforme.md](docs/audit-fonctionnalites-plateforme.md) | Audit complet des fonctionnalités, par domaine, avec état de validation et limites connues |
+| [docs/audit-securite-2026-09-27.md](docs/audit-securite-2026-09-27.md) | Audit de sécurité et de fiabilité : 47 constats corrigés (deux passes + parcours complet de tous les rôles), vérifications, actions requises hors code, risques résiduels |
 | [SUIVI-PROJET.md](SUIVI-PROJET.md) | Avancement du pipeline en 8 étapes, cadrage verrouillé |
 | [docs/cas-utilisation-phase-1.md](docs/cas-utilisation-phase-1.md) | Cas d'utilisation validés de la Phase 1, avec règles métier et références légales |
 | [docs/diagrammes-uml-phase1.md](docs/diagrammes-uml-phase1.md) | Diagramme de cas d'utilisation et diagrammes de classes |
@@ -176,13 +186,14 @@ Premier déploiement au Bénin : conformité suivie article par article contre l
 
 - **Art. 446** — protection des mineurs : branche d'âge à l'inscription, micro-jobs/marketplace réservés aux étudiants majeurs numériques
 - **Art. 389-390** — consentement parental horodaté et démontrable
-- **Art. 395** — données sensibles (casier judiciaire) chiffrées et gardées en base, jamais confiées à un stockage tiers
+- **Art. 395** — données sensibles (casier judiciaire) chiffrées et gardées en base, jamais confiées à un stockage tiers, consultables par le seul A+ recruteur et purgées au verdict ou à 30 jours (seul le statut conforme/non conforme est conservé)
+- **Art. 446** — seul le tuteur peut donner le consentement parental d'un mineur de moins de 16 ans
 - **Art. 284-287** — signature électronique simple (tracé canvas) pour les contrats enseignants
 - **Art. 401** — aucune décision automatisée par IA sans recours humain (écran de révision manuelle systématique)
 - **Art. 354/356** — bornes de remboursement précises (transport/cantine, billetterie)
 
 ## Statut du projet
 
-**239 tests backend passants**, `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
+**311 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend.
 6 lots livrés (Phase 1 → Phase 6 + volets Professeur et Élève/Tuteur), détail complet et
 limites connues dans l'[audit des fonctionnalités](docs/audit-fonctionnalites-plateforme.md).

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   creerCompteEnseignant,
   creerCompteTuteur,
+  renvoyerCodeOtp,
   verifierOtpEnseignant,
   verifierOtpTuteur,
 } from "../api/auth";
@@ -113,6 +114,8 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
   const [code, setCode] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [enRenvoi, setEnRenvoi] = useState(false);
+  const [infoRenvoi, setInfoRenvoi] = useState<string | null>(null);
   const [champErreurs, setChampErreurs] = useState<{ prenom?: string; nom?: string; email?: string; motDePasse?: string; code?: string }>({});
 
   const creerCompte = role === "tuteur" ? creerCompteTuteur : creerCompteEnseignant;
@@ -144,6 +147,21 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
       setErreur(messageErreur(err, "Impossible de créer le compte."));
     } finally {
       setEnCours(false);
+    }
+  };
+
+  const renvoyerCode = async () => {
+    setErreur(null);
+    setInfoRenvoi(null);
+    setEnRenvoi(true);
+    try {
+      const { data } = await renvoyerCodeOtp(email);
+      setCode("");
+      setInfoRenvoi(data.message);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de renvoyer le code pour le moment."));
+    } finally {
+      setEnRenvoi(false);
     }
   };
 
@@ -346,6 +364,20 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
               >
                 Vérifier le code
               </Btn>
+              {infoRenvoi && (
+                <p role="status" style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--ink-faint)", textAlign: "center" }}>
+                  {infoRenvoi}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={renvoyerCode}
+                disabled={enRenvoi}
+                className="btn btn-ghost btn-sm"
+                style={{ width: "100%" }}
+              >
+                {enRenvoi ? "Envoi…" : "Renvoyer un nouveau code"}
+              </button>
               <button
                 type="button"
                 onClick={() => setEtape(1)}

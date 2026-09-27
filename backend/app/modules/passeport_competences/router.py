@@ -31,11 +31,12 @@ def _exporter_pdf(db: Session, files_client: LuluFilesClient, eleve_utilisateur_
     pdf_bytes = generer_pdf_passeport(passeport)
     try:
         file_id = files_client.upload(pdf_bytes, "passeport-competences.pdf", "application/pdf")
+        lien = files_client.get_signed_link(file_id)
     except FileStorageError as exc:
         raise api_error(
             status.HTTP_502_BAD_GATEWAY, "stockage_indisponible", "Impossible de generer le PDF, veuillez reessayer."
         ) from exc
-    return PasseportExportOut(lulufiles_file_id=file_id, lien=files_client.get_signed_link(file_id))
+    return PasseportExportOut(lulufiles_file_id=file_id, lien=lien)
 
 
 @router.get("/eleves/me/passeport", response_model=PasseportOut)

@@ -87,6 +87,8 @@ class MessageElProfessorOut(BaseModel):
     session_id: str
     role: RoleMessageElProfessor
     contenu: str
+    piece_jointe_nom: str | None = None
+    piece_jointe_type: str | None = None
     created_at: datetime
 
 
@@ -95,14 +97,17 @@ class SessionElProfessorOut(BaseModel):
 
     id: str
     eleve_utilisateur_id: str
-    cours_id: str
+    cours_id: str | None
+    cours_titre: str | None = None
+    sujet: str | None = None
+    created_at: datetime
     messages: list[MessageElProfessorOut]
 
 
 class QuestionElProfessorCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    question: str
+    question: str = Field(min_length=1)
 
 
 class MasquerContenuRequest(BaseModel):
@@ -155,6 +160,8 @@ class MessageElProfessorEnseignantOut(BaseModel):
     session_id: str
     role: RoleMessageElProfessorEnseignant
     contenu: str
+    piece_jointe_nom: str | None = None
+    piece_jointe_type: str | None = None
     created_at: datetime
 
 
@@ -165,6 +172,7 @@ class SessionElProfessorEnseignantOut(BaseModel):
     enseignant_id: str
     eleve_utilisateur_id: str | None
     sujet: str | None
+    created_at: datetime
     messages: list[MessageElProfessorEnseignantOut]
 
 
@@ -195,6 +203,8 @@ class MessageElProfessorTuteurOut(BaseModel):
     session_id: str
     role: RoleMessageElProfessorTuteur
     contenu: str
+    piece_jointe_nom: str | None = None
+    piece_jointe_type: str | None = None
     created_at: datetime
 
 
@@ -205,6 +215,7 @@ class SessionElProfessorTuteurOut(BaseModel):
     tuteur_id: str
     eleve_utilisateur_id: str
     sujet: str | None
+    created_at: datetime
     messages: list[MessageElProfessorTuteurOut]
 
 
@@ -222,6 +233,8 @@ class MessageElProfessorFamilleOut(BaseModel):
     session_id: str
     role: RoleMessageElProfessorFamille
     contenu: str
+    piece_jointe_nom: str | None = None
+    piece_jointe_type: str | None = None
     created_at: datetime
 
 
@@ -232,5 +245,33 @@ class SessionElProfessorFamilleOut(BaseModel):
     tuteur_id: str
     eleve_utilisateur_id: str
     sujet: str | None
+    created_at: datetime
     rejointe_le: datetime | None
     messages: list[MessageElProfessorFamilleOut]
+
+
+class SessionElProfessorEleveCreate(BaseModel):
+    """Sans cours_id : conversation d'aide generale (plusieurs possibles) ; avec : la
+    conversation unique de l'eleve sur ce cours (reprise si elle existe deja)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cours_id: str | None = None
+    sujet: str | None = Field(default=None, max_length=200)
+
+
+class RenommerSessionElProfessor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sujet: str = Field(min_length=1, max_length=200)
+
+
+class SessionElProfessorResumeOut(BaseModel):
+    id: str
+    sujet: str | None
+
+
+class SyntheseVocaleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    texte: str = Field(min_length=1)

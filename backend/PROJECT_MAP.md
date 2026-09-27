@@ -36,6 +36,9 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/vie_scolaire/` — absences, retards, appréciations, incidents (UC-23)
 - `app/modules/evaluations/` — enrichi (UC-26) : nature formative/sommative, sujet/barème en document, soumission par copie image
 - `app/modules/pedagogie/` — enrichi (UC-27) : El Professor côté enseignant (conseil éducatif/moral/professionnel) + garde-fou d'alerte
+- `app/modules/pedagogie/el_professor_chat.py` (2026-09-27) — interface de conversation commune aux 4 personas : `POST /el-professor/{persona}/sessions/{id}/flux` (SSE, pièce jointe image/PDF), `PATCH`/`DELETE` d'une conversation, `GET/POST /el-professor/eleve/sessions` (aide générale sans cours), `POST /el-professor/synthese-vocale`. Réutilise les contrôles d'accès et `_detecter_signal_alerte` de `router.py` ; persistance après le flux via `get_session_factory`. Côté élève, seule la question déclenche l'alerte (origine `ELEVE`, exclue de la vue tuteur) et une consigne « détresse » est ajoutée avant l'appel.
+- `app/core/documents.py` — lecture des PDF pour FreeLLM (qui ignore tout bloc non texte/image, voir `server/src/lib/content.ts` du fork) : texte extrait, ou 3 premières pages en PNG si scanné ; téléchargement borné. `pedagogie/router.py::texte_du_cours` fournit le texte d'un cours PDF à El Professor et à la génération de quiz (`Cours.texte_extrait`, extrait à la publication ou à la première demande).
+- `app/core/llm.py` — consignes El Professor factorisées (`consigne_eleve_cours`, `consigne_eleve_general`, `consigne_enseignant`, `consigne_tuteur`, `consigne_famille`, `construire_messages_el_professor`), `diffuser_el_professor` (stream), `synthese_vocale` (voix Gemini, WAV allégé de moitié par `alleger_wav`). Consigne commune : Markdown + LaTeX, contexte béninois, jamais de numéro d'urgence cité.
 - `app/modules/cours_direct/` — enrichi (UC-25) : tableau collaboratif, permissions de craie, chat de session, canal WebSocket temps réel
 
 **Commun**
@@ -54,11 +57,23 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `email.py` — `BrevoEmailClient.send_otp_email` / `.send_temporary_credentials_email`, appels HTTP directs à l'API Brevo. Injecté via `Depends(get_email_client)` pour rester substituable en test. Envoie `htmlContent` (document HTML complet avec branding, pas un fragment `<p>` nu — un fragment sans `<!DOCTYPE html>/<html>/<body>` cassait le rendu chez certains clients mail) et `textContent` (secours texte seul). **Piège réel rencontré** : `BREVO_SENDER_EMAIL` doit être une adresse *vérifiée* dans le compte Brevo (Expéditeurs & IP) — avec le placeholder par défaut (`no-reply@luluschools.example`, domaine `.example` non routable), Brevo accepte la requête API (201/202, pas d'erreur visible côté appli) mais ne délivre jamais le mail.
 - `files.py` — `LuluFilesClient.upload` / `.get_signed_link` (ADR-003), injecté via `Depends(get_files_client)`.
 - `llm.py` — `FreeLLMClient.noter_document` : envoie une image en vision via l'API compatible OpenAI de FreeLLM, parse un score 0-100 depuis la réponse texte (ADR-002). Injecté via `Depends(get_llm_client)`.
+- `rate_limit.py` — (audit 2026-09-27) limiteur en mémoire à fenêtre glissante (`verifier_limite`, `consommer`, `enregistrer_echec`), désactivé par `settings.rate_limit_enabled=False` dans la suite de tests (fixture `limitation_debit` pour le réactiver). Valable pour un seul worker.
+- `reservation.py` — (audit 2026-09-27) `aujourdhui_benin()` (UTC+1) et `filtre_place_occupee()` : une place impayée ne compte dans la capacité que 30 min (tickets transport/cantine, billets).
+- `files.py::lire_upload_borne()` — (audit 2026-09-27) lecture par blocs avec plafond de taille et liste blanche de types, à utiliser depuis un endpoint `def` pour **tout** téléversement.
+- Sessions (audit 2026-09-27) : `security.marqueur_session()` embarque dans chaque refresh token l'empreinte de `Utilisateur.mot_de_passe_modifie_le` ; changer/réinitialiser le mot de passe révoque toutes les sessions. `deps.get_current_user` refuse désormais aussi un compte suspendu (`exiger_compte_actif`), `/me` compris. `config.Settings.verifier_configuration_production()` refuse de démarrer en production sans secrets valides.
 - `crypto.py` — `chiffrer_bytes`/`dechiffrer_bytes` (Fernet) pour le casier judiciaire stocké en base (`recrutement/router.py`) ; la clé `CASIER_JUDICIAIRE_ENCRYPTION_KEY` est hashée (SHA-256) avant usage pour accepter n'importe quel format de secret (dont le base64 standard généré par `generateValue: true` de Render, pas garanti urlsafe comme l'exige Fernet).
+
+### Audit de sécurité du 2026-09-27 (branche `audit/securite-approfondie`)
+Détail complet : `docs/audit-securite-2026-09-27.md`. Points de repère pour reprendre le code :
+- identite : `POST /auth/otp/renvoyer`, `POST /auth/mot-de-passe-oublie` (+ `/confirmer`), `OtpVerification.objet` (vérification e-mail vs réinitialisation), `change-password` renvoie une paire de tokens (`ChangePasswordOut`).
+- recrutement : `GET /candidatures/{id}/casier-judiciaire` (+ `/document`, + `POST .../verdict`), réservés à l'A+ recruteur ; `purger_casiers_expires()` lancée par APScheduler en production (`main.py::lifespan`) ; `creer_contrat` exige un casier `CONFORME` ; `Candidature.rejetee_le` = départ du délai de contestation. **Ne jamais faire `.distinct()` sur une entité portant une colonne `JSON`** (erreur PostgreSQL) — utiliser une sous-requête `IN`.
+- marketplace : `GET /etablissements/{id}/marketplace/transactions-a-reverser` (applique la confirmation tacite).
+- Tests : `tests/test_securite_auth.py`, `tests/test_securite_acces.py`, `tests/test_securite_complements.py` ; `LULU_TEST_DATABASE_URL` rejoue toute la suite sur PostgreSQL (schéma créé une fois, tables vidées entre deux tests ; étape CI dédiée). Migrations `0016_durcissement_securite`, `0017_limitation_debit`.
+- Seconde passe : webhook Kkiapay piloté par `partnerId` (`"<type>:<id>"`, voir `paiements/router.py::_MODELES_PAR_TYPE`, le frontend l'envoie via `KkiapayButton.typeRessource`) ; limitation de débit en base (`identite.models.TentativeLimitee`, signatures `rate_limit.*(db, ...)`) ; messages paginés (`limite`, `avant`) ; inscription/OTP sans énumération ; DM élève↔élève limité au même établissement ; contrôleur restreint à `controle_acces.router._est_designable`.
 
 ### app/modules/identite/
 - `models.py` — `Utilisateur` (table de base commune à tous les rôles ; `login_id` = e-mail pour tuteur/enseignant/admin, matricule pour un élève), `Tuteur`, `OtpVerification`, enum `RoleUtilisateur`.
-- `router.py` — `router` (`/auth/tuteurs`, `/auth/tuteurs/verify-otp` — UC-01) + `auth_router`/`me_router` (`/auth/login`, `/auth/refresh`, `/auth/change-password`, `/me`).
+- `router.py` — `router` (`/auth/tuteurs`, `/auth/tuteurs/verify-otp` — UC-01) + `auth_router`/`me_router` (`/auth/login`, `/auth/refresh`, `/auth/change-password`, `GET /me`, `PATCH /me` — numéro Mobile Money, seul champ modifiable par l'utilisateur, requis pour les reversements marketplace/micro-jobs).
 - `schemas.py` — schémas Pydantic stricts (`extra="forbid"`, anti mass-assignment), validateur de force de mot de passe partagé création/changement.
 
 ### app/modules/etablissements/
@@ -146,7 +161,7 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 
 ### scripts/
 - `seed_admin_ministeriel.py` — crée le tout premier compte A++ (aucune route API ne le fait, choix de sécurité assumé). À exécuter une fois au déploiement, directement sur le serveur.
-- `seed_mega.py` — seed de développement « grandeur nature » : peuple **toutes** les tables applicatives (35+ tables, Phase 1 + Phase 2/3) avec un volume représentatif du système éducatif béninois. Voir section dédiée ci-dessous.
+- `seed_mega.py` + `seed_donnees/` — seed « grandeur nature » cohérent avec le workflow réel (UAC toujours présente), `verifier_seed.py` (39 règles métier), `seed_render.bat` (seed de la base en ligne). Voir section dédiée ci-dessous.
 
 ## Modèle de données (résumé)
 `Utilisateur` (1) → (0..1) `Tuteur` | `Enseignant` | `AdminEtablissement`. `AdminEtablissement` (N) → (1) `Etablissement` (1) → (N) `Classe`. `Poste` (1) → (N) `CritereDocumentPoste`, (1) → (N) `Candidature` (1) → (N) `DocumentCandidature`, (1) → (0..1) `VerificationCasierJudiciaire`, (1) → (0..1) `Contestation`, (1) → (0..1) `Contrat`.
@@ -183,69 +198,47 @@ Implémenté endpoint par endpoint après validation des cas d'utilisation (`../
 
 **Étape 5 (validation de bout en bout) close** : `tests/test_e2e_parcours_phase2_3.py` — même principe que `test_e2e_parcours_complet.py` (Phase 1), un seul jeu d'objets réutilisé à travers tous les modules plutôt que des fixtures isolées par test. Ordre rejoué : messagerie (groupe de classe auto-créé, DM tuteur→enfant, DM adulte→élève refusé, signalement traité) → El Professor + cours vidéo → cours en direct (consentement caméra, démarrage, participation, fin) → tickets transport et cantine (même enseignant cumulant les deux désignations de Contrôleur) → billetterie → visite virtuelle 3D → micro-job (offre → paiement → déclaration → validation → reversement A++). N'a pas révélé de bug d'intégration (contrairement à la Phase 1, qui en avait révélé plusieurs) — les modules Phase 2/3 réutilisent systématiquement les mêmes helpers RBAC (`verifier_admin_de_l_etablissement`, `est_controleur_designe`) que les tests unitaires exerçaient déjà.
 
-## Seed de développement grandeur nature (`scripts/seed_mega.py`)
+## Seed grandeur nature (`scripts/seed_mega.py` + paquet `scripts/seed_donnees/`)
 
-Créé sur demande explicite de l'utilisateur (« tests grandeur nature »), pour disposer d'un
-jeu de données réaliste couvrant les UC implémentés sans passer par des dizaines de
-comptes créés manuellement. Usage : `cd backend && python scripts/seed_mega.py --yes`
-(`--scale` ajuste tous les volumes, `--seed` change le tirage aléatoire — reproductible).
-Étendu le 2026-09-26 pour couvrir la Phase 4 (marketplace étudiante, UC-20/21/22) en plus
-des 18 UC des Phases 1/2/3.
+**Réécrit le 2026-09-27** : l'ancien seed (antérieur à l'audit) produisait des données
+incohérentes avec les règles des routeurs (plusieurs contrats par poste, contrat sans casier
+conforme, un seul enseignant pour 15 classes, moyennes de bulletin inventées sur 20 au lieu
+d'être calculées sur 100, identifiants de fichiers fictifs donnant des liens cassés,
+sessions « en cours » figées, tickets validés dans le futur...). Le nouveau seed rejoue le
+workflow réel de chaque entité ; chaque module du paquet documente les règles qu'il suit :
 
-**Ce qu'il fait** : réinitialise entièrement le schéma (`Base.metadata.drop_all` puis
-`create_all` — même technique que `tests/conftest.py` sur SQLite, appliquée ici à Postgres)
-puis insère directement via SQLAlchemy (sans passer par les endpoints HTTP, pour la vitesse)
-~30 établissements (10 EP, 10 ES moitié général/moitié technique, 10 UP moitié
-public/moitié privé), avec la vraie taxonomie béninoise : niveaux Maternelle→CM2, séries
-générales A1/A2/B/C/D et techniques F2-F4/G1-G3 encodées directement dans `Classe.niveau`
-(pas de colonne `filiere` dédiée — le modèle n'en a pas, volontairement non modifié pour
-un simple seed), filières universitaires réalistes (Droit, Génie Civil, Informatique de
-Gestion, etc.) avec leurs propres matières. Résultat typique (`--scale 1.0`) : 370 classes,
-~4400 élèves/inscriptions, ~6200 utilisateurs, et un volume cohérent sur les 40 tables
-restantes (recrutement, pédagogie, évaluations, actes, messagerie, cours en direct,
-transport/cantine, billetterie, micro-jobs, visites virtuelles, **marketplace étudiante**)
-— recensement exact dans le récapitulatif imprimé en fin d'exécution. Tous les comptes
-partagent le mot de passe `Password1!` (mot de passe permanent, flux OTP volontairement
-court-circuité).
+- `contexte.py` — configuration (`--scale`), horloge (tout est daté par rapport au moment du
+  seed : rentrée mi-septembre, activité entre la rentrée et maintenant), insertion **groupée
+  par table dans l'ordre des clés étrangères** (`persister`) : une requête par table au lieu
+  d'un aller-retour par ligne, indispensable contre une base distante.
+- `etablissements.py` — **Université d'Abomey-Calavi toujours créée en premier (code UP01)**,
+  quel que soit `--scale`, avec ses vraies entités (FADESP, FASEG, IFRI, EPAC, FSS, FLLAC,
+  FAST) ; EP/ES/UP avec la taxonomie béninoise (`taxonomie.py`), A+ `admin.<code>@...`,
+  référentiels de coefficients nationaux.
+- `recrutement.py` — poste → candidatures notées (rejet automatique sous le seuil) → verdict
+  casier CONFORME → **un** contrat par poste (POURVU) → signature ; reconductions dans la
+  fenêtre de 30 jours ; postes encore ouverts avec casiers à examiner et contestations.
+- `scolarite.py` — familles (nom du tuteur, fratries), âge conforme au niveau, consentement
+  parental horodaté pour les moins de 16 ans uniquement (Art. 446), capacité respectée.
+- `pedagogie.py` / `evaluations.py` — contenus par des enseignants **affectés**, cours PDF avec
+  texte extrait, quiz et notes cohérents avec le niveau de chaque élève, **bulletin calculé
+  comme l'application**, El Professor (4 personas, alertes), vie scolaire.
+- `vie_classe.py` — messagerie selon les règles de DM, sessions live (tableau en coordonnées
+  normalisées, capture rendue par `rendu_tableau.py`).
+- `services.py` / `economie.py` — actes, tickets, billets, micro-jobs, marketplace et
+  Coffre-fort avec les vraies transitions (paiement, validation tacite, reversement exigeant
+  un numéro Mobile Money, validations parentales liées à de vraies dépenses).
+- `demo.py` — scénarios **garantis** pour les comptes de démonstration (chaque écran et chaque
+  file d'administration a quelque chose à montrer).
+- `fichiers.py` — vrais fichiers générés (pymupdf) et téléversés **une fois** sur LuluFiles ;
+  sans LuluFiles, aucune donnée n'exige de fichier (jamais d'identifiant fictif).
 
-**Marketplace (UC-20/21/22, ajouté le 2026-09-26)** : par établissement ayant au moins deux
-élèves ≥16 ans avec compte (seuil dupliqué de `AGE_MAJORITE_NUMERIQUE`, pas d'import d'un
-module de router dans ce script qui ne dépend sinon que de `models` purs), génère des
-annonces réalistes (fournitures, manuels, uniformes, électronique...), un signalement
-occasionnel (15 %, dont 60 % déjà traités par l'A+), puis pour 60 % des annonces une
-transaction couvrant tout le cycle de vie du séquestre (`en_attente_paiement` → `finalisee`
-ou `remboursee`/`annulee`), y compris les deux issues d'une contestation (acceptée →
-remboursement, rejetée → transaction confirmée) — le statut de l'`Annonce` liée est toujours
-recalculé en cohérence (`reservee`/`vendue`/`disponible`), jamais laissé désynchronisé de sa
-transaction. Vérifié par un script isolé (SQLite en mémoire, hors périmètre Postgres/Alembic
-de ce seed) rejouant la fonction sur 80 graines aléatoires différentes : les 8 statuts de
-transaction et les 3 décisions de contestation sont tous atteints sans erreur.
-
-**Piège réel rencontré et corrigé** : un premier jet faisait un seul `db.add()` par ligne
-puis un unique `commit()` final, en supposant que SQLAlchemy trierait automatiquement les
-INSERT par dépendance de clé étrangère (comportement bien réel... mais seulement quand des
-`relationship()` relient les mappers). Aucun modèle de ce projet n'utilise `relationship()`
-pour ses clés étrangères (que des colonnes id brutes) : sans elles, l'ordre d'insertion
-n'est pas garanti, ce qui provoquait des `ForeignKeyViolation` aléatoires (reproduit dans un
-cas minimal à 2 tables sans aucune complexité annexe). Corrigé en remplaçant tout `db.add`
-par un helper `add()` qui `flush()` immédiatement après chaque ajout — chaque ligne devient
-réelle dans la transaction en cours avant que la suivante ne puisse la référencer, sans rien
-perdre de l'atomicité globale (un seul `commit()` final).
-
-**Second piège** : `Base.metadata.drop_all`/`create_all` ne touchent jamais la table
-`alembic_version` (hors de `Base.metadata`) — après un seed, `alembic upgrade head`
-croirait la base vierge et rejouerait toutes les migrations sur des tables déjà présentes.
-Le script aligne donc `alembic_version` sur `head` via `alembic.command.stamp(..., purge=True)`
-juste après le reset (`purge=True` efface la table plutôt que de calculer un delta depuis
-son contenu courant — nécessaire ici car l'historique de migrations de ce projet a été
-squashé en une seule révision (`0001_schema_initial`), rendant tout ancien contenu de
-`alembic_version` incompatible).
-
-**Limites assumées** : `etablissement_photos` reste vide (nécessiterait de vrais envois
-LuluFiles, hors périmètre d'un seed hors-ligne) ; `otp_verifications` reste vide (flux OTP
-volontairement court-circuité, son absence est l'état normal en régime établi) ;
-`photos_annonce_marketplace` réutilise le même identifiant LuluFiles factice que les cours
-PDF/vidéo (`LULUFILES_ID_PLACEHOLDER`), jamais un vrai envoi.
+`scripts/verifier_seed.py` (lancé automatiquement en fin de seed) relit la base et contrôle
+39 règles métier. Vérifié sur PostgreSQL : échelles 0,05 / 0,2 / 1,0 et trois graines, 39/39 ;
+puis chaque compte de démonstration appelle tous les endpoints GET de l'API : aucune erreur
+serveur. Échelle 1,0 : 30 établissements, 323 classes, ~5 200 élèves, ~8 700 comptes, 37 s en
+local (sans fichiers). `scripts/seed_render.bat` : seed de la base Render depuis le poste
+(aperçu, confirmation, clé de chiffrement des casiers de Render facultative, vérification).
 
 ## Phase 5 — Volet Professeur (UC-23 à UC-28)
 

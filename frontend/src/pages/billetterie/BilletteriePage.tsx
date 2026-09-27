@@ -133,11 +133,13 @@ export function BilletteriePage() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                     <div>
                       <p style={{ margin: 0, fontWeight: 600 }}>{ev?.titre ?? "Événement"}</p>
-                      <Badge tone={STATUT_TONE[b.statut]}>{STATUT_LABEL[b.statut]}</Badge>
+                      <Badge tone={b.statut === "achete" ? (b.paiement_confirme || b.prix_paye === 0 ? "success" : "pending") : STATUT_TONE[b.statut]}>
+                        {b.statut === "achete" ? (b.paiement_confirme || b.prix_paye === 0 ? "Payé — à présenter" : "Paiement en attente") : STATUT_LABEL[b.statut]}
+                      </Badge>
                     </div>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       {b.statut === "achete" && !b.paiement_confirme && b.prix_paye > 0 && (
-                        <KkiapayButton montant={b.prix_paye} reference={b.id} onSucces={(txId) => payer(b.id, txId)} disabled={actionEnCoursId === b.id} />
+                        <KkiapayButton montant={b.prix_paye} reference={b.id} typeRessource="billet" onSucces={(txId) => payer(b.id, txId)} disabled={actionEnCoursId === b.id} />
                       )}
                       {(b.paiement_confirme || b.prix_paye === 0) && (
                         <Btn variant="ghost" size="sm" loading={actionEnCoursId === b.id} onClick={() => telecharger(b.id)} leftIcon={<Download size={14} />}>
@@ -146,7 +148,7 @@ export function BilletteriePage() {
                       )}
                       {b.statut === "achete" && (
                         <Btn variant="outline" size="sm" loading={actionEnCoursId === b.id} onClick={() => rembourser(b.id)}>
-                          Rembourser
+                          {b.paiement_confirme ? "Rembourser" : "Annuler"}
                         </Btn>
                       )}
                     </div>

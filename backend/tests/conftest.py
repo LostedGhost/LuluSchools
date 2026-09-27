@@ -1,12 +1,14 @@
 import io
+import os
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.database import Base, get_db, get_session_factory
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
@@ -15,6 +17,7 @@ from app.core.llm import (
     DigestFamilleError,
     DocumentScoringError,
     ElProfessorError,
+    SyntheseVocaleError,
     QuizGenerationError,
     ResumeSessionLiveError,
     get_llm_client,
@@ -24,21 +27,64 @@ from app.main import app
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 
 
+@pytest.fixture(autouse=True)
+def _limitation_debit_desactivee():
+    """Les fixtures ouvrent des dizaines de sessions depuis la meme IP de test : la
+    limitation de debit est desactivee par defaut et reactivee explicitement par les
+    tests qui la verifient (fixture `limitation_debit`). Les compteurs vivent en base,
+    donc repartent de zero a chaque test."""
+    settings.rate_limit_enabled = False
+    yield
+    settings.rate_limit_enabled = False
+
+
 @pytest.fixture()
-def db_session():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+def limitation_debit():
+    settings.rate_limit_enabled = True
+    yield
+
+
+# Optionnel : rejouer toute la suite sur un vrai PostgreSQL (base dediee). SQLite masque
+# certaines erreurs propres a Postgres (ex. DISTINCT sur colonne json). Le schema est cree
+# une seule fois par session de test, puis les tables sont videes (TRUNCATE) entre deux
+# tests : recreer le schema a chaque test etait tres lent et saturait le disque.
+_URL_TEST_POSTGRES = os.environ.get("LULU_TEST_DATABASE_URL")
+
+
+@pytest.fixture(scope="session")
+def _moteur_postgres():
+    if not _URL_TEST_POSTGRES:
+        yield None
+        return
+    engine = create_engine(_URL_TEST_POSTGRES, pool_size=5, max_overflow=5)
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture()
+def db_session(_moteur_postgres):
+    if _moteur_postgres is not None:
+        engine = _moteur_postgres
+        with engine.begin() as connexion:
+            tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+            connexion.execute(text(f"TRUNCATE {tables} CASCADE"))
+    else:
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(engine)
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = testing_session_local()
     try:
         yield session
     finally:
         session.close()
-        engine.dispose()
+        if _moteur_postgres is None:
+            engine.dispose()
 
 
 class FakeEmailClient:
@@ -69,6 +115,11 @@ class FakeEmailClient:
         if self.should_fail:
             raise EmailDeliveryError("echec simule")
         self.sent.append({"to_email": to_email, "to_name": to_name, "subject": subject, "message": message})
+
+    def send_password_reset_email(self, to_email: str, to_name: str, login_id: str, code: str) -> None:
+        if self.should_fail:
+            raise EmailDeliveryError("echec simule")
+        self.sent.append({"to_email": to_email, "to_name": to_name, "reset_login_id": login_id, "reset_code": code})
 
 
 @pytest.fixture()
@@ -117,6 +168,13 @@ class FakeLLMClient:
         self.echec_conseil_famille = False
         self.reponse_digest_famille = "Cette semaine, votre enfant a bien avance."
         self.echec_digest_famille = False
+        # El Professor en flux : morceaux diffuses, messages recus (pour inspecter la consigne
+        # et les pieces jointes), echec simule, synthese vocale.
+        self.morceaux_el_professor = ["Voici ", "une ", "explication."]
+        self.echec_flux_el_professor = False
+        self.messages_flux_el_professor: list[list[dict]] = []
+        self.audio_synthese = b"RIFF-audio-simule"
+        self.echec_synthese_vocale = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -177,6 +235,17 @@ class FakeLLMClient:
         if self.echec_conseil_famille:
             raise ElProfessorError("echec simule")
         return self.reponse_conseil_famille
+
+    def diffuser_el_professor(self, messages: list[dict]):
+        self.messages_flux_el_professor.append(messages)
+        if self.echec_flux_el_professor:
+            raise ElProfessorError("echec simule")
+        yield from self.morceaux_el_professor
+
+    def synthese_vocale(self, texte: str) -> bytes:
+        if self.echec_synthese_vocale:
+            raise SyntheseVocaleError("echec simule")
+        return self.audio_synthese
 
     def generer_digest_famille(self, eleve_nom: str, sources: list[str]) -> str:
         if self.echec_digest_famille:
@@ -491,6 +560,11 @@ def classe_avec_enseignant_et_eleve(client, fake_email_client, fake_llm_client, 
         ],
         headers=enseignant_headers,
     ).json()
+    client.post(
+        f"/api/v1/candidatures/{candidature['id']}/casier-judiciaire/verdict",
+        json={"conforme": True},
+        headers=admin_headers,
+    )
     contrat = client.post(
         f"/api/v1/candidatures/{candidature['id']}/contrat",
         json={"syllabus": "Programme", "date_fin": "2027-06-30"},

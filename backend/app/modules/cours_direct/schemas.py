@@ -1,7 +1,8 @@
+import json
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.modules.cours_direct.models import (
     ModePermissionEcriture,
@@ -57,11 +58,25 @@ class PanneauTableauOut(BaseModel):
     ordre: int
 
 
+_TAILLE_MAX_DONNEES_TRAIT = 200_000  # octets JSON : borne le stockage et le rendu PNG
+_POINTS_MAX_PAR_TRAIT = 5_000
+
+
 class TraitTableauCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: TypeTraitTableau
     donnees: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("donnees")
+    @classmethod
+    def _borner_donnees(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if len(json.dumps(value, default=str)) > _TAILLE_MAX_DONNEES_TRAIT:
+            raise ValueError("Trait trop volumineux.")
+        points = value.get("points")
+        if isinstance(points, list) and len(points) > _POINTS_MAX_PAR_TRAIT:
+            raise ValueError(f"Un trait est limite a {_POINTS_MAX_PAR_TRAIT} points.")
+        return value
 
 
 class TraitTableauOut(BaseModel):
@@ -131,7 +146,7 @@ class CaptureTableauOut(BaseModel):
 class MessageSessionLiveCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    contenu: str
+    contenu: str = Field(min_length=1, max_length=2000)
 
 
 class MessageSessionLiveOut(BaseModel):

@@ -36,6 +36,21 @@ def est_controleur_designe(
     return query.first() is not None
 
 
+def _est_designable(db: Session, etablissement_id: str, utilisateur_id: str) -> bool:
+    sous_contrat = (
+        db.query(Contrat)
+        .filter(
+            Contrat.enseignant_id == utilisateur_id,
+            Contrat.etablissement_id == etablissement_id,
+            Contrat.statut == StatutContrat.SIGNE,
+        )
+        .first()
+        is not None
+    )
+    lien_admin = db.get(AdminEtablissement, utilisateur_id)
+    return sous_contrat or (lien_admin is not None and lien_admin.etablissement_id == etablissement_id)
+
+
 @router.get(
     "/etablissements/{etablissement_id}/utilisateurs-designables", response_model=list[UtilisateurDesignableOut]
 )
@@ -97,6 +112,15 @@ def designer_controleur(
 
     if db.get(Utilisateur, payload.utilisateur_id) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur a designer introuvable.")
+    # Arbitrage du 2026-09-27 : meme perimetre que la recherche ci-dessus (enseignant sous
+    # contrat signe ou admin de CET etablissement) - un controleur valide des titres payes,
+    # role de confiance qui ne se confie pas a n'importe quel compte de la plateforme.
+    if not _est_designable(db, etablissement_id, payload.utilisateur_id):
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "non_designable",
+            "Seuls un enseignant sous contrat ou un administrateur de l'etablissement peuvent etre designes.",
+        )
 
     designation = DesignationControleur(
         etablissement_id=etablissement_id,

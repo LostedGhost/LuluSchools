@@ -18,13 +18,22 @@ def test_creation_compte_envoie_un_otp_par_email(client, fake_email_client):
     assert len(fake_email_client.sent[0]["code"]) == 6
 
 
-def test_creation_compte_refuse_email_deja_utilise(client):
+def test_email_deja_utilise_reponse_identique_sans_doublon(client, fake_email_client, db_session):
+    """Anti-enumeration (audit 2026-09-27) : meme reponse qu'une inscription reussie ; aucun
+    second compte n'est cree et seul le proprietaire de l'adresse est prevenu."""
+    from app.modules.identite.models import Utilisateur
+
     premiere = client.post("/api/v1/auth/tuteurs", json=PAYLOAD_VALIDE)
     assert premiere.status_code == 201
+    code = fake_email_client.sent[0]["code"]
+    client.post("/api/v1/auth/tuteurs/verify-otp", json={"email": PAYLOAD_VALIDE["email"], "code": code})
 
-    seconde = client.post("/api/v1/auth/tuteurs", json=PAYLOAD_VALIDE)
-    assert seconde.status_code == 409
-    assert seconde.json()["error"]["code"] == "email_deja_utilise"
+    seconde = client.post("/api/v1/auth/tuteurs", json={**PAYLOAD_VALIDE, "mot_de_passe": "AutreMdp9"})
+    assert seconde.status_code == 201
+    assert seconde.json()["email_verifie"] is False
+    assert seconde.json()["id"] != premiere.json()["id"]
+    assert db_session.query(Utilisateur).filter(Utilisateur.email == PAYLOAD_VALIDE["email"]).count() == 1
+    assert "Tentative d'inscription" in fake_email_client.sent[-1]["subject"]
 
 
 def test_creation_compte_refuse_mot_de_passe_faible(client):
@@ -96,7 +105,7 @@ def test_verification_otp_epuise_les_tentatives_apres_cinq_echecs(client, fake_e
     assert derniere_tentative.json()["error"]["code"] == "otp_tentatives_epuisees"
 
 
-def test_verification_otp_deja_verifie_est_un_conflit(client, fake_email_client):
+def test_verification_otp_deja_verifie_reponse_generique(client, fake_email_client):
     client.post("/api/v1/auth/tuteurs", json=PAYLOAD_VALIDE)
     code = fake_email_client.sent[0]["code"]
     client.post(
@@ -106,8 +115,8 @@ def test_verification_otp_deja_verifie_est_un_conflit(client, fake_email_client)
     response = client.post(
         "/api/v1/auth/tuteurs/verify-otp", json={"email": PAYLOAD_VALIDE["email"], "code": code}
     )
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "deja_verifie"
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "otp_invalide"
 
 
 def test_verification_otp_compte_introuvable(client):
@@ -115,5 +124,5 @@ def test_verification_otp_compte_introuvable(client):
         "/api/v1/auth/tuteurs/verify-otp",
         json={"email": "inconnu@example.com", "code": "123456"},
     )
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "compte_introuvable"
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "otp_invalide"

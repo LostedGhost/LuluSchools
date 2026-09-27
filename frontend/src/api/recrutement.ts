@@ -9,6 +9,7 @@ import type {
   LienFichierOut,
   PosteOut,
   PropositionReconductionOut,
+  VerificationCasierOut,
 } from "../types/api";
 
 export function listerPostes(etablissementId: string) {
@@ -101,6 +102,15 @@ export function deciderContestation(contestationId: string, decision: "acceptee"
 
 export function creerContrat(candidatureId: string, syllabus: string, dateFin: string) {
   return api.post<ContratOut>(`/candidatures/${candidatureId}/contrat`, { syllabus, date_fin: dateFin });
+}
+
+// Casier judiciaire (Art. 395) : consultable uniquement par l'A+ recruteur, purge au verdict.
+export function telechargerCasierJudiciaire(candidatureId: string) {
+  return api.get<Blob>(`/candidatures/${candidatureId}/casier-judiciaire/document`, { responseType: "blob" });
+}
+
+export function rendreVerdictCasier(candidatureId: string, conforme: boolean) {
+  return api.post<VerificationCasierOut>(`/candidatures/${candidatureId}/casier-judiciaire/verdict`, { conforme });
 }
 
 export function listerContratsEtablissement(etablissementId: string) {

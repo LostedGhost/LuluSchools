@@ -11,6 +11,7 @@ declare global {
       api_key: string;
       sandbox: boolean;
       data?: string;
+      partnerId?: string;
     }) => void;
     addSuccessListener?: (callback: (response: { transactionId: string }) => void) => void;
     addFailedListener?: (callback: (error: unknown) => void) => void;
@@ -18,6 +19,35 @@ declare global {
 }
 
 let scriptCharge: Promise<void> | null = null;
+
+// Le widget Kkiapay est global : ajouter un ecouteur a chaque ouverture les empilait, et un
+// paiement reussi declenchait alors le rattachement a TOUTES les ressources ouvertes
+// auparavant. Un seul ecouteur, enregistre une fois, route vers le paiement en cours.
+let paiementEnCours: { onSucces: (transactionId: string) => void; onEchec?: () => void } | null = null;
+let ecouteursInstalles = false;
+
+function installerEcouteurs() {
+  if (ecouteursInstalles) return;
+  window.addSuccessListener?.((response) => {
+    const courant = paiementEnCours;
+    paiementEnCours = null;
+    courant?.onSucces(response.transactionId);
+  });
+  window.addFailedListener?.(() => {
+    const courant = paiementEnCours;
+    paiementEnCours = null;
+    courant?.onEchec?.();
+  });
+  ecouteursInstalles = true;
+}
+
+export type TypeRessourcePayable =
+  | "acte"
+  | "ticket_transport"
+  | "ticket_cantine"
+  | "billet"
+  | "offre_micro_job"
+  | "transaction_marketplace";
 
 function chargerScriptKkiapay(): Promise<void> {
   if (scriptCharge) return scriptCharge;
@@ -38,13 +68,15 @@ function chargerScriptKkiapay(): Promise<void> {
 
 interface KkiapayButtonProps {
   montant: number;
+  /** Type de la ressource payee : avec `reference`, forme le partnerId renvoye par le webhook. */
+  typeRessource: TypeRessourcePayable;
   reference: string;
   onSucces: (transactionId: string) => void;
   onEchec?: () => void;
   disabled?: boolean;
 }
 
-export function KkiapayButton({ montant, reference, onSucces, onEchec, disabled }: KkiapayButtonProps) {
+export function KkiapayButton({ montant, typeRessource, reference, onSucces, onEchec, disabled }: KkiapayButtonProps) {
   const pretRef = useRef(false);
 
   useEffect(() => {
@@ -69,13 +101,16 @@ export function KkiapayButton({ montant, reference, onSucces, onEchec, disabled 
       window.alert("Le module de paiement n'a pas pu demarrer.");
       return;
     }
-    window.addSuccessListener?.((response) => onSucces(response.transactionId));
-    window.addFailedListener?.(() => onEchec?.());
+    installerEcouteurs();
+    paiementEnCours = { onSucces, onEchec };
     window.openKkiapayWidget({
       amount: Math.round(montant),
       api_key: KKIAPAY_PUBLIC_KEY,
       sandbox: KKIAPAY_SANDBOX,
       data: JSON.stringify({ reference }),
+      // Le backend identifie la ressource payee par ce champ (webhook), jamais par un
+      // identifiant de transaction fourni ensuite par le navigateur.
+      partnerId: `${typeRessource}:${reference}`,
     });
   };
 

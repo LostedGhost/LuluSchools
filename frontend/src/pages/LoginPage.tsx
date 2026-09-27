@@ -16,6 +16,7 @@ export function LoginPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [champErreurs, setChampErreurs] = useState<{ identifiant?: string; motDePasse?: string }>({});
+  const messageSucces = (location.state as { message?: string } | null)?.message ?? null;
 
   const soumettre = async (e: FormEvent) => {
     e.preventDefault();
@@ -156,7 +157,21 @@ export function LoginPage() {
               </div>
             </Field>
 
+            {messageSucces && !erreur && (
+              <p role="status" style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--primary)" }}>
+                {messageSucces}
+              </p>
+            )}
             {erreur && <ErrorBanner>{erreur}</ErrorBanner>}
+
+            <p style={{ margin: 0, textAlign: "right" }}>
+              <Link
+                to="/mot-de-passe-oublie"
+                style={{ color: "var(--primary)", fontSize: "var(--text-xs)", textDecoration: "none" }}
+              >
+                Mot de passe oublié ?
+              </Link>
+            </p>
 
             <Btn
               type="submit"

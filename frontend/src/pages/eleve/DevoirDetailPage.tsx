@@ -153,7 +153,12 @@ export function DevoirDetailPage() {
 
           {soumission.note !== null && soumission.statut === "corrigee" && (
             <Card style={{ textAlign: 'center', padding: 'var(--space-6)', border: '1px solid color-mix(in srgb, var(--reward-deep) 30%, transparent)' }}>
-              <ScoreBurst score={soumission.note} max={20} label="Note finale" tone="success" />
+              <ScoreBurst
+                score={soumission.note}
+                max={questionsTriees.reduce((total, q) => total + q.points_max, 0) || 20}
+                label="Note finale"
+                tone="success"
+              />
             </Card>
           )}
 

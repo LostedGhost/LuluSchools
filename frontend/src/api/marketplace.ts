@@ -9,6 +9,7 @@ import type {
   EtatArticle,
   SignalementAnnonceOut,
   StatutAnnonce,
+  TransactionAReverserOut,
   TransactionMarketplaceOut,
 } from "../types/api";
 
@@ -130,6 +131,10 @@ export function deciderContestationMarketplace(
     decision,
     decision_motif: decisionMotif,
   });
+}
+
+export function transactionsAReverser(etablissementId: string) {
+  return api.get<TransactionAReverserOut[]>(`/etablissements/${etablissementId}/marketplace/transactions-a-reverser`);
 }
 
 export function reverserVendeur(transactionId: string, referencePaiement: string) {

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -52,6 +53,8 @@ from app.modules.inscriptions.models import Eleve, Inscription, StatutInscriptio
 from app.modules.pedagogie.router import _verifier_enseignant_rattache
 
 router = APIRouter(tags=["cours-direct"])
+
+logger = logging.getLogger(__name__)
 
 
 def _verifier_eleve_inscrit(db: Session, eleve_utilisateur_id: str, classe_id: str) -> Eleve:
@@ -255,7 +258,10 @@ def _capturer_tous_les_panneaux(db: Session, session_id: str, files_client: Lulu
         try:
             png = rendre_panneau_png(traits)
             file_id = files_client.upload(png, f"tableau-{panneau.id}.png", "image/png")
-        except FileStorageError:
+        except Exception:
+            # Best-effort : une capture ratee (stockage OU rendu) ne doit jamais rendre la
+            # session impossible a terminer.
+            logger.exception("capture du panneau %s en echec", panneau.id)
             continue
         db.add(CaptureTableauSession(session_id=session_id, panneau_id=panneau.id, lulufiles_file_id=file_id))
 
@@ -341,17 +347,32 @@ def _est_organisateur(session: SessionLive, utilisateur: Utilisateur) -> bool:
 
 
 def _est_participant(db: Session, session_id: str, utilisateur: Utilisateur) -> bool:
-    if utilisateur.role == RoleUtilisateur.ELEVE:
-        return (
-            db.query(ParticipationLive)
-            .filter(
-                ParticipationLive.session_id == session_id,
-                ParticipationLive.eleve_utilisateur_id == utilisateur.id,
-            )
-            .first()
-            is not None
+    """Avoir rejoint une fois ne suffit pas : l'eleve doit etre toujours inscrit (VALIDEE)
+    dans la classe de la session - un eleve desinscrit perd l'acces au tableau et au chat."""
+    if utilisateur.role != RoleUtilisateur.ELEVE:
+        return False
+    participation = (
+        db.query(ParticipationLive)
+        .filter(
+            ParticipationLive.session_id == session_id,
+            ParticipationLive.eleve_utilisateur_id == utilisateur.id,
         )
-    return False
+        .first()
+    )
+    if participation is None:
+        return False
+    session = db.get(SessionLive, session_id)
+    return (
+        db.query(Inscription)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .filter(
+            Eleve.utilisateur_id == utilisateur.id,
+            Inscription.classe_id == session.classe_id,
+            Inscription.statut == StatutInscription.VALIDEE,
+        )
+        .first()
+        is not None
+    )
 
 
 def _verifier_session_et_acces(db: Session, session_id: str, utilisateur: Utilisateur) -> SessionLive:
@@ -453,6 +474,8 @@ async def _ajouter_trait(
     db: Session, session_id: str, panneau_id: str, utilisateur: Utilisateur, payload: TraitTableauCreate
 ) -> TraitTableau:
     session = _verifier_session_et_acces(db, session_id, utilisateur)
+    if session.statut == StatutSessionLive.TERMINEE:
+        raise api_error(status.HTTP_409_CONFLICT, "session_terminee", "Cette session est terminee : le tableau est fige.")
     panneau = db.get(PanneauTableau, panneau_id)
     if panneau is None or panneau.session_id != session_id:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Panneau introuvable.")
@@ -734,7 +757,7 @@ async def canal_temps_reel_session_live(
         utilisateur = db.get(Utilisateur, payload.get("sub")) if payload.get("type") == "access" else None
     except Exception:
         utilisateur = None
-    if utilisateur is None:
+    if utilisateur is None or not utilisateur.actif or utilisateur.mot_de_passe_temporaire:
         await websocket.close(code=4401)
         return
 

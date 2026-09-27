@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, require_roles, verifier_portee_etablissement
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import MO, TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.formulaire import valider_reponses_formulaire
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
 from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
@@ -155,6 +155,12 @@ def soumettre_demande_acte(
         type_acte = db.get(TypeActeAcademique, payload.type_acte_id)
         if type_acte is None:
             raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Type d'acte introuvable.")
+        # Sans ce controle, un eleve pouvait choisir le type d'acte (eventuellement gratuit)
+        # d'un autre etablissement et contourner les frais fixes par le sien.
+        if type_acte.etablissement_id != _etablissement_actuel_de_l_eleve(db, eleve):
+            raise api_error(
+                status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce type d'acte n'appartient pas a l'etablissement de l'eleve."
+            )
         if type_acte.prix > 0:
             statut_initial = StatutDemandeActe.SOUMISE
             paiement_confirme = False
@@ -263,6 +269,8 @@ def traiter_demande_acte(
         raise api_error(
             status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande n'est pas prete a etre traitee (paiement manquant ?)."
         )
+    if payload.decision not in (StatutDemandeActe.ACCEPTEE, StatutDemandeActe.REJETEE):
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Decision invalide.")
     if payload.decision == StatutDemandeActe.REJETEE and not payload.motif_rejet:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet.")
 
@@ -281,7 +289,7 @@ def _verifier_proprietaire_ou_tuteur(db: Session, utilisateur: Utilisateur, elev
 
 
 @router.post("/demandes-actes/{demande_id}/pieces/{champ_id}", response_model=DemandeActeOut)
-async def televerser_piece_jointe(
+def televerser_piece_jointe(
     demande_id: str,
     champ_id: str,
     fichier: UploadFile = File(...),
@@ -298,12 +306,16 @@ async def televerser_piece_jointe(
     eleve = db.get(Eleve, demande.eleve_id)
     _verifier_proprietaire_ou_tuteur(db, utilisateur, eleve)
 
+    if demande.statut in (StatutDemandeActe.ACCEPTEE, StatutDemandeActe.REJETEE):
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande a deja ete traitee.")
     type_acte = db.get(TypeActeAcademique, demande.type_acte_id) if demande.type_acte_id else None
-    champs_fichier = {c["id"] for c in (type_acte.schema_formulaire or [])} if type_acte else set()
+    champs_fichier = (
+        {c["id"] for c in (type_acte.schema_formulaire or []) if c.get("type") == "fichier"} if type_acte else set()
+    )
     if champ_id not in champs_fichier:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "champ_inconnu", "Ce champ n'existe pas sur ce type d'acte.")
 
-    contenu = await fichier.read()
+    contenu = lire_upload_borne(fichier, 10 * MO, TYPES_DOCUMENT)
     try:
         lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or champ_id, fichier.content_type or "application/octet-stream"
@@ -318,7 +330,7 @@ async def televerser_piece_jointe(
 
 
 @router.post("/demandes-actes/{demande_id}/livrer-document", response_model=DemandeActeOut)
-async def livrer_document_acte(
+def livrer_document_acte(
     demande_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -339,7 +351,7 @@ async def livrer_document_acte(
             status.HTTP_409_CONFLICT, "statut_invalide", "Seule une demande acceptee peut recevoir son document final."
         )
 
-    contenu = await fichier.read()
+    contenu = lire_upload_borne(fichier, 20 * MO, TYPES_DOCUMENT)
     try:
         lulufiles_file_id = files_client.upload(
             contenu, fichier.filename or "acte.pdf", fichier.content_type or "application/pdf"

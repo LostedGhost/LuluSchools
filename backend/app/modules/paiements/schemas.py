@@ -25,3 +25,5 @@ class KkiapayWebhookPayload(BaseModel):
     isPaymentSucces: bool
     event: str
     amount: float
+    # "<type>:<id>" transmis au widget par le frontend (voir paiements/router.py).
+    partnerId: str | None = None

@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -6,6 +7,7 @@ from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DataError, IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,7 @@ from app.modules.cours_direct.router import router as cours_direct_router
 from app.modules.etablissements.router import classes_router as etablissements_classes_router
 from app.modules.etablissements.router import router as etablissements_router
 from app.modules.evaluations.router import router as evaluations_router
+from app.modules.pedagogie.el_professor_chat import router as el_professor_chat_router
 from app.modules.pedagogie.router import router as pedagogie_router
 from app.modules.identite.router import admin_router as identite_admin_router
 from app.modules.identite.router import auth_router, enseignant_router, me_router
@@ -37,7 +40,41 @@ from app.modules.vie_scolaire.router import router as vie_scolaire_router
 from app.modules.visites_virtuelles.router import router as visites_virtuelles_router
 from app.system.router import router as system_router
 
-app = FastAPI(title="LuluSchools API", version="0.1.0")
+
+
+def _purger_casiers_expires_tache() -> None:
+    from app.core.database import SessionLocal
+    from app.modules.recrutement.router import purger_casiers_expires
+
+    db = SessionLocal()
+    try:
+        nombre = purger_casiers_expires(db)
+        if nombre:
+            logger.info("purge casiers judiciaires : %s contenu(s) expire(s) supprime(s)", nombre)
+    except Exception:
+        logger.exception("purge des casiers judiciaires expires en echec")
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Taches periodiques (APScheduler en process, ADR-001) uniquement en production :
+    la suite de tests ne doit jamais toucher la vraie base."""
+    planificateur = None
+    if settings.environment == "production":
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        planificateur = BackgroundScheduler(timezone="UTC")
+        planificateur.add_job(_purger_casiers_expires_tache, "interval", hours=6)
+        planificateur.start()
+        _purger_casiers_expires_tache()
+    yield
+    if planificateur is not None:
+        planificateur.shutdown(wait=False)
+
+
+app = FastAPI(title="LuluSchools API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,6 +109,26 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """Contrainte d'unicite violee (ex. deux requetes concurrentes, identifiant de
+    transaction deja rattache) : un conflit metier, pas une panne serveur."""
+    logger.warning("Contrainte d'integrite violee sur %s %s : %s", request.method, request.url.path, exc.orig)
+    return JSONResponse(
+        status_code=409,
+        content={"error": {"code": "conflit", "message": "Cette operation entre en conflit avec des donnees existantes.", "details": {}}},
+    )
+
+
+@app.exception_handler(DataError)
+async def data_error_handler(request: Request, exc: DataError) -> JSONResponse:
+    logger.warning("Donnee refusee par la base sur %s %s : %s", request.method, request.url.path, exc.orig)
+    return JSONResponse(
+        status_code=422,
+        content={"error": {"code": "donnee_invalide", "message": "Une valeur fournie est invalide ou trop longue.", "details": {}}},
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Filet de secours : sans lui, toute exception non prevue (bug reel, panne d'un
@@ -100,6 +157,7 @@ app.include_router(inscriptions_router, prefix="/api/v1")
 app.include_router(inscriptions_mon_espace_router, prefix="/api/v1")
 app.include_router(recrutement_router, prefix="/api/v1")
 app.include_router(pedagogie_router, prefix="/api/v1")
+app.include_router(el_professor_chat_router, prefix="/api/v1")
 app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")

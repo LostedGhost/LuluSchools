@@ -12,16 +12,6 @@ export function listerMesSessionsElProfessorEnseignant() {
   return api.get<SessionElProfessorEnseignantOut[]>("/el-professor-enseignant/sessions");
 }
 
-export function obtenirSessionElProfessorEnseignant(sessionId: string) {
-  return api.get<SessionElProfessorEnseignantOut>(`/el-professor-enseignant/sessions/${sessionId}`);
-}
-
-export function poserQuestionElProfessorEnseignant(sessionId: string, question: string) {
-  return api.post<SessionElProfessorEnseignantOut>(`/el-professor-enseignant/sessions/${sessionId}/messages`, {
-    question,
-  });
-}
-
 export function listerAlertesElProfessor(etablissementId: string) {
   return api.get<AlerteElProfessorOut[]>(`/etablissements/${etablissementId}/alertes-el-professor`);
 }

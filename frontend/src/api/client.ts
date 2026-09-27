@@ -40,7 +40,7 @@ interface RequeteAvecRetry extends InternalAxiosRequestConfig {
 
 let refreshEnCours: Promise<string | null> | null = null;
 
-async function rafraichirToken(): Promise<string | null> {
+export async function rafraichirToken(): Promise<string | null> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
   try {
@@ -55,18 +55,26 @@ async function rafraichirToken(): Promise<string | null> {
   }
 }
 
+/** Un seul rafraichissement a la fois, partage entre axios et les appels fetch (flux SSE). */
+export function rafraichirUneFois(): Promise<string | null> {
+  if (!refreshEnCours) {
+    refreshEnCours = rafraichirToken().finally(() => {
+      refreshEnCours = null;
+    });
+  }
+  return refreshEnCours;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const requeteOriginale = error.config as RequeteAvecRetry | undefined;
-    if (error.response?.status === 401 && requeteOriginale && !requeteOriginale._retry) {
+    // Un 401 sur /auth/* (mauvais mot de passe, code OTP errone...) est une reponse
+    // metier a afficher sur place : jamais un motif de rafraichissement ni de redirection.
+    const estAppelAuth = requeteOriginale?.url?.startsWith("/auth/") ?? false;
+    if (error.response?.status === 401 && requeteOriginale && !requeteOriginale._retry && !estAppelAuth) {
       requeteOriginale._retry = true;
-      if (!refreshEnCours) {
-        refreshEnCours = rafraichirToken().finally(() => {
-          refreshEnCours = null;
-        });
-      }
-      const nouveauToken = await refreshEnCours;
+      const nouveauToken = await rafraichirUneFois();
       if (nouveauToken) {
         requeteOriginale.headers = requeteOriginale.headers ?? {};
         requeteOriginale.headers.Authorization = `Bearer ${nouveauToken}`;

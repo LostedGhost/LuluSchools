@@ -2,6 +2,8 @@ from datetime import date, timedelta
 
 import pytest
 
+from app.core.reservation import aujourdhui_benin
+
 
 @pytest.fixture()
 def kkiapay_secret(monkeypatch):
@@ -38,7 +40,7 @@ def test_parcours_ticket_transport_achat_paiement_validation(client, classe_avec
         headers=ctx["admin_headers"],
     ).json()
 
-    demain = (date.today() + timedelta(days=5)).isoformat()
+    demain = aujourdhui_benin().isoformat()  # un ticket ne se valide que le jour du trajet
     ticket = client.post(
         f"/api/v1/lignes-transport/{ligne['id']}/tickets",
         json={"date_trajet": demain},
@@ -175,7 +177,7 @@ def test_parcours_ticket_cantine(client, classe_avec_enseignant_et_eleve, kkiapa
         headers=ctx["admin_headers"],
     ).json()
 
-    demain = (date.today() + timedelta(days=5)).isoformat()
+    demain = aujourdhui_benin().isoformat()  # un ticket ne se valide que le jour du service
     ticket = client.post(
         f"/api/v1/types-repas-cantine/{type_repas['id']}/tickets",
         json={"date_service": demain},

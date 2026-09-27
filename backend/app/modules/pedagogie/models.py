@@ -34,6 +34,10 @@ class Cours(Base):
     format: Mapped[FormatCours] = mapped_column(Enum(FormatCours))
     contenu_texte: Mapped[str | None] = mapped_column(Text, nullable=True)
     lulufiles_file_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Texte extrait d'un cours PDF (a la publication, ou a la premiere demande pour les cours
+    # plus anciens) : donne a El Professor et a la generation de quiz le contenu reel du
+    # document, que contenu_texte laisse vide pour ce format.
+    texte_extrait: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     # UC-37/53 (lot admin ministeriel) : masquage non destructif d'un contenu signale, meme
     # pattern que Message.masque_par en messagerie (Phase 2/3) - jamais une suppression.
@@ -88,19 +92,27 @@ class RoleMessageElProfessor(str, enum.Enum):
 
 class SessionElProfessor(Base):
     """UC-14 : une session par (eleve, cours) - upsert, reutilisee a chaque nouvelle
-    question pour garder l'historique de continuite pedagogique (delegue)."""
+    question pour garder l'historique de continuite pedagogique (delegue). Sans cours
+    (cours_id NULL) : conversation d'aide generale, l'eleve peut en ouvrir plusieurs
+    (l'unicite ne porte que sur les couples ou cours_id est renseigne)."""
 
     __tablename__ = "sessions_el_professor"
     __table_args__ = (UniqueConstraint("eleve_utilisateur_id", "cours_id", name="uq_session_el_professor"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     eleve_utilisateur_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
-    cours_id: Mapped[str] = mapped_column(ForeignKey("cours.id"), index=True)
+    cours_id: Mapped[str | None] = mapped_column(ForeignKey("cours.id"), nullable=True, index=True)
+    sujet: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     messages: Mapped[list["MessageElProfessor"]] = relationship(
         back_populates="session", order_by="MessageElProfessor.created_at"
     )
+    cours: Mapped["Cours | None"] = relationship()
+
+    @property
+    def cours_titre(self) -> str | None:
+        return self.cours.titre if self.cours is not None else None
 
 
 class MessageElProfessor(Base):
@@ -111,6 +123,14 @@ class MessageElProfessor(Base):
     role: Mapped[RoleMessageElProfessor] = mapped_column(Enum(RoleMessageElProfessor))
     contenu: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    # Piece jointe de la question (image ou PDF). L'image n'est jamais conservee
+    # (minimisation, Art. 383 du Code du numerique) : seuls son nom et son type restent ;
+    # d'un PDF, seul le texte extrait est garde, pour que la suite de la conversation
+    # puisse encore s'y referer.
+    piece_jointe_nom: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    piece_jointe_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    piece_jointe_texte: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     session: Mapped[SessionElProfessor] = relationship(back_populates="messages")
 
@@ -149,6 +169,14 @@ class MessageElProfessorEnseignant(Base):
     contenu: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
+    # Piece jointe de la question (image ou PDF). L'image n'est jamais conservee
+    # (minimisation, Art. 383 du Code du numerique) : seuls son nom et son type restent ;
+    # d'un PDF, seul le texte extrait est garde, pour que la suite de la conversation
+    # puisse encore s'y referer.
+    piece_jointe_nom: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    piece_jointe_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    piece_jointe_texte: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     session: Mapped[SessionElProfessorEnseignant] = relationship(back_populates="messages")
 
 
@@ -185,6 +213,14 @@ class MessageElProfessorTuteur(Base):
     contenu: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
+    # Piece jointe de la question (image ou PDF). L'image n'est jamais conservee
+    # (minimisation, Art. 383 du Code du numerique) : seuls son nom et son type restent ;
+    # d'un PDF, seul le texte extrait est garde, pour que la suite de la conversation
+    # puisse encore s'y referer.
+    piece_jointe_nom: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    piece_jointe_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    piece_jointe_texte: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     session: Mapped[SessionElProfessorTuteur] = relationship(back_populates="messages")
 
 
@@ -192,6 +228,9 @@ class OrigineAlerteElProfessor(str, enum.Enum):
     ENSEIGNANT = "enseignant"
     TUTEUR = "tuteur"
     FAMILLE = "famille"
+    # Conversation d'un eleve avec El Professor : comme FAMILLE, jamais montree au tuteur
+    # (il peut etre la source du danger), uniquement a l'administration.
+    ELEVE = "eleve"
 
 
 class AlerteElProfessor(Base):
@@ -266,5 +305,13 @@ class MessageElProfessorFamille(Base):
     role: Mapped[RoleMessageElProfessorFamille] = mapped_column(Enum(RoleMessageElProfessorFamille))
     contenu: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    # Piece jointe de la question (image ou PDF). L'image n'est jamais conservee
+    # (minimisation, Art. 383 du Code du numerique) : seuls son nom et son type restent ;
+    # d'un PDF, seul le texte extrait est garde, pour que la suite de la conversation
+    # puisse encore s'y referer.
+    piece_jointe_nom: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    piece_jointe_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    piece_jointe_texte: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     session: Mapped[SessionElProfessorFamille] = relationship(back_populates="messages")

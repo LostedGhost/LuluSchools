@@ -5,11 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
+from app.core.reservation import aujourdhui_benin, filtre_place_occupee
 from app.modules.controle_acces.models import ServiceControle
 from app.modules.controle_acces.router import est_controleur_designe, verifier_admin_de_l_etablissement
-from app.modules.etablissements.models import Etablissement
+from app.modules.etablissements.models import Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
-from app.modules.inscriptions.models import Eleve
+from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
 from app.modules.paiements.schemas import AmorcerPaiementRequest
 from app.modules.services_scolaires.models import (
     LigneTransport,
@@ -47,6 +48,27 @@ def _resoudre_beneficiaire(db: Session, utilisateur: Utilisateur, eleve_utilisat
     if eleve is None or eleve.tuteur_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
     return db.get(Utilisateur, eleve_utilisateur_id)
+
+
+def _verifier_eleve_de_l_etablissement(db: Session, beneficiaire: Utilisateur, etablissement_id: str) -> None:
+    """Transport et cantine sont des services d'etablissement : reserves a ses eleves
+    inscrits (VALIDEE), pas a un eleve d'un autre etablissement."""
+    inscrit = (
+        db.query(Inscription)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .join(Classe, Classe.id == Inscription.classe_id)
+        .filter(
+            Eleve.utilisateur_id == beneficiaire.id,
+            Inscription.statut == StatutInscription.VALIDEE,
+            Classe.etablissement_id == etablissement_id,
+        )
+        .first()
+        is not None
+    )
+    if not inscrit:
+        raise api_error(
+            status.HTTP_403_FORBIDDEN, "hors_etablissement", "Ce service est reserve aux eleves de l'etablissement."
+        )
 
 
 def _verifier_proprietaire_ou_tuteur(db: Session, utilisateur: Utilisateur, beneficiaire_id: str) -> None:
@@ -125,6 +147,22 @@ def acheter_ticket_transport(
     if ligne is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ligne de transport introuvable.")
     beneficiaire = _resoudre_beneficiaire(db, utilisateur, payload.eleve_utilisateur_id)
+    _verifier_eleve_de_l_etablissement(db, beneficiaire, ligne.etablissement_id)
+    if payload.date_trajet < aujourdhui_benin():
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "date_passee", "Impossible d'acheter un ticket pour une date passee.")
+    if (
+        db.query(TicketTransport)
+        .filter(
+            TicketTransport.ligne_id == ligne_id,
+            TicketTransport.date_trajet == payload.date_trajet,
+            TicketTransport.utilisateur_id == beneficiaire.id,
+            TicketTransport.statut.in_([StatutTicket.ACHETE, StatutTicket.VALIDE]),
+            filtre_place_occupee(TicketTransport),
+        )
+        .first()
+        is not None
+    ):
+        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un ticket existe deja pour ce trajet et cette date.")
 
     deja_pris = (
         db.query(TicketTransport)
@@ -132,6 +170,7 @@ def acheter_ticket_transport(
             TicketTransport.ligne_id == ligne_id,
             TicketTransport.date_trajet == payload.date_trajet,
             TicketTransport.statut.in_([StatutTicket.ACHETE, StatutTicket.VALIDE]),
+            filtre_place_occupee(TicketTransport),
         )
         .count()
     )
@@ -161,7 +200,7 @@ def amorcer_paiement_ticket_transport(
     if ticket is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ticket introuvable.")
     _verifier_proprietaire_ou_tuteur(db, utilisateur, ticket.utilisateur_id)
-    if ticket.statut != StatutTicket.ACHETE:
+    if ticket.statut != StatutTicket.ACHETE or ticket.paiement_confirme:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket n'attend pas de paiement.")
 
     ticket.kkiapay_transaction_id = payload.transaction_id
@@ -186,6 +225,8 @@ def valider_ticket_transport(
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut pas etre valide.")
     if not ticket.paiement_confirme:
         raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce ticket n'est pas confirme.")
+    if ticket.date_trajet != aujourdhui_benin():
+        raise api_error(status.HTTP_409_CONFLICT, "mauvaise_date", "Ce ticket n'est pas valable aujourd'hui.")
 
     ticket.statut = StatutTicket.VALIDE
     db.commit()
@@ -330,6 +371,22 @@ def acheter_ticket_cantine(
     if type_repas is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Type de repas introuvable.")
     beneficiaire = _resoudre_beneficiaire(db, utilisateur, payload.eleve_utilisateur_id)
+    _verifier_eleve_de_l_etablissement(db, beneficiaire, type_repas.etablissement_id)
+    if payload.date_service < aujourdhui_benin():
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "date_passee", "Impossible d'acheter un ticket pour une date passee.")
+    if (
+        db.query(TicketCantine)
+        .filter(
+            TicketCantine.type_repas_id == type_repas_id,
+            TicketCantine.date_service == payload.date_service,
+            TicketCantine.utilisateur_id == beneficiaire.id,
+            TicketCantine.statut.in_([StatutTicket.ACHETE, StatutTicket.VALIDE]),
+            filtre_place_occupee(TicketCantine),
+        )
+        .first()
+        is not None
+    ):
+        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un ticket existe deja pour ce repas et cette date.")
 
     deja_pris = (
         db.query(TicketCantine)
@@ -337,6 +394,7 @@ def acheter_ticket_cantine(
             TicketCantine.type_repas_id == type_repas_id,
             TicketCantine.date_service == payload.date_service,
             TicketCantine.statut.in_([StatutTicket.ACHETE, StatutTicket.VALIDE]),
+            filtre_place_occupee(TicketCantine),
         )
         .count()
     )
@@ -366,7 +424,7 @@ def amorcer_paiement_ticket_cantine(
     if ticket is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ticket introuvable.")
     _verifier_proprietaire_ou_tuteur(db, utilisateur, ticket.utilisateur_id)
-    if ticket.statut != StatutTicket.ACHETE:
+    if ticket.statut != StatutTicket.ACHETE or ticket.paiement_confirme:
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket n'attend pas de paiement.")
 
     ticket.kkiapay_transaction_id = payload.transaction_id
@@ -391,6 +449,8 @@ def valider_ticket_cantine(
         raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut pas etre valide.")
     if not ticket.paiement_confirme:
         raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce ticket n'est pas confirme.")
+    if ticket.date_service != aujourdhui_benin():
+        raise api_error(status.HTTP_409_CONFLICT, "mauvaise_date", "Ce ticket n'est pas valable aujourd'hui.")
 
     ticket.statut = StatutTicket.VALIDE
     db.commit()

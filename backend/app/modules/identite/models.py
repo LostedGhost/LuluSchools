@@ -43,6 +43,9 @@ class Utilisateur(Base):
     # endroit que le mot de passe temporaire (get_current_active_user) - defaut true, aucun
     # compte existant n'est suspendu par cette migration.
     actif: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Tout refresh token emis avant cette date est refuse (changement ou reinitialisation
+    # du mot de passe = fermeture des autres sessions).
+    mot_de_passe_modifie_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
@@ -68,11 +71,29 @@ class Enseignant(Base):
     utilisateur: Mapped[Utilisateur] = relationship()
 
 
+class TentativeLimitee(Base):
+    """Evenements comptes par la limitation de debit (app/core/rate_limit.py) : en base
+    plutot qu'en memoire pour rester valable avec plusieurs workers/instances."""
+
+    __tablename__ = "tentatives_limitees"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    cle: Mapped[str] = mapped_column(String(255), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class ObjetOtp(str, enum.Enum):
+    VERIFICATION_EMAIL = "verification_email"
+    REINITIALISATION_MOT_DE_PASSE = "reinitialisation_mot_de_passe"
+
+
 class OtpVerification(Base):
     __tablename__ = "otp_verifications"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     utilisateur_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
+    # Un code de reinitialisation ne doit jamais valider une adresse e-mail, ni l'inverse.
+    objet: Mapped[str] = mapped_column(String(40), default=ObjetOtp.VERIFICATION_EMAIL.value)
     code_hash: Mapped[str] = mapped_column(String(64))
     salt: Mapped[str] = mapped_column(String(32))
     tentatives: Mapped[int] = mapped_column(Integer, default=0)

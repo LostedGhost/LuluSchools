@@ -8,12 +8,11 @@ from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.deps import (
     api_error,
     get_current_active_user,
-    get_current_user,
     require_roles,
     verifier_portee_etablissement,
 )
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import MO, TYPES_IMAGE, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.security import generate_temporary_password, hash_password
 from app.modules.etablissements.models import (
     AdminEtablissement,
@@ -143,7 +142,7 @@ def creer_etablissement(
 
 @router.get("", response_model=list[EtablissementOut])
 def lister_etablissements(
-    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_user)
+    db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Etablissement]:
     return db.query(Etablissement).all()
 
@@ -291,7 +290,7 @@ def annuaire_public(
 def obtenir_etablissement(
     etablissement_id: str,
     db: Session = Depends(get_db),
-    _utilisateur: Utilisateur = Depends(get_current_user),
+    _utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> Etablissement:
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
@@ -436,7 +435,7 @@ def creer_classe(
 @router.post(
     "/{etablissement_id}/photos", response_model=EtablissementPhotoOut, status_code=status.HTTP_201_CREATED
 )
-async def ajouter_photo_etablissement(
+def ajouter_photo_etablissement(
     etablissement_id: str,
     fichier: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -456,7 +455,7 @@ async def ajouter_photo_etablissement(
     if nb_photos >= 8:
         raise api_error(status.HTTP_400_BAD_REQUEST, "limite_atteinte", "Maximum 8 photos par etablissement.")
 
-    contenu = await fichier.read()
+    contenu = lire_upload_borne(fichier, 5 * MO, TYPES_IMAGE)
     try:
         file_id = files_client.upload(
             contenu, fichier.filename or "photo.jpg", fichier.content_type or "image/jpeg"
@@ -494,7 +493,11 @@ def photos_publiques_etablissement(
 ) -> list[EtablissementPhotoPubliqueOut]:
     """Endpoint public assume (aucune authentification) : resout les liens signes a la demande,
     appele uniquement quand un visiteur ouvre une fiche etablissement precise (jamais en masse
-    sur la liste/annuaire, pour ne pas multiplier les appels reseau vers LuluFiles)."""
+    sur la liste/annuaire, pour ne pas multiplier les appels reseau vers LuluFiles). Un
+    etablissement suspendu n'expose plus rien publiquement (comme l'annuaire)."""
+    etablissement = db.get(Etablissement, etablissement_id)
+    if etablissement is None or not etablissement.actif:
+        return []
     photos = (
         db.query(EtablissementPhoto)
         .filter(EtablissementPhoto.etablissement_id == etablissement_id)
@@ -516,7 +519,7 @@ def lister_classes(
     etablissement_id: str,
     annee_academique: str | None = None,
     db: Session = Depends(get_db),
-    _utilisateur: Utilisateur = Depends(get_current_user),
+    _utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> list[Classe]:
     """UC-45/60 : `annee_academique` optionnel - un client qui veut voir toutes les
     annees (ex. pour peupler un selecteur d'historique) omet le filtre."""

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { listerMessages, masquerMessage, mesConversations, envoyerMessage, signalerMessage } from "../../api/messagerie";
+import { TAILLE_PAGE_MESSAGES, listerMessages, masquerMessage, mesConversations, envoyerMessage, signalerMessage } from "../../api/messagerie";
 import { messageErreur } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import type { ConversationOut, MessageOut } from "../../types/api";
@@ -20,6 +20,8 @@ export function ConversationPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
   const finDuFil = useRef<HTMLDivElement>(null);
+  const chargementPrecedents = useRef(false);
+  const [plusAnciens, setPlusAnciens] = useState(false);
 
   const charger = () => {
     if (!conversationId) return;
@@ -28,6 +30,7 @@ export function ConversationPage() {
         const trouvee = resConversations.data.find((c) => c.id === conversationId) ?? null;
         setConversation(trouvee);
         setMessages([...resMessages.data].reverse());
+        setPlusAnciens(resMessages.data.length >= TAILLE_PAGE_MESSAGES);
       })
       .catch((err) => setErreur(messageErreur(err)))
       .finally(() => setChargement(false));
@@ -35,8 +38,21 @@ export function ConversationPage() {
 
   useEffect(charger, [conversationId]);
   useEffect(() => {
-    finDuFil.current?.scrollIntoView({ behavior: "smooth" });
+    if (!chargementPrecedents.current) finDuFil.current?.scrollIntoView({ behavior: "smooth" });
+    chargementPrecedents.current = false;
   }, [messages.length]);
+
+  const chargerPrecedents = async () => {
+    if (!conversationId || messages.length === 0) return;
+    try {
+      const res = await listerMessages(conversationId, messages[0].id);
+      chargementPrecedents.current = true;
+      setMessages((prev) => [...[...res.data].reverse(), ...prev]);
+      setPlusAnciens(res.data.length >= TAILLE_PAGE_MESSAGES);
+    } catch (err) {
+      setErreur(messageErreur(err));
+    }
+  };
 
   const envoyer = async (e: FormEvent) => {
     e.preventDefault();
@@ -125,6 +141,11 @@ export function ConversationPage() {
       )}
 
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--space-3)", padding: "var(--space-2) 0" }}>
+        {plusAnciens && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={chargerPrecedents} style={{ alignSelf: "center" }}>
+            Charger les messages précédents
+          </button>
+        )}
         {messages.length === 0 ? (
           <EmptyState icon={<MessageCircle size={24} />} title="Aucun message" desc="Envoyez le premier message de cette conversation." />
         ) : (

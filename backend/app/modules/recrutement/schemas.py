@@ -10,6 +10,7 @@ from app.modules.recrutement.models import (
     StatutDocument,
     StatutPoste,
     StatutProposition,
+    StatutVerificationCasier,
 )
 
 TypeChampFormulaire = Literal["texte_court", "texte_long", "fichier", "choix_unique", "choix_multiple"]
@@ -99,6 +100,26 @@ class CandidatureOut(BaseModel):
     documents: list[DocumentCandidatureOut]
     enseignant_nom: str
     enseignant_prenom: str
+    statut_casier_judiciaire: StatutVerificationCasier | None = None
+
+
+class VerificationCasierOut(BaseModel):
+    """Jamais le contenu du casier lui-meme (telechargement dedie, reserve a l'A+
+    recruteur) : seulement le statut et les dates de verification/purge."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    candidature_id: str
+    statut: StatutVerificationCasier
+    date_verification: datetime | None
+    date_suppression_prevue: datetime | None
+    document_disponible: bool
+
+
+class VerdictCasierRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conforme: bool
 
 
 class EnseignantSigneOut(BaseModel):

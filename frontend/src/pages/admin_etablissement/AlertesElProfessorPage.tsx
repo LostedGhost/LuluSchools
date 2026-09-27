@@ -6,6 +6,14 @@ import type { AlerteElProfessorOut } from "../../types/api";
 import { Badge, Btn, Card, EmptyState, ErrorBanner, PageTitle, SectionHead, SkeletonCard } from "../../components/ui";
 import { CheckCircle2, TriangleAlert } from "lucide-react";
 
+/** Qui parlait à El Professor quand le signal a été détecté. */
+const ORIGINES: Record<string, string> = {
+  eleve: "Conversation d'un élève",
+  enseignant: "Conversation d'un enseignant",
+  tuteur: "Conversation d'un tuteur",
+  famille: "Fil familial",
+};
+
 export function AlertesElProfessorPage() {
   const etablissement = useAdminEtab();
   const [alertes, setAlertes] = useState<AlerteElProfessorOut[]>([]);
@@ -61,6 +69,7 @@ export function AlertesElProfessorPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                 <TriangleAlert size={18} style={{ color: "var(--action-deep)" }} />
                 <Badge tone="error">Non traitée</Badge>
+                <Badge tone="info">{ORIGINES[a.origine] ?? a.origine}</Badge>
                 <span style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)" }}>
                   {new Date(a.created_at).toLocaleString("fr-FR")}
                 </span>

@@ -82,7 +82,7 @@ export function QuizPage() {
           <ScoreBurst
             score={resultat.score}
             max={100}
-            label="/ 100"
+            label="Score"
             tone={resultat.reussie ? "success" : "error"}
           />
           <div style={{ marginTop: "16px" }}>

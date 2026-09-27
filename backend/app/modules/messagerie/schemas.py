@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.messagerie.models import TypeConversation
 
@@ -31,7 +31,7 @@ class ConversationOut(BaseModel):
 class MessageCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    contenu: str
+    contenu: str = Field(min_length=1, max_length=5000)
 
 
 class MessageOut(BaseModel):

@@ -357,10 +357,17 @@ def contestations_micro_job_en_attente(
     contestations = (
         db.query(ContestationMicroJob).filter(ContestationMicroJob.statut == StatutContestationMicroJob.EN_ATTENTE).all()
     )
+    missions = {
+        m.id: m
+        for m in db.query(MissionMicroJob).filter(MissionMicroJob.id.in_({c.mission_id for c in contestations}))
+    } if contestations else {}
+    offres = {
+        o.id: o for o in db.query(OffreMicroJob).filter(OffreMicroJob.id.in_({m.offre_id for m in missions.values()}))
+    } if missions else {}
     resultats = []
     for contestation in contestations:
-        mission = db.get(MissionMicroJob, contestation.mission_id)
-        offre = db.get(OffreMicroJob, mission.offre_id) if mission is not None else None
+        mission = missions.get(contestation.mission_id)
+        offre = offres.get(mission.offre_id) if mission is not None else None
         resultats.append(
             {
                 "id": contestation.id,
@@ -418,6 +425,19 @@ def lister_missions_a_reverser(
     """UC-33/48 : file des missions validees pas encore reversees, avec le contact
     mobile money deja connu du prestataire (Utilisateur.telephone) - remplace la saisie
     manuelle d'un identifiant de mission."""
+    # La validation tacite (client silencieux 5 jours) n'etait appliquee qu'a l'occasion
+    # d'une action sur la mission : un prestataire dont le client ne repondait jamais
+    # n'apparaissait donc jamais dans cette file, et n'etait jamais paye.
+    for mission_echue in (
+        db.query(MissionMicroJob)
+        .filter(
+            MissionMicroJob.statut == StatutMissionMicroJob.TERMINEE_DECLAREE,
+            MissionMicroJob.date_limite_validation.isnot(None),
+        )
+        .all()
+    ):
+        _appliquer_validation_tacite(db, mission_echue)
+
     missions = (
         db.query(MissionMicroJob)
         .filter(

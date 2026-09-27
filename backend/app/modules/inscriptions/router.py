@@ -79,6 +79,23 @@ def _generer_matricule(db: Session, type_etablissement: TypeEtablissement, natio
     return f"{prefixe_cycle}{chiffre_nationalite}{sequence}{annee_suffixe}"
 
 
+_STATUTS_INSCRIPTION_ACTIFS = (
+    StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL,
+    StatutInscription.SOUMISE,
+    StatutInscription.VALIDEE,
+)
+
+
+def _enfant_existant(db: Session, tuteur_id: str, payload: InscriptionCreate) -> Eleve | None:
+    """Reinscription (rentree suivante, changement de classe) : le tuteur ressaisit
+    l'identite de son enfant - on retrouve alors l'Eleve existant plutot que d'en creer
+    un doublon qui perdrait matricule, historique et dossier scolaire."""
+    for eleve in db.query(Eleve).filter(Eleve.tuteur_id == tuteur_id, Eleve.date_naissance == payload.date_naissance):
+        if eleve.nom.strip().lower() == payload.nom.strip().lower() and eleve.prenom.strip().lower() == payload.prenom.strip().lower():
+            return eleve
+    return None
+
+
 @router.post("", response_model=InscriptionOut, status_code=status.HTTP_201_CREATED)
 def creer_inscription(
     payload: InscriptionCreate,
@@ -90,24 +107,47 @@ def creer_inscription(
     classe = db.get(Classe, payload.classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "classe_introuvable", "Classe introuvable.")
+    etablissement = db.get(Etablissement, classe.etablissement_id)
+    if etablissement is None or not etablissement.actif:
+        raise api_error(
+            status.HTTP_409_CONFLICT, "etablissement_suspendu", "Cet etablissement n'accepte pas d'inscription."
+        )
 
     if utilisateur.role == RoleUtilisateur.ELEVE:
         eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
         if eleve is None:
             raise api_error(status.HTTP_404_NOT_FOUND, "compte_eleve_introuvable", "Compte eleve introuvable.")
     else:
-        eleve = Eleve(
-            nom=payload.nom,
-            prenom=payload.prenom,
-            date_naissance=payload.date_naissance,
-            nationalite=payload.nationalite,
-            tuteur_id=utilisateur.id,
+        eleve = _enfant_existant(db, utilisateur.id, payload)
+        if eleve is None:
+            eleve = Eleve(
+                nom=payload.nom.strip(),
+                prenom=payload.prenom.strip(),
+                date_naissance=payload.date_naissance,
+                nationalite=payload.nationalite,
+                tuteur_id=utilisateur.id,
+            )
+            db.add(eleve)
+            db.flush()
+
+    en_cours = (
+        db.query(Inscription)
+        .filter(
+            Inscription.eleve_id == eleve.id,
+            Inscription.classe_id == payload.classe_id,
+            Inscription.statut.in_(_STATUTS_INSCRIPTION_ACTIFS),
         )
-        db.add(eleve)
-        db.flush()
+        .first()
+    )
+    if en_cours is not None:
+        raise api_error(
+            status.HTTP_409_CONFLICT, "inscription_existante", "Une inscription est deja en cours ou validee pour cette classe."
+        )
 
     mineur = _age_a(eleve.date_naissance) < AGE_MAJORITE_NUMERIQUE
-    if mineur and payload.consentement_parental_donne:
+    # Art. 446 : seul le tuteur peut consentir pour un mineur de moins de 16 ans - la case
+    # cochee par l'eleve lui-meme (reinscription depuis son compte) est ignoree.
+    if mineur and payload.consentement_parental_donne and utilisateur.role == RoleUtilisateur.TUTEUR:
         statut = StatutInscription.SOUMISE
         horodatage = datetime.now(timezone.utc)
     elif mineur:
@@ -195,6 +235,14 @@ def valider_inscription(
         )
 
     eleve = db.get(Eleve, inscription.eleve_id)
+    if eleve.utilisateur_id is not None:
+        # Reinscription : le compte et le matricule existent deja et ne sont jamais
+        # regeneres (regle du matricule) - aucun nouvel identifiant a envoyer.
+        inscription.statut = StatutInscription.VALIDEE
+        db.commit()
+        db.refresh(inscription)
+        return inscription
+
     etablissement = db.get(Etablissement, classe.etablissement_id)
     matricule = _generer_matricule(db, etablissement.type, eleve.nationalite)
     mot_de_passe_temporaire = generate_temporary_password()
@@ -253,6 +301,10 @@ def rejeter_inscription(
 
     classe = db.get(Classe, inscription.classe_id)
     verifier_portee_etablissement(db, admin, classe.etablissement_id)
+    if inscription.statut not in (StatutInscription.SOUMISE, StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL):
+        raise api_error(
+            status.HTTP_409_CONFLICT, "statut_invalide", "Seule une inscription en attente peut etre rejetee."
+        )
 
     inscription.statut = StatutInscription.REJETEE
     inscription.motif_rejet = payload.motif
@@ -292,6 +344,12 @@ def obtenir_inscription(
     return inscription
 
 
+def _eleves_par_id(db: Session, inscriptions: list[Inscription]) -> dict[str, Eleve]:
+    """Une seule requete pour tous les eleves d'une liste d'inscriptions."""
+    ids = {i.eleve_id for i in inscriptions}
+    return {e.id: e for e in db.query(Eleve).filter(Eleve.id.in_(ids)).all()} if ids else {}
+
+
 @mon_espace_router.get(
     "/etablissements/{etablissement_id}/inscriptions-a-valider", response_model=list[InscriptionAvecEleveOut]
 )
@@ -311,9 +369,10 @@ def inscriptions_a_valider(
         .order_by(Inscription.created_at.asc())
         .all()
     )
+    eleves = _eleves_par_id(db, inscriptions)
     resultat = []
     for inscription in inscriptions:
-        eleve = db.get(Eleve, inscription.eleve_id)
+        eleve = eleves[inscription.eleve_id]
         resultat.append(
             {
                 "id": inscription.id,
@@ -344,9 +403,10 @@ def mes_inscriptions(
         .order_by(Inscription.created_at.desc())
         .all()
     )
+    eleves = _eleves_par_id(db, inscriptions)
     resultat = []
     for inscription in inscriptions:
-        eleve = db.get(Eleve, inscription.eleve_id)
+        eleve = eleves[inscription.eleve_id]
         pp_nom, pp_prenom = (
             _professeur_principal_de(db, inscription.classe_id)
             if inscription.statut == StatutInscription.VALIDEE

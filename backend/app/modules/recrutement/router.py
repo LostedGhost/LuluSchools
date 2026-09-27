@@ -1,21 +1,33 @@
 import hashlib
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
-from sqlalchemy import or_
+import logging
+import mimetypes
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Response, UploadFile, status
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.crypto import chiffrer_bytes
+from cryptography.fernet import InvalidToken
+
+from app.core.crypto import chiffrer_bytes, dechiffrer_bytes
 from app.core.database import get_db, get_session_factory
 from app.core.deps import (
     api_error,
     get_current_active_user,
-    get_current_user,
     require_roles,
     verifier_portee_etablissement,
 )
 from app.core.conversion import convertir_en_image
-from app.core.files import FileStorageError, LuluFilesClient, get_files_client
+from app.core.files import (
+    MO,
+    TYPES_DOCUMENT,
+    TYPES_IMAGE,
+    FileStorageError,
+    LuluFilesClient,
+    get_files_client,
+    lire_upload_borne,
+)
 from app.core.formulaire import valider_reponses_formulaire
 from app.core.llm import DocumentScoringError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Etablissement
@@ -46,6 +58,8 @@ from app.modules.recrutement.schemas import (
     ContratCreate,
     ContratOut,
     EnseignantSigneOut,
+    VerdictCasierRequest,
+    VerificationCasierOut,
     LienFichierOut,
     NotationManuelleRequest,
     PosteCreate,
@@ -57,8 +71,34 @@ from app.modules.recrutement.schemas import (
 CONTESTATION_DELAI_JOURS = 5
 CASIER_JUDICIAIRE_RETENTION_JOURS = 30
 RECONDUCTION_FENETRE_JOURS = 30
+MAX_DOCUMENT_CANDIDATURE_OCTETS = 10 * MO
+MAX_DOCUMENTS_CANDIDATURE = 15
+MAX_SIGNATURE_OCTETS = 2 * MO
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["recrutement"])
+
+
+def purger_casiers_expires(db: Session) -> int:
+    """Art. 395 : le contenu brut d'un casier n'est jamais conserve au-dela de la duree
+    de retention, meme sans verdict - seul le statut reste. Appelee au demarrage du
+    service (qui redemarre souvent sur le plan gratuit) et a chaque consultation."""
+    maintenant = datetime.now(timezone.utc)
+    expires = (
+        db.query(VerificationCasierJudiciaire)
+        .filter(
+            VerificationCasierJudiciaire.contenu_chiffre.isnot(None),
+            VerificationCasierJudiciaire.date_suppression_prevue.isnot(None),
+            VerificationCasierJudiciaire.date_suppression_prevue < maintenant,
+        )
+        .all()
+    )
+    for verification in expires:
+        verification.contenu_chiffre = None
+    if expires:
+        db.commit()
+    return len(expires)
 
 
 def _ajouter_jours_ouvres(date_depart: datetime, jours_ouvres: int) -> datetime:
@@ -117,7 +157,7 @@ def creer_poste(
 
 @router.get("/postes/{poste_id}", response_model=PosteOut)
 def obtenir_poste(
-    poste_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_user)
+    poste_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> Poste:
     poste = db.get(Poste, poste_id)
     if poste is None:
@@ -127,7 +167,7 @@ def obtenir_poste(
 
 @router.get("/etablissements/{etablissement_id}/postes", response_model=list[PosteOut])
 def lister_postes(
-    etablissement_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_user)
+    etablissement_id: str, db: Session = Depends(get_db), _utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> list[Poste]:
     """Sans cette liste, un enseignant candidat n'a aucun moyen de decouvrir les postes
     ouverts d'un etablissement sans deja en connaitre les id (UC-04)."""
@@ -258,6 +298,15 @@ def postuler(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Poste introuvable.")
     if poste.statut != StatutPoste.OUVERT:
         raise api_error(status.HTTP_409_CONFLICT, "poste_ferme", "Ce poste n'accepte plus de candidatures.")
+    if (
+        db.query(Candidature)
+        .filter(Candidature.poste_id == poste_id, Candidature.enseignant_id == enseignant.id)
+        .first()
+        is not None
+    ):
+        raise api_error(status.HTTP_409_CONFLICT, "deja_candidat", "Vous avez deja postule a ce poste.")
+    if len(fichiers) > MAX_DOCUMENTS_CANDIDATURE:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "trop_de_documents", "Trop de documents joints.")
 
     criteres_par_type = {c.type_document: c for c in poste.criteres}
     if len(types) != len(fichiers) or set(types) != set(criteres_par_type.keys()):
@@ -279,9 +328,13 @@ def postuler(
     db.add(candidature)
     db.flush()
 
+    # Lecture bornee de TOUS les fichiers avant la moindre ecriture chez LuluFiles : un
+    # fichier refuse (taille/type) ne laisse ainsi aucun document orphelin stocke.
+    contenus = [lire_upload_borne(f, MAX_DOCUMENT_CANDIDATURE_OCTETS, TYPES_DOCUMENT) for f in fichiers]
+    contenu_casier = lire_upload_borne(casier_judiciaire, MAX_DOCUMENT_CANDIDATURE_OCTETS, TYPES_DOCUMENT)
+
     documents_a_noter = []
-    for type_document, fichier in zip(types, fichiers):
-        contenu = fichier.file.read()
+    for type_document, fichier, contenu in zip(types, fichiers, contenus):
         try:
             lulufiles_file_id = files_client.upload(
                 contenu, fichier.filename or type_document, fichier.content_type or "application/octet-stream"
@@ -316,13 +369,13 @@ def postuler(
             }
         )
 
-    contenu_casier = casier_judiciaire.file.read()
     db.add(
         VerificationCasierJudiciaire(
             candidature_id=candidature.id,
             contenu_chiffre=chiffrer_bytes(contenu_casier),
-            nom_fichier=casier_judiciaire.filename or f"{candidature.id}.bin",
+            nom_fichier=(casier_judiciaire.filename or f"{candidature.id}.pdf")[:255],
             statut=StatutVerificationCasier.EN_ATTENTE,
+            date_suppression_prevue=datetime.now(timezone.utc) + timedelta(days=CASIER_JUDICIAIRE_RETENTION_JOURS),
         )
     )
 
@@ -358,6 +411,11 @@ def _noter_candidature_en_arriere_plan(
                 document.statut = StatutDocument.NOTE
             except DocumentScoringError:
                 document.statut = StatutDocument.ECHEC_NOTATION
+            except Exception:
+                # Jamais un document bloque EN_ATTENTE pour toujours : il bascule en
+                # revision manuelle, comme un echec FreeLLM ordinaire.
+                logger.exception("notation IA inattendue en echec (document %s)", item["document_id"])
+                document.statut = StatutDocument.ECHEC_NOTATION
         db.commit()
 
         candidature = db.get(Candidature, candidature_id)
@@ -375,17 +433,19 @@ def _reevaluer_candidature(db: Session, candidature: Candidature, criteres_par_t
     aucune decision automatique tant qu'un document n'a pas pu etre note)."""
     documents = db.query(DocumentCandidature).filter(DocumentCandidature.candidature_id == candidature.id).all()
 
-    if any(d.statut == StatutDocument.ECHEC_NOTATION for d in documents):
-        return  # en attente de revision manuelle, voir POST /documents-candidature/{id}/noter-manuellement
+    if any(d.statut != StatutDocument.NOTE or d.note_ia is None for d in documents):
+        return  # en attente (notation en cours ou revision manuelle, voir noter-manuellement)
 
+    # Score toujours calcule, meme en cas de rejet : une contestation acceptee doit pouvoir
+    # deboucher sur un contrat (creer_contrat exige un score).
+    poids_total = sum(criteres_par_type[d.type_document].coefficient for d in documents) or 1.0
+    candidature.score = (
+        sum(d.note_ia * criteres_par_type[d.type_document].coefficient for d in documents) / poids_total
+    )
     sous_seuil = any(d.note_ia < criteres_par_type[d.type_document].seuil_minimal for d in documents)
-    if sous_seuil:
+    if sous_seuil and candidature.statut == StatutCandidature.EN_EVALUATION:
         candidature.statut = StatutCandidature.REJETEE
-    else:
-        poids_total = sum(criteres_par_type[d.type_document].coefficient for d in documents)
-        candidature.score = (
-            sum(d.note_ia * criteres_par_type[d.type_document].coefficient for d in documents) / poids_total
-        )
+        candidature.rejetee_le = datetime.now(timezone.utc)
 
 
 @router.get("/candidatures/en-attente-revision", response_model=list[CandidatureOut])
@@ -395,16 +455,21 @@ def lister_candidatures_en_attente_revision(
     """Ecran de revision manuelle (recrutement) : candidatures ayant au moins un
     document que FreeLLM n'a pas pu noter, scopees aux etablissements administres."""
     lien = db.get(AdminEtablissement, admin.id)
-    if lien is None:
+    if lien is None and admin.role != RoleUtilisateur.ADMIN_MINISTERIEL:
         return []
-    return (
-        db.query(Candidature)
-        .join(Poste, Poste.id == Candidature.poste_id)
-        .join(DocumentCandidature, DocumentCandidature.candidature_id == Candidature.id)
-        .filter(Poste.etablissement_id == lien.etablissement_id, DocumentCandidature.statut == StatutDocument.ECHEC_NOTATION)
-        .distinct()
-        .all()
+    # Sous-requete IN plutot que DISTINCT : PostgreSQL ne sait pas comparer une colonne
+    # `json` (reponses_formulaire), un SELECT DISTINCT sur Candidature echouait donc
+    # systematiquement - et avec lui tout l'ecran Recrutement de l'A+.
+    candidatures_en_echec = select(DocumentCandidature.candidature_id).where(
+        DocumentCandidature.statut == StatutDocument.ECHEC_NOTATION
     )
+    requete = db.query(Candidature).join(Poste, Poste.id == Candidature.poste_id).filter(
+        Candidature.id.in_(candidatures_en_echec)
+    )
+    # L'A++ (sans rattachement) voit la file nationale ; l'A+ celle de son etablissement.
+    if admin.role != RoleUtilisateur.ADMIN_MINISTERIEL:
+        requete = requete.filter(Poste.etablissement_id == lien.etablissement_id)
+    return requete.all()
 
 
 @router.post("/documents-candidature/{document_id}/noter-manuellement", response_model=CandidatureOut)
@@ -438,7 +503,7 @@ def noter_document_manuellement(
 
 @router.get("/candidatures/{candidature_id}", response_model=CandidatureOut)
 def obtenir_candidature(
-    candidature_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_user)
+    candidature_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> Candidature:
     candidature = db.get(Candidature, candidature_id)
     if candidature is None:
@@ -472,7 +537,7 @@ def obtenir_lien_document_candidature(
     document_id: str,
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
-    utilisateur: Utilisateur = Depends(get_current_user),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> LienFichierOut:
     """Bug reel corrige : ni le candidat ni l'A+ n'avaient jusqu'ici de moyen de
     consulter le document lui-meme (seule la note IA etait exposee) - rend l'ecran de
@@ -508,6 +573,100 @@ def obtenir_lien_document_candidature(
     return LienFichierOut(url=url)
 
 
+def _verification_casier_du_recruteur(
+    db: Session, admin: Utilisateur, candidature_id: str
+) -> tuple[Candidature, VerificationCasierJudiciaire]:
+    """Art. 395/402 : lecture reservee a l'administration de l'etablissement recruteur
+    (ADMIN_ETABLISSEMENT, portee verifiee) - jamais au Ministere, qui n'a aucune raison
+    d'acceder aux donnees penales d'un candidat."""
+    candidature = db.get(Candidature, candidature_id)
+    if candidature is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Candidature introuvable.")
+    poste = db.get(Poste, candidature.poste_id)
+    lien = db.get(AdminEtablissement, admin.id)
+    if lien is None or lien.etablissement_id != poste.etablissement_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas l'etablissement recruteur.")
+    verification = candidature.verification_casier
+    if verification is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucun casier judiciaire depose.")
+    return candidature, verification
+
+
+@router.get("/candidatures/{candidature_id}/casier-judiciaire", response_model=VerificationCasierOut)
+def obtenir_statut_casier(
+    candidature_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> VerificationCasierJudiciaire:
+    purger_casiers_expires(db)
+    _, verification = _verification_casier_du_recruteur(db, admin, candidature_id)
+    return verification
+
+
+@router.get("/candidatures/{candidature_id}/casier-judiciaire/document")
+def telecharger_casier(
+    candidature_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> Response:
+    purger_casiers_expires(db)
+    _, verification = _verification_casier_du_recruteur(db, admin, candidature_id)
+    if verification.contenu_chiffre is None:
+        raise api_error(
+            status.HTTP_410_GONE,
+            "casier_purge",
+            "Le document a ete supprime (verdict rendu ou delai de conservation depasse) ; seul le statut est conserve.",
+        )
+    try:
+        contenu = dechiffrer_bytes(verification.contenu_chiffre)
+    except InvalidToken as exc:
+        # Chiffre avec une autre cle (rotation de CASIER_JUDICIAIRE_ENCRYPTION_KEY, donnees
+        # importees d'un autre environnement) : illisible, mais jamais une erreur 500.
+        logger.error("casier_judiciaire: document illisible avec la cle actuelle (candidature %s)", candidature_id)
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "casier_illisible",
+            "Ce document ne peut pas être déchiffré avec la clé actuelle : demandez au candidat de le déposer à nouveau.",
+        ) from exc
+    type_contenu = mimetypes.guess_type(verification.nom_fichier)[0] or "application/octet-stream"
+    logger.info("casier_judiciaire: consultation de la candidature %s par %s", candidature_id, admin.id)
+    return Response(
+        content=contenu,
+        media_type=type_contenu,
+        headers={
+            "Content-Disposition": 'attachment; filename="casier-judiciaire"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.post("/candidatures/{candidature_id}/casier-judiciaire/verdict", response_model=VerificationCasierOut)
+def rendre_verdict_casier(
+    candidature_id: str,
+    payload: VerdictCasierRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> VerificationCasierJudiciaire:
+    """Le verdict purge immediatement le contenu brut : seul le statut conforme/non
+    conforme est conserve durablement (Art. 395). Un casier non conforme elimine la
+    candidature."""
+    candidature, verification = _verification_casier_du_recruteur(db, admin, candidature_id)
+    if verification.statut != StatutVerificationCasier.EN_ATTENTE:
+        raise api_error(status.HTTP_409_CONFLICT, "deja_verifie", "Le verdict a deja ete rendu.")
+
+    verification.statut = StatutVerificationCasier.CONFORME if payload.conforme else StatutVerificationCasier.NON_CONFORME
+    verification.verifie_par_utilisateur_id = admin.id
+    verification.date_verification = datetime.now(timezone.utc)
+    verification.contenu_chiffre = None
+    if not payload.conforme and candidature.statut == StatutCandidature.EN_EVALUATION:
+        candidature.statut = StatutCandidature.REJETEE
+        candidature.rejetee_le = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(verification)
+    return verification
+
+
 @router.post(
     "/candidatures/{candidature_id}/contestation",
     response_model=ContestationOut,
@@ -528,7 +687,11 @@ def contester_candidature(
         raise api_error(
             status.HTTP_409_CONFLICT, "candidature_non_rejetee", "Seule une candidature rejetee peut etre contestee."
         )
-    limite = _ajouter_jours_ouvres(candidature.created_at.replace(tzinfo=timezone.utc), CONTESTATION_DELAI_JOURS)
+    if db.query(Contestation).filter(Contestation.candidature_id == candidature_id).first() is not None:
+        raise api_error(status.HTTP_409_CONFLICT, "deja_contestee", "Cette candidature a deja fait l'objet d'une contestation.")
+    depart = candidature.rejetee_le or candidature.created_at
+    depart = depart if depart.tzinfo else depart.replace(tzinfo=timezone.utc)
+    limite = _ajouter_jours_ouvres(depart, CONTESTATION_DELAI_JOURS)
     if datetime.now(timezone.utc) > limite:
         raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de contestation est depasse.")
 
@@ -555,6 +718,10 @@ def decider_contestation(
     poste = db.get(Poste, candidature.poste_id)
     _verifier_admin_de_l_etablissement(db, admin, poste.etablissement_id)
 
+    if contestation.statut != StatutContestation.EN_ATTENTE:
+        raise api_error(status.HTTP_409_CONFLICT, "deja_tranchee", "Cette contestation a deja ete tranchee.")
+    if payload.decision not in (StatutContestation.ACCEPTEE, StatutContestation.REJETEE):
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Decision invalide.")
     if payload.decision == StatutContestation.REJETEE and not payload.motif_decision:
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet."
@@ -565,6 +732,7 @@ def decider_contestation(
     contestation.decided_at = datetime.now(timezone.utc)
     if payload.decision == StatutContestation.REJETEE:
         candidature.statut = StatutCandidature.REJETEE
+        candidature.rejetee_le = candidature.rejetee_le or datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(contestation)
@@ -591,6 +759,15 @@ def creer_contrat(
             status.HTTP_409_CONFLICT,
             "candidature_non_eligible",
             "Cette candidature n'est pas eligible a un contrat (score manquant ou statut invalide).",
+        )
+    if poste.statut != StatutPoste.OUVERT:
+        raise api_error(status.HTTP_409_CONFLICT, "poste_pourvu", "Ce poste est deja pourvu.")
+    verification = candidature.verification_casier
+    if verification is None or verification.statut != StatutVerificationCasier.CONFORME:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "casier_non_verifie",
+            "Le casier judiciaire du candidat doit etre verifie conforme avant tout contrat.",
         )
 
     contrat = Contrat(
@@ -631,9 +808,7 @@ def signer_contrat(
     if contrat.statut != StatutContrat.EN_ATTENTE_SIGNATURE:
         raise api_error(status.HTTP_409_CONFLICT, "deja_signe", "Ce contrat est deja signe.")
 
-    contenu_image = signature_image.file.read()
-    if not contenu_image:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "signature_vide", "Aucun trace de signature recu.")
+    contenu_image = lire_upload_borne(signature_image, MAX_SIGNATURE_OCTETS, TYPES_IMAGE)
     try:
         signature_image_id = files_client.upload(
             contenu_image, signature_image.filename or "signature.png", signature_image.content_type or "image/png"
@@ -657,7 +832,7 @@ def obtenir_lien_signature_contrat(
     contrat_id: str,
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
-    utilisateur: Utilisateur = Depends(get_current_user),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> LienFichierOut:
     contrat = db.get(Contrat, contrat_id)
     if contrat is None:

@@ -30,6 +30,7 @@ export interface MeOut {
   email_verifie: boolean;
   mot_de_passe_temporaire: boolean;
   est_etudiant: boolean;
+  telephone: string | null;
 }
 
 export interface TuteurOut {
@@ -270,6 +271,17 @@ export interface CandidatureOut {
   enseignant_nom: string;
   enseignant_prenom: string;
   documents: DocumentCandidatureOut[];
+  statut_casier_judiciaire: StatutVerificationCasier | null;
+}
+
+export type StatutVerificationCasier = "en_attente" | "conforme" | "non_conforme";
+
+export interface VerificationCasierOut {
+  candidature_id: string;
+  statut: StatutVerificationCasier;
+  date_verification: string | null;
+  date_suppression_prevue: string | null;
+  document_disponible: boolean;
 }
 
 export interface EnseignantSigneOut {
@@ -469,14 +481,33 @@ export interface MessageElProfessorOut {
   session_id: string;
   role: RoleMessageElProfessor;
   contenu: string;
+  piece_jointe_nom?: string | null;
+  piece_jointe_type?: string | null;
   created_at: string;
 }
 
 export interface SessionElProfessorOut {
   id: string;
   eleve_utilisateur_id: string;
-  cours_id: string;
+  /** null : conversation d'aide générale, hors d'un cours précis. */
+  cours_id: string | null;
+  cours_titre: string | null;
+  sujet: string | null;
+  created_at: string;
   messages: MessageElProfessorOut[];
+}
+
+export type PersonaElProfessor = "eleve" | "enseignant" | "tuteur" | "famille";
+
+/** Message tel que le renvoie le flux SSE, commun aux 4 personas. */
+export interface MessageElProfessorChat {
+  id: string;
+  session_id: string;
+  role: string;
+  contenu: string;
+  piece_jointe_nom?: string | null;
+  piece_jointe_type?: string | null;
+  created_at: string;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -840,6 +871,16 @@ export interface ContestationMarketplaceAEtrancherOut extends ContestationMarket
   prix_paye: number;
 }
 
+export interface TransactionAReverserOut {
+  id: string;
+  annonce_titre: string;
+  prix_paye: number;
+  vendeur_nom: string;
+  vendeur_prenom: string;
+  vendeur_telephone: string | null;
+  date_remise_declaree: string | null;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Phase 5 — UC-23 : vie scolaire
    ═══════════════════════════════════════════════════════════════ */
@@ -881,6 +922,8 @@ export interface MessageElProfessorEnseignantOut {
   session_id: string;
   role: RoleMessageElProfessorEnseignant;
   contenu: string;
+  piece_jointe_nom?: string | null;
+  piece_jointe_type?: string | null;
   created_at: string;
 }
 
@@ -889,11 +932,15 @@ export interface SessionElProfessorEnseignantOut {
   enseignant_id: string;
   eleve_utilisateur_id: string | null;
   sujet: string | null;
+  created_at: string;
   messages: MessageElProfessorEnseignantOut[];
 }
 
 export interface AlerteElProfessorOut {
   id: string;
+  /** Conversation d'origine : enseignant, tuteur, famille ou élève. */
+  origine: "enseignant" | "tuteur" | "famille" | "eleve";
+  eleve_utilisateur_id: string | null;
   session_id: string;
   etablissement_id: string | null;
   motif: string;
@@ -999,6 +1046,8 @@ export interface MessageElProfessorTuteurOut {
   session_id: string;
   role: RoleMessageElProfessorTuteur;
   contenu: string;
+  piece_jointe_nom?: string | null;
+  piece_jointe_type?: string | null;
   created_at: string;
 }
 
@@ -1007,6 +1056,7 @@ export interface SessionElProfessorTuteurOut {
   tuteur_id: string;
   eleve_utilisateur_id: string;
   sujet: string | null;
+  created_at: string;
   messages: MessageElProfessorTuteurOut[];
 }
 
@@ -1017,6 +1067,8 @@ export interface MessageElProfessorFamilleOut {
   session_id: string;
   role: RoleMessageElProfessorFamille;
   contenu: string;
+  piece_jointe_nom?: string | null;
+  piece_jointe_type?: string | null;
   created_at: string;
 }
 
@@ -1025,6 +1077,7 @@ export interface SessionElProfessorFamilleOut {
   tuteur_id: string;
   eleve_utilisateur_id: string;
   sujet: string | null;
+  created_at: string;
   rejointe_le: string | null;
   messages: MessageElProfessorFamilleOut[];
 }

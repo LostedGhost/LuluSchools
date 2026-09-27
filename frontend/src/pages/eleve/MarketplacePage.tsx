@@ -41,6 +41,7 @@ import {
 import { KkiapayButton } from "../../components/KkiapayButton";
 import { Flag, ImagePlus, ShoppingBag, Store, Trash2 } from "lucide-react";
 import { estRempli } from "../../utils/validation";
+import { NumeroMobileMoney } from "../../components/NumeroMobileMoney";
 
 const LABEL_CATEGORIE: Record<CategorieAnnonce, string> = {
   fournitures_scolaires: "Fournitures scolaires",
@@ -351,6 +352,7 @@ export function MarketplacePage() {
           {showForm ? "Fermer" : "Publier une annonce"}
         </Btn>
       </div>
+      <NumeroMobileMoney contexte="le produit de vos ventes" />
 
       <div className="mb-6 space-y-3">
         <ErrorBanner>{erreur}</ErrorBanner>
@@ -368,6 +370,7 @@ export function MarketplacePage() {
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <KkiapayButton
               montant={transactionEnAttentePaiement.prix_paye}
+              typeRessource="transaction_marketplace"
               reference={transactionEnAttentePaiement.id}
               onSucces={(txId) => payerTransaction(transactionEnAttentePaiement.id, txId)}
               disabled={actionEnCoursId === transactionEnAttentePaiement.id}

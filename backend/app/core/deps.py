@@ -40,22 +40,26 @@ def get_current_user(
         raise api_error(
             status.HTTP_401_UNAUTHORIZED, "utilisateur_introuvable", "Utilisateur introuvable."
         )
+    exiger_compte_actif(utilisateur)
     return utilisateur
 
 
-def get_current_active_user(utilisateur: Utilisateur = Depends(get_current_user)) -> Utilisateur:
-    """Comme get_current_user, mais bloque un compte dont le mot de passe temporaire
-    (eleve/admin etablissement provisionnes) n'a pas encore ete change - sauf pour
-    /me et /auth/change-password, qui utilisent get_current_user directement pour
-    rester accessibles pendant ce changement obligatoire. Bloque aussi un compte suspendu
-    par l'A++ (UC-35/50, lot admin ministeriel) - meme /me reste bloque dans ce cas (pas
-    d'exception : un compte suspendu n'a plus aucune raison de rafraichir son profil)."""
+def exiger_compte_actif(utilisateur: Utilisateur) -> None:
+    """Un compte suspendu par l'A++ (UC-35/50) est bloque partout, /me et
+    /auth/change-password compris."""
     if not utilisateur.actif:
         raise api_error(
             status.HTTP_403_FORBIDDEN,
             "compte_suspendu",
             "Ce compte a ete suspendu par le Ministere de l'Education.",
         )
+
+
+def get_current_active_user(utilisateur: Utilisateur = Depends(get_current_user)) -> Utilisateur:
+    """Comme get_current_user, mais bloque aussi un compte dont le mot de passe temporaire
+    (eleve/admin etablissement provisionnes) n'a pas encore ete change - seuls /me et
+    /auth/change-password utilisent get_current_user directement pour rester accessibles
+    pendant ce changement obligatoire."""
     if utilisateur.mot_de_passe_temporaire:
         raise api_error(
             status.HTTP_403_FORBIDDEN,
