@@ -344,6 +344,12 @@ def obtenir_inscription(
     return inscription
 
 
+def _eleves_par_id(db: Session, inscriptions: list[Inscription]) -> dict[str, Eleve]:
+    """Une seule requete pour tous les eleves d'une liste d'inscriptions."""
+    ids = {i.eleve_id for i in inscriptions}
+    return {e.id: e for e in db.query(Eleve).filter(Eleve.id.in_(ids)).all()} if ids else {}
+
+
 @mon_espace_router.get(
     "/etablissements/{etablissement_id}/inscriptions-a-valider", response_model=list[InscriptionAvecEleveOut]
 )
@@ -363,9 +369,10 @@ def inscriptions_a_valider(
         .order_by(Inscription.created_at.asc())
         .all()
     )
+    eleves = _eleves_par_id(db, inscriptions)
     resultat = []
     for inscription in inscriptions:
-        eleve = db.get(Eleve, inscription.eleve_id)
+        eleve = eleves[inscription.eleve_id]
         resultat.append(
             {
                 "id": inscription.id,
@@ -396,9 +403,10 @@ def mes_inscriptions(
         .order_by(Inscription.created_at.desc())
         .all()
     )
+    eleves = _eleves_par_id(db, inscriptions)
     resultat = []
     for inscription in inscriptions:
-        eleve = db.get(Eleve, inscription.eleve_id)
+        eleve = eleves[inscription.eleve_id]
         pp_nom, pp_prenom = (
             _professeur_principal_de(db, inscription.classe_id)
             if inscription.statut == StatutInscription.VALIDEE

@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -11,7 +12,7 @@ from app.core.database import get_db
 from app.core.deps import exiger_compte_actif, get_current_user, require_roles
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.etudiant import est_etudiant as est_etudiant_fn
-from app.core.rate_limit import adresse_client, consommer, enregistrer_echec, limiteur, verifier_limite
+from app.core.rate_limit import adresse_client, consommer, enregistrer_echec, reinitialiser, verifier_limite
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -130,9 +131,43 @@ def _verifier_code(db: Session, utilisateur: Utilisateur, objet: ObjetOtp, code:
     if not otp_correspond(code, otp.salt, otp.code_hash):
         otp.tentatives += 1
         db.commit()
-        enregistrer_echec(f"otp:ip:{ip}")
+        enregistrer_echec(db, f"otp:ip:{ip}")
         raise _api_error(status.HTTP_401_UNAUTHORIZED, "otp_invalide", "Code invalide.")
     return otp
+
+
+def _reponse_inscription_adresse_deja_prise(
+    db: Session, existant: Utilisateur, payload: TuteurCreate, email_client: BrevoEmailClient
+) -> dict:
+    """Anti-enumeration : la reponse est identique a une inscription reussie, que l'adresse
+    soit libre ou non - seul le proprietaire de l'adresse est prevenu, par e-mail. Un
+    compte existant encore non verifie recoit simplement un nouveau code."""
+    try:
+        if not existant.email_verifie:
+            code = _creer_otp(db, existant, ObjetOtp.VERIFICATION_EMAIL)
+            email_client.send_otp_email(to_email=existant.email, to_name=existant.prenom, code=code)
+            db.commit()
+        else:
+            email_client.send_notification_email(
+                to_email=existant.email,
+                to_name=existant.prenom,
+                subject="Tentative d'inscription avec votre adresse",
+                message=(
+                    "Quelqu'un a tente de creer un compte LuluSchools avec votre adresse e-mail, "
+                    "qui possede deja un compte. Si c'etait vous, connectez-vous ou utilisez "
+                    "« Mot de passe oublie ». Sinon, vous pouvez ignorer ce message."
+                ),
+            )
+    except EmailDeliveryError:
+        db.rollback()
+        logger.warning("inscription: echec d'envoi Brevo vers un compte existant (%s)", existant.id)
+    return {
+        "id": str(uuid.uuid4()),
+        "nom": payload.nom.strip(),
+        "prenom": payload.prenom.strip(),
+        "email": payload.email.lower(),
+        "email_verifie": False,
+    }
 
 
 def _creer_compte_avec_otp(
@@ -141,19 +176,17 @@ def _creer_compte_avec_otp(
     role: RoleUtilisateur,
     db: Session,
     email_client: BrevoEmailClient,
-) -> Utilisateur:
-    consommer(f"inscription:ip:{adresse_client(request)}", 10, _HEURE)
+) -> Utilisateur | dict:
+    consommer(db, f"inscription:ip:{adresse_client(request)}", 10, _HEURE)
     email_normalise = payload.email.lower()
 
-    if (
+    existant = (
         db.query(Utilisateur)
         .filter(or_(Utilisateur.email == email_normalise, Utilisateur.login_id == email_normalise))
         .first()
-        is not None
-    ):
-        raise _api_error(
-            status.HTTP_409_CONFLICT, "email_deja_utilise", "Un compte existe deja avec cet e-mail."
-        )
+    )
+    if existant is not None:
+        return _reponse_inscription_adresse_deja_prise(db, existant, payload, email_client)
 
     utilisateur = Utilisateur(
         nom=payload.nom.strip(),
@@ -191,23 +224,20 @@ def creer_compte_tuteur(
     request: Request,
     db: Session = Depends(get_db),
     email_client: BrevoEmailClient = Depends(get_email_client),
-) -> Utilisateur:
+) -> Utilisateur | dict:
     return _creer_compte_avec_otp(request, payload, RoleUtilisateur.TUTEUR, db, email_client)
 
 
 @router.post("/verify-otp", response_model=OtpVerifyResponse)
 def verifier_otp(payload: OtpVerifyRequest, request: Request, db: Session = Depends(get_db)) -> Utilisateur:
     ip = adresse_client(request)
-    verifier_limite(f"otp:ip:{ip}", 30, _QUART_HEURE)
+    verifier_limite(db, f"otp:ip:{ip}", 30, _QUART_HEURE)
     email_normalise = payload.email.lower()
     utilisateur = db.query(Utilisateur).filter(Utilisateur.email == email_normalise).first()
-    if utilisateur is None:
-        raise _api_error(
-            status.HTTP_404_NOT_FOUND, "compte_introuvable", "Aucun compte ne correspond a cet e-mail."
-        )
-
-    if utilisateur.email_verifie:
-        raise _api_error(status.HTTP_409_CONFLICT, "deja_verifie", "Ce compte est deja verifie.")
+    if utilisateur is None or utilisateur.email_verifie:
+        # Meme reponse qu'un code errone : ne revele ni l'existence ni l'etat d'un compte.
+        enregistrer_echec(db, f"otp:ip:{ip}")
+        raise _api_error(status.HTTP_401_UNAUTHORIZED, "otp_invalide", "Code invalide.")
 
     otp = _verifier_code(db, utilisateur, ObjetOtp.VERIFICATION_EMAIL, payload.code, ip)
     otp.utilisee = True
@@ -226,7 +256,7 @@ def creer_compte_enseignant(
     request: Request,
     db: Session = Depends(get_db),
     email_client: BrevoEmailClient = Depends(get_email_client),
-) -> Utilisateur:
+) -> Utilisateur | dict:
     """Prealable a UC-04 (candidature) : un enseignant doit avoir un compte verifie avant
     de pouvoir postuler. Meme mecanisme que UC-01 (mot de passe + OTP email)."""
     return _creer_compte_avec_otp(request, payload, RoleUtilisateur.ENSEIGNANT, db, email_client)
@@ -252,8 +282,8 @@ def renvoyer_otp(
     la re-inscription renvoie 409 puisque l'e-mail existe deja. Reponse identique que le
     compte existe ou non (pas d'enumeration des adresses)."""
     email_normalise = payload.email.lower()
-    consommer(f"renvoi_otp:ip:{adresse_client(request)}", 10, _QUART_HEURE)
-    consommer(f"renvoi_otp:email:{email_normalise}", 3, _QUART_HEURE)
+    consommer(db, f"renvoi_otp:ip:{adresse_client(request)}", 10, _QUART_HEURE)
+    consommer(db, f"renvoi_otp:email:{email_normalise}", 3, _QUART_HEURE)
 
     utilisateur = db.query(Utilisateur).filter(Utilisateur.email == email_normalise).first()
     if utilisateur is not None and not utilisateur.email_verifie:
@@ -296,8 +326,8 @@ def demander_reinitialisation_mot_de_passe(
     email_client: BrevoEmailClient = Depends(get_email_client),
 ) -> DemandeEnregistreeOut:
     identifiant = payload.identifiant.strip().lower()
-    consommer(f"oubli:ip:{adresse_client(request)}", 10, _QUART_HEURE)
-    consommer(f"oubli:id:{identifiant}", 3, _QUART_HEURE)
+    consommer(db, f"oubli:ip:{adresse_client(request)}", 10, _QUART_HEURE)
+    consommer(db, f"oubli:id:{identifiant}", 3, _QUART_HEURE)
 
     utilisateur = _trouver_par_identifiant(db, payload.identifiant)
     destinataire = _destinataire_reinitialisation(db, utilisateur) if utilisateur is not None else None
@@ -319,10 +349,10 @@ def reinitialiser_mot_de_passe(
     payload: ReinitialiserMotDePasseRequest, request: Request, db: Session = Depends(get_db)
 ) -> DemandeEnregistreeOut:
     ip = adresse_client(request)
-    verifier_limite(f"otp:ip:{ip}", 30, _QUART_HEURE)
+    verifier_limite(db, f"otp:ip:{ip}", 30, _QUART_HEURE)
     utilisateur = _trouver_par_identifiant(db, payload.identifiant)
     if utilisateur is None:
-        enregistrer_echec(f"otp:ip:{ip}")
+        enregistrer_echec(db, f"otp:ip:{ip}")
         raise _api_error(status.HTTP_400_BAD_REQUEST, "code_invalide", "Code invalide ou expire.")
 
     otp = _verifier_code(db, utilisateur, ObjetOtp.REINITIALISATION_MOT_DE_PASSE, payload.code, ip)
@@ -333,7 +363,7 @@ def reinitialiser_mot_de_passe(
     if utilisateur.email:
         utilisateur.email_verifie = True
     db.commit()
-    limiteur.reinitialiser(f"login:id:{utilisateur.login_id}")
+    reinitialiser(db, f"login:id:{utilisateur.login_id}")
     return DemandeEnregistreeOut(message="Mot de passe reinitialise. Vous pouvez vous connecter.")
 
 
@@ -342,15 +372,15 @@ def se_connecter(payload: LoginRequest, request: Request, db: Session = Depends(
     ip = adresse_client(request)
     identifiant = payload.identifiant.strip()
     cle_identifiant = f"login:id:{identifiant.lower()}"
-    verifier_limite(cle_identifiant, 10, _QUART_HEURE)
-    verifier_limite(f"login:ip:{ip}", 50, _QUART_HEURE)
+    verifier_limite(db, cle_identifiant, 10, _QUART_HEURE)
+    verifier_limite(db, f"login:ip:{ip}", 50, _QUART_HEURE)
 
     utilisateur = _trouver_par_identifiant(db, identifiant)
     if utilisateur is None:
         verify_password_factice(payload.mot_de_passe)
     if utilisateur is None or not verify_password(payload.mot_de_passe, utilisateur.mot_de_passe_hash):
-        enregistrer_echec(cle_identifiant)
-        enregistrer_echec(f"login:ip:{ip}")
+        enregistrer_echec(db, cle_identifiant)
+        enregistrer_echec(db, f"login:ip:{ip}")
         raise _api_error(
             status.HTTP_401_UNAUTHORIZED, "identifiants_invalides", "Identifiant ou mot de passe incorrect."
         )
@@ -360,7 +390,7 @@ def se_connecter(payload: LoginRequest, request: Request, db: Session = Depends(
             status.HTTP_403_FORBIDDEN, "compte_non_verifie", "Ce compte n'est pas encore verifie."
         )
     exiger_compte_actif(utilisateur)
-    limiteur.reinitialiser(cle_identifiant)
+    reinitialiser(db, cle_identifiant)
 
     return {
         "access_token": create_access_token(utilisateur.id, utilisateur.role.value),
@@ -410,9 +440,9 @@ def changer_mot_de_passe(
     db: Session = Depends(get_db),
 ) -> dict:
     cle = f"change_mdp:{utilisateur.id}"
-    verifier_limite(cle, 10, _QUART_HEURE)
+    verifier_limite(db, cle, 10, _QUART_HEURE)
     if not verify_password(payload.ancien_mot_de_passe, utilisateur.mot_de_passe_hash):
-        enregistrer_echec(cle)
+        enregistrer_echec(db, cle)
         raise _api_error(
             status.HTTP_401_UNAUTHORIZED, "mot_de_passe_incorrect", "Ancien mot de passe incorrect."
         )

@@ -329,6 +329,17 @@ def signaler_annonce(
     if annonce is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Annonce introuvable.")
     _verifier_eleve_de_l_etablissement(db, utilisateur, annonce.etablissement_id)
+    existant = (
+        db.query(SignalementAnnonceMarketplace)
+        .filter(
+            SignalementAnnonceMarketplace.annonce_id == annonce_id,
+            SignalementAnnonceMarketplace.signale_par_id == utilisateur.id,
+            SignalementAnnonceMarketplace.traite.is_(False),
+        )
+        .first()
+    )
+    if existant is not None:
+        return existant
 
     signalement = SignalementAnnonceMarketplace(annonce_id=annonce_id, signale_par_id=utilisateur.id)
     db.add(signalement)
@@ -606,10 +617,22 @@ def contestations_en_attente(
         )
         .all()
     )
+    transactions = {
+        t.id: t
+        for t in db.query(TransactionMarketplace).filter(
+            TransactionMarketplace.id.in_({c.transaction_id for c in contestations})
+        )
+    }
+    annonces = {
+        a.id: a
+        for a in db.query(AnnonceMarketplace).filter(
+            AnnonceMarketplace.id.in_({t.annonce_id for t in transactions.values()})
+        )
+    } if transactions else {}
     resultats = []
     for contestation in contestations:
-        transaction = db.get(TransactionMarketplace, contestation.transaction_id)
-        annonce = db.get(AnnonceMarketplace, transaction.annonce_id) if transaction is not None else None
+        transaction = transactions.get(contestation.transaction_id)
+        annonce = annonces.get(transaction.annonce_id) if transaction is not None else None
         resultats.append(
             {
                 "id": contestation.id,

@@ -347,17 +347,32 @@ def _est_organisateur(session: SessionLive, utilisateur: Utilisateur) -> bool:
 
 
 def _est_participant(db: Session, session_id: str, utilisateur: Utilisateur) -> bool:
-    if utilisateur.role == RoleUtilisateur.ELEVE:
-        return (
-            db.query(ParticipationLive)
-            .filter(
-                ParticipationLive.session_id == session_id,
-                ParticipationLive.eleve_utilisateur_id == utilisateur.id,
-            )
-            .first()
-            is not None
+    """Avoir rejoint une fois ne suffit pas : l'eleve doit etre toujours inscrit (VALIDEE)
+    dans la classe de la session - un eleve desinscrit perd l'acces au tableau et au chat."""
+    if utilisateur.role != RoleUtilisateur.ELEVE:
+        return False
+    participation = (
+        db.query(ParticipationLive)
+        .filter(
+            ParticipationLive.session_id == session_id,
+            ParticipationLive.eleve_utilisateur_id == utilisateur.id,
         )
-    return False
+        .first()
+    )
+    if participation is None:
+        return False
+    session = db.get(SessionLive, session_id)
+    return (
+        db.query(Inscription)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .filter(
+            Eleve.utilisateur_id == utilisateur.id,
+            Inscription.classe_id == session.classe_id,
+            Inscription.statut == StatutInscription.VALIDEE,
+        )
+        .first()
+        is not None
+    )
 
 
 def _verifier_session_et_acces(db: Session, session_id: str, utilisateur: Utilisateur) -> SessionLive:

@@ -13,8 +13,13 @@ export function conversationClasse(classeId: string) {
   return api.get<ConversationOut>(`/classes/${classeId}/conversation`);
 }
 
-export function listerMessages(conversationId: string) {
-  return api.get<MessageOut[]>(`/conversations/${conversationId}/messages`);
+export const TAILLE_PAGE_MESSAGES = 100;
+
+/** Du plus récent au plus ancien ; `avant` = id du plus ancien message déjà affiché. */
+export function listerMessages(conversationId: string, avant?: string) {
+  return api.get<MessageOut[]>(`/conversations/${conversationId}/messages`, {
+    params: { limite: TAILLE_PAGE_MESSAGES, ...(avant ? { avant } : {}) },
+  });
 }
 
 export function envoyerMessage(conversationId: string, contenu: string) {

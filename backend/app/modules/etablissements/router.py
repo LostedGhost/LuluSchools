@@ -493,7 +493,11 @@ def photos_publiques_etablissement(
 ) -> list[EtablissementPhotoPubliqueOut]:
     """Endpoint public assume (aucune authentification) : resout les liens signes a la demande,
     appele uniquement quand un visiteur ouvre une fiche etablissement precise (jamais en masse
-    sur la liste/annuaire, pour ne pas multiplier les appels reseau vers LuluFiles)."""
+    sur la liste/annuaire, pour ne pas multiplier les appels reseau vers LuluFiles). Un
+    etablissement suspendu n'expose plus rien publiquement (comme l'annuaire)."""
+    etablissement = db.get(Etablissement, etablissement_id)
+    if etablissement is None or not etablissement.actif:
+        return []
     photos = (
         db.query(EtablissementPhoto)
         .filter(EtablissementPhoto.etablissement_id == etablissement_id)

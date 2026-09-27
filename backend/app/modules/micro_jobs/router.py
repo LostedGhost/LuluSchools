@@ -357,10 +357,17 @@ def contestations_micro_job_en_attente(
     contestations = (
         db.query(ContestationMicroJob).filter(ContestationMicroJob.statut == StatutContestationMicroJob.EN_ATTENTE).all()
     )
+    missions = {
+        m.id: m
+        for m in db.query(MissionMicroJob).filter(MissionMicroJob.id.in_({c.mission_id for c in contestations}))
+    } if contestations else {}
+    offres = {
+        o.id: o for o in db.query(OffreMicroJob).filter(OffreMicroJob.id.in_({m.offre_id for m in missions.values()}))
+    } if missions else {}
     resultats = []
     for contestation in contestations:
-        mission = db.get(MissionMicroJob, contestation.mission_id)
-        offre = db.get(OffreMicroJob, mission.offre_id) if mission is not None else None
+        mission = missions.get(contestation.mission_id)
+        offre = offres.get(mission.offre_id) if mission is not None else None
         resultats.append(
             {
                 "id": contestation.id,

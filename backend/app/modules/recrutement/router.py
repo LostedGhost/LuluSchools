@@ -453,7 +453,7 @@ def lister_candidatures_en_attente_revision(
     """Ecran de revision manuelle (recrutement) : candidatures ayant au moins un
     document que FreeLLM n'a pas pu noter, scopees aux etablissements administres."""
     lien = db.get(AdminEtablissement, admin.id)
-    if lien is None:
+    if lien is None and admin.role != RoleUtilisateur.ADMIN_MINISTERIEL:
         return []
     # Sous-requete IN plutot que DISTINCT : PostgreSQL ne sait pas comparer une colonne
     # `json` (reponses_formulaire), un SELECT DISTINCT sur Candidature echouait donc
@@ -461,12 +461,13 @@ def lister_candidatures_en_attente_revision(
     candidatures_en_echec = select(DocumentCandidature.candidature_id).where(
         DocumentCandidature.statut == StatutDocument.ECHEC_NOTATION
     )
-    return (
-        db.query(Candidature)
-        .join(Poste, Poste.id == Candidature.poste_id)
-        .filter(Poste.etablissement_id == lien.etablissement_id, Candidature.id.in_(candidatures_en_echec))
-        .all()
+    requete = db.query(Candidature).join(Poste, Poste.id == Candidature.poste_id).filter(
+        Candidature.id.in_(candidatures_en_echec)
     )
+    # L'A++ (sans rattachement) voit la file nationale ; l'A+ celle de son etablissement.
+    if admin.role != RoleUtilisateur.ADMIN_MINISTERIEL:
+        requete = requete.filter(Poste.etablissement_id == lien.etablissement_id)
+    return requete.all()
 
 
 @router.post("/documents-candidature/{document_id}/noter-manuellement", response_model=CandidatureOut)

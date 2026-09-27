@@ -90,6 +90,13 @@ def creer_devoir(
     return devoir
 
 
+def _refuser_si_masque(devoir: Devoir) -> None:
+    """Un devoir masque par le Ministere n'existe plus pour l'eleve et son tuteur (meme
+    regle que la liste des devoirs) - y compris par lien direct ou soumission."""
+    if devoir.masque_par_id is not None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
+
+
 def _verifier_proprietaire_du_devoir(db: Session, enseignant: Utilisateur, devoir: Devoir) -> None:
     if devoir.enseignant_id != enseignant.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce devoir ne vous appartient pas.")
@@ -137,6 +144,7 @@ def obtenir_lien_sujet_document(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, devoir.classe_id)
+        _refuser_si_masque(devoir)
     else:
         _verifier_proprietaire_du_devoir(db, utilisateur, devoir)
     if not devoir.sujet_lulufiles_file_id:
@@ -247,8 +255,10 @@ def obtenir_devoir(
     classe = db.get(Classe, devoir.classe_id)
     if utilisateur.role == RoleUtilisateur.ELEVE:
         _verifier_eleve_inscrit(db, utilisateur.id, devoir.classe_id)
+        _refuser_si_masque(devoir)
     elif utilisateur.role == RoleUtilisateur.TUTEUR:
         _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, devoir.classe_id)
+        _refuser_si_masque(devoir)
     elif utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     else:
@@ -330,6 +340,7 @@ def soumettre_devoir(
     if devoir is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     eleve = _verifier_eleve_inscrit(db, eleve_utilisateur.id, devoir.classe_id)
+    _refuser_si_masque(devoir)
 
     date_limite = devoir.date_limite if devoir.date_limite.tzinfo else devoir.date_limite.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) > date_limite:
@@ -398,6 +409,7 @@ def soumettre_devoir_par_copie_image(
     if devoir is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     eleve = _verifier_eleve_inscrit(db, eleve_utilisateur.id, devoir.classe_id)
+    _refuser_si_masque(devoir)
 
     date_limite = devoir.date_limite if devoir.date_limite.tzinfo else devoir.date_limite.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) > date_limite:
