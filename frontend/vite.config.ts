@@ -8,7 +8,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        // Surchargeable pour lancer un second environnement local en parallele.
+        target: process.env.LULU_API_PROXY ?? 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true, // UC-25 : canal temps reel /api/v1/ws/sessions-live/{id}
       },

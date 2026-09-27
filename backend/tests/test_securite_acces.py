@@ -445,6 +445,34 @@ def test_type_de_fichier_de_candidature_refuse(
     assert reponse.status_code == 415
 
 
+def test_candidatures_en_attente_de_revision_sans_distinct_sur_json(
+    client, db_session, fake_llm_client, etablissement_avec_classe, enseignant_headers
+):
+    """PostgreSQL ne sait pas comparer une colonne `json` : un SELECT DISTINCT sur
+    Candidature (reponses_formulaire) echouait en production et cassait tout l'ecran
+    Recrutement de l'A+ - invisible sous SQLite, d'ou la verification du SQL emis."""
+    from sqlalchemy import event
+
+    fake_llm_client.types_en_echec = {"cv"}
+    _, candidature = _poste_et_candidature(client, etablissement_avec_classe, enseignant_headers, fake_llm_client)
+
+    requetes: list[str] = []
+    moteur = db_session.get_bind()
+
+    def _capturer(conn, cursor, statement, *args):
+        requetes.append(statement)
+
+    event.listen(moteur, "before_cursor_execute", _capturer)
+    try:
+        reponse = client.get("/api/v1/candidatures/en-attente-revision", headers=etablissement_avec_classe["admin_headers"])
+    finally:
+        event.remove(moteur, "before_cursor_execute", _capturer)
+
+    assert reponse.status_code == 200
+    assert [c["id"] for c in reponse.json()] == [candidature["id"]]
+    assert not any("DISTINCT" in r.upper() and "FROM CANDIDATURES" in r.upper() for r in requetes)
+
+
 def test_compte_a_mot_de_passe_temporaire_bloque_sur_les_endpoints_metier(client, db_session):
     utilisateur = creer_utilisateur_direct(db_session, role=RoleUtilisateur.TUTEUR, login_id="temporaire@example.com")
     utilisateur.mot_de_passe_temporaire = True

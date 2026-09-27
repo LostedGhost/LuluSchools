@@ -1,4 +1,5 @@
 import io
+import os
 import uuid
 
 import pytest
@@ -45,13 +46,22 @@ def limitation_debit():
     yield
 
 
+# Optionnel : rejouer toute la suite sur un vrai PostgreSQL (base dediee, videe a chaque
+# test). SQLite masque certaines erreurs propres a Postgres (ex. DISTINCT sur colonne json).
+_URL_TEST_POSTGRES = os.environ.get("LULU_TEST_DATABASE_URL")
+
+
 @pytest.fixture()
 def db_session():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    if _URL_TEST_POSTGRES:
+        engine = create_engine(_URL_TEST_POSTGRES)
+        Base.metadata.drop_all(engine)
+    else:
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
     Base.metadata.create_all(engine)
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = testing_session_local()

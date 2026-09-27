@@ -5,7 +5,7 @@ import logging
 import mimetypes
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Response, UploadFile, status
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.crypto import chiffrer_bytes, dechiffrer_bytes
@@ -455,12 +455,16 @@ def lister_candidatures_en_attente_revision(
     lien = db.get(AdminEtablissement, admin.id)
     if lien is None:
         return []
+    # Sous-requete IN plutot que DISTINCT : PostgreSQL ne sait pas comparer une colonne
+    # `json` (reponses_formulaire), un SELECT DISTINCT sur Candidature echouait donc
+    # systematiquement - et avec lui tout l'ecran Recrutement de l'A+.
+    candidatures_en_echec = select(DocumentCandidature.candidature_id).where(
+        DocumentCandidature.statut == StatutDocument.ECHEC_NOTATION
+    )
     return (
         db.query(Candidature)
         .join(Poste, Poste.id == Candidature.poste_id)
-        .join(DocumentCandidature, DocumentCandidature.candidature_id == Candidature.id)
-        .filter(Poste.etablissement_id == lien.etablissement_id, DocumentCandidature.statut == StatutDocument.ECHEC_NOTATION)
-        .distinct()
+        .filter(Poste.etablissement_id == lien.etablissement_id, Candidature.id.in_(candidatures_en_echec))
         .all()
     )
 
