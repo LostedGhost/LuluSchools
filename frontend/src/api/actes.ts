@@ -51,6 +51,7 @@ export interface TypeActePayload {
   schema_formulaire?: ChampFormulaire[];
   /** Acte généré et livré automatiquement dès le paiement. */
   modele_document?: "attestation_scolarite" | "releve_notes" | "certificat_reussite" | null;
+  critere_automatique?: "bourse_scientifique" | null;
 }
 
 export function creerTypeActe(etablissementId: string, payload: TypeActePayload) {

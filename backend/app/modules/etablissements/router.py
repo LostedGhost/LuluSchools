@@ -474,6 +474,7 @@ def creer_classe(
         annee_academique=_resoudre_annee_academique(db, etablissement_id, payload.annee_academique),
         capacite=payload.capacite,
         politique_depassement=payload.politique_depassement,
+        enseignement=payload.enseignement,
     )
     db.add(classe)
     db.commit()
@@ -621,6 +622,7 @@ def reconduire_classes(
             reconduite_depuis_id=classe.id,
             capacite=classe.capacite,
             politique_depassement=classe.politique_depassement,
+            enseignement=classe.enseignement,
         )
         db.add(nouvelle)
         nouvelles.append(nouvelle)

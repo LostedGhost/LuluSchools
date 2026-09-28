@@ -46,6 +46,9 @@ class TypeActeAcademique(Base):
     # Acte standard genere et livre automatiquement des le paiement (actes/generation.py) :
     # "attestation_scolarite" ou "releve_notes" ; None = traitement manuel par l'A+.
     modele_document: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Lot 7.8 : critere verifie automatiquement a la demande (« bourse_scientifique » :
+    # moyenne des matieres scientifiques >= 12/20, insertion/service.py).
+    critere_automatique: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 

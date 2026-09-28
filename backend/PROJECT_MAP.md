@@ -494,3 +494,17 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
 - Indicateurs : `inclusion.apprenants_alphabetisation`, `par_type.CA`. Migration `0025_alphabetisation`
   (`ALTER TYPE ... ADD VALUE` en autocommit). Seed : `seed_donnees/alphabetisation.py` (centre de Bohicon,
   leçons courtes + quiz, parents inscrits, compte de démo « parent en mode Écoute », centre protégé des suspensions).
+
+### app/modules/insertion/ (7.8, EFTP, stages, bourses)
+- `Classe.enseignement` (« general »/« technique »/« professionnel ») ; indicateur `eftp` (élèves et part).
+- Stages : `OffreStage` publiée par l'A+ pour une entreprise partenaire sans compte
+  (`POST/GET /etablissements/{id}/stages`, `POST /stages/{id}/cloturer`), `GET /stages` (élève : offres ouvertes
+  de son établissement, filière compatible, statut de sa candidature), `POST /stages/{id}/candidatures`,
+  `GET /stages/{id}/candidatures` et `POST /candidatures-stage/{id}/decision` (A+ transmet la réponse).
+- `CompetenceMetier` validée par un enseignant affecté à la classe actuelle (`/eleves/{id}/competences-metier`),
+  reprise dans le passeport (`competences_metier`) et son PDF.
+- Bourse scientifique : `TypeActeAcademique.critere_automatique = "bourse_scientifique"` ; la demande est refusée
+  (422 `non_eligible`) si la moyenne pondérée des matières scientifiques de l'année est < 12/20
+  (`insertion/service.py`) ; `GET /bourses/eligibilite-scientifique` (pré-contrôle élève/tuteur).
+- Migration `0026_eftp_stages_bourses` ; seed : `seed_donnees/insertion.py` (classes techniques marquées,
+  offres et candidatures, compétences, type d'acte « bourse » en ES et UP).

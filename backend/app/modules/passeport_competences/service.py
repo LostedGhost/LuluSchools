@@ -120,4 +120,21 @@ def construire_passeport(db: Session, eleve_utilisateur_id: str) -> dict | None:
         "cours_suivis": cours_suivis,
         "moyennes_par_matiere": moyennes,
         "badges": badges,
+        "competences_metier": _competences_metier(db, eleve_utilisateur_id),
     }
+
+
+_LIBELLES_NIVEAU = {"initie": "initié", "confirme": "confirmé", "maitrise": "maîtrisé"}
+
+
+def _competences_metier(db: Session, eleve_utilisateur_id: str) -> list[dict]:
+    """Lot 7.8 : competences professionnelles validees par un enseignant."""
+    from app.modules.insertion.models import CompetenceMetier
+
+    lignes = (
+        db.query(CompetenceMetier)
+        .filter(CompetenceMetier.eleve_utilisateur_id == eleve_utilisateur_id)
+        .order_by(CompetenceMetier.created_at)
+        .all()
+    )
+    return [{"intitule": c.intitule, "niveau": _LIBELLES_NIVEAU[c.niveau.value]} for c in lignes]

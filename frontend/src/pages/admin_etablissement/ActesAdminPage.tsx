@@ -35,6 +35,7 @@ export function ActesAdminPage() {
   const [nom, setNom] = useState("");
   const [prix, setPrix] = useState(0);
   const [piecesRequises, setPiecesRequises] = useState("");
+  const [bourseScientifique, setBourseScientifique] = useState(false);
   const [modeleDocument, setModeleDocument] = useState<"" | "attestation_scolarite" | "releve_notes" | "certificat_reussite">("");
   const [schemaFormulaire, setSchemaFormulaire] = useState<ChampFormulaire[]>([]);
   const [motifParId, setMotifParId] = useState<Record<string, string>>({});
@@ -74,6 +75,7 @@ export function ActesAdminPage() {
         prix,
         pieces_requises: piecesRequises,
         modele_document: modeleDocument || null,
+        critere_automatique: bourseScientifique ? "bourse_scientifique" : null,
         schema_formulaire: schemaFormulaire.filter((c) => c.label.trim()).length > 0
           ? schemaFormulaire.filter((c) => c.label.trim())
           : undefined,
@@ -149,6 +151,15 @@ export function ActesAdminPage() {
                 <option value="certificat_reussite">Automatique : certificat de réussite, dès la décision favorable du conseil de classe</option>
               </Select>
             </Field>
+            <label style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+              <input type="checkbox" checked={bourseScientifique} onChange={(e) => setBourseScientifique(e.target.checked)} style={{ marginTop: "4px" }} />
+              <span>
+                <strong>Bourse pour les filières scientifiques</strong>
+                <span style={{ display: "block", fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>
+                  La demande n'est acceptée que si la moyenne des matières scientifiques atteint 12/20 (vérifié automatiquement).
+                </span>
+              </span>
+            </label>
             <Field label="Pièces requises (description)" error={champErreurs.piecesRequises}>
               <TextInput value={piecesRequises} onChange={(e) => setPiecesRequises(e.target.value)} placeholder="Ex. CIP, acte de naissance" />
             </Field>

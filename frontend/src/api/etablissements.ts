@@ -92,6 +92,8 @@ export interface ClassePayload {
   annee_academique?: string;
   capacite: number;
   politique_depassement: "ordre_arrivee" | "notes_concours" | "tirage_sort";
+  /** Lot 7.8 (EFTP) : type d'enseignement, « general » par défaut. */
+  enseignement?: "general" | "technique" | "professionnel";
 }
 
 export function creerClasse(etablissementId: string, payload: ClassePayload) {

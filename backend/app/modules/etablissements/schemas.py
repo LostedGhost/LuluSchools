@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
@@ -96,6 +97,7 @@ class ClasseCreate(BaseModel):
     annee_academique: str | None = None
     capacite: int
     politique_depassement: PolitiqueDepassement
+    enseignement: Literal["general", "technique", "professionnel"] | None = None
     # UC-24 : optionnel - permet a un A+/A++ de preparer les classes de l'annee suivante
     # en avance. Par defaut, l'annee academique en cours au moment de la creation.
     annee_academique: str | None = None
@@ -113,6 +115,7 @@ class ClasseOut(BaseModel):
     capacite: int
     politique_depassement: PolitiqueDepassement
     annee_academique: str
+    enseignement: str | None = None
 
 
 class ReconduireClassesRequest(BaseModel):

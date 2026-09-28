@@ -110,6 +110,9 @@ class Classe(Base):
     # informative, pas structurante).
     reconduite_depuis_id: Mapped[str | None] = mapped_column(ForeignKey("classes.id"), nullable=True)
     capacite: Mapped[int] = mapped_column(Integer)
+    # Lot 7.8 (PAG, action 2 : EFTP) : « general », « technique » ou « professionnel » ;
+    # None = general. Sert aux indicateurs (part de l'EFTP) et aux offres de stage.
+    enseignement: Mapped[str | None] = mapped_column(String(20), nullable=True)
     politique_depassement: Mapped[PolitiqueDepassement] = mapped_column(Enum(PolitiqueDepassement))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

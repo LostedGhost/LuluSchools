@@ -18,6 +18,7 @@ export interface IndicateursOut {
   seuil_anonymat: number;
   etablissements: { total: number; publics: number; prives: number; par_type: Record<"EP" | "ES" | "UP" | "CA", number>; sans_territoire: number };
   eleves: { total: number; filles: number | null; garcons: number | null; sexe_non_renseigne: number | null; indice_parite: number | null };
+  eftp?: { eleves: number | null; part: number | null };
   reussite: { bulletins: number; taux_reussite: number | null; taux_reussite_filles: number | null; taux_reussite_garcons: number | null };
   assiduite: { absences: number; retards: number; absences_par_eleve: number | null };
   enseignants: { sous_contrat: number; eleves_par_enseignant: number | null };
@@ -29,6 +30,7 @@ export interface IndicateursOut {
     comptes_mode_ecoute: number;
     comptes_reglages_accessibilite: number;
     messages_vocaux: number;
+    apprenants_alphabetisation?: number;
   };
   par_departement?: LigneDepartement[];
 }

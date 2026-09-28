@@ -346,6 +346,8 @@ export interface TypeActeOut {
   pieces_requises: string;
   condition_eligibilite: string | null;
   schema_formulaire: ChampFormulaire[] | null;
+  /** Lot 7.8 : « bourse_scientifique » = éligibilité vérifiée automatiquement. */
+  critere_automatique?: string | null;
 }
 
 export type StatutDemandeActe = "soumise" | "en_traitement" | "acceptee" | "rejetee";
@@ -1203,6 +1205,8 @@ export interface PasseportOut {
   cours_suivis: CoursSuiviOut[];
   moyennes_par_matiere: MoyenneMatiereOut[];
   badges: BadgeOut[];
+  /** Lot 7.8 : compétences professionnelles validées par un enseignant. */
+  competences_metier?: { intitule: string; niveau: string }[];
 }
 
 export interface PasseportExportOut {

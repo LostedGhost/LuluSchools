@@ -184,6 +184,15 @@ def calculer_indicateurs(db: Session, p: Perimetre) -> dict:
         or 0,
     }
 
+    # PAG action 2 : part de l'enseignement technique et professionnel (EFTP).
+    eftp = (
+        _inscriptions(db, p)
+        .filter(Classe.enseignement.in_(("technique", "professionnel")))
+        .with_entities(func.count(func.distinct(Eleve.id)))
+        .scalar()
+        or 0
+    )
+
     resultat = {
         "annee_academique": p.annee_academique,
         "perimetre": p.libelle,
@@ -204,6 +213,7 @@ def calculer_indicateurs(db: Session, p: Perimetre) -> dict:
             "indice_parite": round(filles / garcons, 2) if filles >= SEUIL_ANONYMAT and garcons >= SEUIL_ANONYMAT else None,
         },
         "reussite": _reussite(db, p),
+        "eftp": {"eleves": masquer(eftp), "part": taux(eftp, total_eleves)},
         "assiduite": {
             "absences": absences,
             "retards": vie.get(NatureEntreeVieScolaire.RETARD, 0),

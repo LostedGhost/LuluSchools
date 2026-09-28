@@ -36,6 +36,11 @@ class BadgeOut(BaseModel):
     label: str
 
 
+class CompetenceMetierOut(BaseModel):
+    intitule: str
+    niveau: str
+
+
 class PasseportOut(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -46,6 +51,8 @@ class PasseportOut(BaseModel):
     cours_suivis: list[CoursSuiviOut]
     moyennes_par_matiere: list[MoyenneMatiereOut]
     badges: list[BadgeOut]
+    # Lot 7.8 : competences professionnelles validees par un enseignant (EFTP).
+    competences_metier: list[CompetenceMetierOut] = []
 
 
 class PasseportExportOut(BaseModel):

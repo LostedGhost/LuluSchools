@@ -69,6 +69,7 @@ def creer_type_acte(
         condition_eligibilite=payload.condition_eligibilite,
         schema_formulaire=[c.model_dump() for c in payload.schema_formulaire] if payload.schema_formulaire else None,
         modele_document=payload.modele_document,
+        critere_automatique=payload.critere_automatique,
     )
     db.add(type_acte)
     db.commit()
@@ -169,6 +170,12 @@ def soumettre_demande_acte(
             raise api_error(
                 status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce type d'acte n'appartient pas à l'établissement de l'élève."
             )
+        if type_acte.critere_automatique == "bourse_scientifique":
+            from app.modules.insertion.service import eligibilite_bourse_scientifique
+
+            eligibilite = eligibilite_bourse_scientifique(db, eleve)
+            if not eligibilite.eligible:
+                raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "non_eligible", eligibilite.explication)
         if type_acte.prix > 0:
             statut_initial = StatutDemandeActe.SOUMISE
             paiement_confirme = False

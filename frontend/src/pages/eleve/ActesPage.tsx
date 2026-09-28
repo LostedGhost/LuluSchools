@@ -15,6 +15,7 @@ import { KkiapayButton } from "../../components/KkiapayButton";
 import { FormulaireDynamique, champsFichierDe } from "../../components/FormulaireDynamique";
 import { Download, FileStack, FlagTriangleRight, ScrollText, Upload } from "lucide-react";
 import { estRempli } from "../../utils/validation";
+import { eligibiliteBourseScientifique, type EligibiliteBourse } from "../../api/insertion";
 
 const LIBELLES_STATUT: Record<StatutDemandeActe, { label: string; tone: "neutral" | "success" | "error" | "pending" | "info" }> = {
   soumise: { label: "En attente de paiement", tone: "pending" },
@@ -129,6 +130,7 @@ export function ActesPage() {
   };
 
   const typeSelectionne = types.find((t) => t.id === typeActeId);
+  const estBourse = typeSelectionne?.critere_automatique === "bourse_scientifique";
 
   return (
     <div className="page-content">
@@ -252,6 +254,7 @@ export function ActesPage() {
                       Pièces requises : {typeSelectionne.pieces_requises}
                     </p>
                   )}
+                  {estBourse && <EligibiliteBourseBandeau />}
                   {typeSelectionne?.schema_formulaire && typeSelectionne.schema_formulaire.length > 0 && (
                     <div style={{ marginTop: "12px" }}>
                       <FormulaireDynamique
@@ -288,5 +291,26 @@ export function ActesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Lot 7.8 : pré-contrôle de la bourse scientifique (la règle est revérifiée à l'envoi). */
+function EligibiliteBourseBandeau() {
+  const [resultat, setResultat] = useState<EligibiliteBourse | null>(null);
+  useEffect(() => {
+    eligibiliteBourseScientifique().then((r) => setResultat(r.data)).catch(() => {});
+  }, []);
+  if (!resultat) return null;
+  return (
+    <p
+      role="status"
+      style={{
+        marginTop: "8px", padding: "10px 12px", borderRadius: "var(--radius-md)",
+        background: resultat.eligible ? "var(--primary-tint)" : "var(--reward-tint, #FDF0DB)", color: "var(--ink)",
+      }}
+    >
+      <strong>{resultat.eligible ? "Vous êtes éligible." : "Pas encore éligible."}</strong> {resultat.explication}
+      {resultat.matieres.length > 0 && <> Matières prises en compte : {resultat.matieres.join(", ")}.</>}
+    </p>
   );
 }

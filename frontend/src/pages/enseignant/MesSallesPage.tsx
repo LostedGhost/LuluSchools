@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { ValiderCompetence } from "../../components/insertion/ValiderCompetence";
 import { listerElevesDeLaClasse, mesClassesAffectees } from "../../api/etablissements";
 import { creerEntreeVieScolaire, listerVieScolaireEleve } from "../../api/vie_scolaire";
 import { messageErreur } from "../../api/client";
@@ -140,11 +141,14 @@ export function MesSallesPage() {
                             </Btn>
                           </div>
                           {eleveOuvertId === eleve.eleve_id && (
-                            <VieScolaireEleve
-                              classeId={salle.id}
-                              eleveId={eleve.eleve_id}
-                              estProfesseurPrincipal={salle.est_professeur_principal}
-                            />
+                            <>
+                              <VieScolaireEleve
+                                classeId={salle.id}
+                                eleveId={eleve.eleve_id}
+                                estProfesseurPrincipal={salle.est_professeur_principal}
+                              />
+                              {eleve.utilisateur_id && <ValiderCompetence eleveUtilisateurId={eleve.utilisateur_id} />}
+                            </>
                           )}
                         </div>
                       ))}

@@ -50,6 +50,8 @@ const ActesPage = lazy(() => import("./pages/eleve/ActesPage").then((m) => ({ de
 const CoursDirectPage = lazy(() => import("./pages/eleve/CoursDirectPage").then((m) => ({ default: m.CoursDirectPage })));
 const EleveServicesScolairesPage = lazy(() => import("./pages/eleve/ServicesScolairesPage").then((m) => ({ default: m.ServicesScolairesPage })));
 const ElProfessorElevePage = lazy(() => import("./pages/eleve/ElProfessorElevePage").then((m) => ({ default: m.ElProfessorElevePage })));
+const StagesPage = lazy(() => import("./pages/eleve/StagesPage").then((m) => ({ default: m.StagesPage })));
+const StagesAdminPage = lazy(() => import("./pages/admin_etablissement/StagesAdminPage").then((m) => ({ default: m.StagesAdminPage })));
 const PasseportPage = lazy(() => import("./pages/eleve/PasseportPage").then((m) => ({ default: m.PasseportPage })));
 
 const EnseignantDashboard = lazy(() => import("./pages/enseignant/EnseignantDashboard").then((m) => ({ default: m.EnseignantDashboard })));
@@ -416,6 +418,24 @@ function App() {
                   <EleveProfileProvider>
                     <ElProfessorElevePage ongletInitial="famille" />
                   </EleveProfileProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/eleve/stages"
+              element={
+                <RequireAuth roles={["eleve"]}>
+                  <StagesPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/stages"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <StagesAdminPage />
+                  </AdminEtabProvider>
                 </RequireAuth>
               }
             />

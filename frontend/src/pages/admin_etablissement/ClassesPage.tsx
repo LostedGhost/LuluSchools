@@ -53,6 +53,7 @@ export function ClassesPage() {
   const [classes, setClasses] = useState<ClasseOut[]>([]);
   const [niveau, setNiveau] = useState("");
   const [filiere, setFiliere] = useState("");
+  const [enseignement, setEnseignement] = useState<"general" | "technique" | "professionnel">("general");
   const [anneeAcademique, setAnneeAcademique] = useState("");
   const [capacite, setCapacite] = useState(30);
   const [politique, setPolitique] = useState<PolitiqueDepassement>("ordre_arrivee");
@@ -116,6 +117,7 @@ export function ClassesPage() {
         annee_academique: anneeAcademique.trim() || undefined,
         capacite,
         politique_depassement: politique,
+        enseignement,
       });
       setSucces(`Classe "${niveau}${filiere ? ` ${filiere}` : ""}" créée avec succès !`);
       setNiveau("");
@@ -243,6 +245,15 @@ export function ClassesPage() {
                 {filieresConnues.map((f) => <option key={f} value={f} />)}
               </datalist>
             </Field>
+            {(etablissement.type === "ES" || etablissement.type === "UP") && (
+              <Field label="Type d'enseignement" helper="Technique ou professionnel : compté dans l'EFTP (indicateurs du ministère).">
+                <Select value={enseignement} onChange={(e) => setEnseignement(e.target.value as typeof enseignement)}>
+                  <option value="general">Général</option>
+                  <option value="technique">Technique</option>
+                  <option value="professionnel">Professionnel</option>
+                </Select>
+              </Field>
+            )}
             <Field label="Année académique" helper={`Par défaut : ${anneeAcademiqueCourante()} (ou la rentrée ouverte)`}>
               <TextInput value={anneeAcademique} onChange={(e) => setAnneeAcademique(e.target.value)} placeholder={anneeAcademiqueCourante()} />
             </Field>

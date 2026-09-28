@@ -1063,7 +1063,7 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 /* Pastilles du menu (ce qui attend l'utilisateur) */
 .nav-pastille {
   flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill);
-  background: var(--action); color: #fff; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center;
+  background: var(--action); color: var(--on-action); font-size: 11px; font-weight: 700; line-height: 20px; text-align: center;
 }
 .nav-pastille-point {
   position: absolute; top: -2px; right: -4px; width: 9px; height: 9px; border-radius: 50%;
@@ -1302,3 +1302,6 @@ html[data-donnees-reduites] .hero-glow { display: none; }
   flex: none; width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
   background: var(--ink); color: var(--bg); font-weight: 800;
 }
+
+/* Offres de stage (Lot 7.8) */
+.stage-meta { display: inline-flex; align-items: center; gap: 4px; }

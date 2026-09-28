@@ -141,11 +141,14 @@ def _referentiel(ctx: Contexte, niveau: str, filiere: str | None, matiere: str) 
     ctx.referentiel_ids[(niveau, matiere)] = referentiel.id
 
 
-def _classe(ctx: Contexte, etab: Etablissement, niveau: str, matieres: list[str], filiere: str | None = None) -> Classe:
+def _classe(
+    ctx: Contexte, etab: Etablissement, niveau: str, matieres: list[str], filiere: str | None = None,
+    enseignement: str | None = None,
+) -> Classe:
     capacite = ctx.rng.randint(ctx.cfg.eleves_par_classe[1] + 2, ctx.cfg.eleves_par_classe[1] + 12)
     classe = Classe(
         id=new_id(), etablissement_id=etab.id, niveau=niveau, filiere=filiere, annee_academique=ctx.annee,
-        capacite=capacite, politique_depassement=ctx.rng.choice(list(PolitiqueDepassement)),
+        enseignement=enseignement, capacite=capacite, politique_depassement=ctx.rng.choice(list(PolitiqueDepassement)),
         created_at=ctx.rentree - timedelta(days=ctx.rng.randint(40, 90)),
     )
     # UC-44/59 : une partie des classes est reconduite de l'annee precedente (classe source
@@ -153,7 +156,7 @@ def _classe(ctx: Contexte, etab: Etablissement, niveau: str, matieres: list[str]
     if ctx.rng.random() < 0.3:
         debut, fin = ctx.annee.split("-")
         source = Classe(
-            id=new_id(), etablissement_id=etab.id, niveau=niveau, filiere=filiere,
+            id=new_id(), etablissement_id=etab.id, niveau=niveau, filiere=filiere, enseignement=enseignement,
             annee_academique=f"{int(debut) - 1}-{int(fin) - 1}", capacite=capacite,
             politique_depassement=classe.politique_depassement, created_at=classe.created_at - timedelta(days=365),
         )
@@ -226,7 +229,10 @@ def _secondaire(ctx: Contexte, nom: str, technique: bool) -> None:
     if technique:
         for code in ctx.rng.sample(list(SERIES_TECHNIQUES), k=2):
             for niveau in NIVEAUX_TECHNIQUE_2ND_CYCLE:
-                _classe(ctx, etab, niveau, MATIERES_TECHNIQUE_COMMUN + MATIERES_PAR_SERIE_TECHNIQUE[code], SERIES_TECHNIQUES[code])
+                _classe(
+                    ctx, etab, niveau, MATIERES_TECHNIQUE_COMMUN + MATIERES_PAR_SERIE_TECHNIQUE[code], SERIES_TECHNIQUES[code],
+                    enseignement="technique",  # Lot 7.8 : EFTP
+                )
     else:
         for code in ctx.rng.sample(list(SERIES_GENERALES), k=3):
             for niveau in ("2nde", "1ère", "Terminale"):

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, GraduationCap, Landmark, Scale, Soup, Users, Accessibility, CalendarX } from "lucide-react";
+import { Download, GraduationCap, Landmark, Scale, Soup, Users, Accessibility, CalendarX, Wrench, BookOpenCheck } from "lucide-react";
 import { messageErreur } from "../../api/client";
 import { listerTerritoires } from "../../api/etablissements";
 import { exporterIndicateursCsv, obtenirIndicateurs, type IndicateursOut } from "../../api/indicateurs";
@@ -24,6 +24,8 @@ const pourcent = (v: number | null | undefined) => (v === null || v === undefine
 
 const ALIGNEMENT_PAG: { orientation: string; indicateurs: string }[] = [
   { orientation: "Restructuration du système éducatif — qualité des formations", indicateurs: "Taux de réussite, élèves par enseignant sous contrat" },
+  { orientation: "Enseignement et formation techniques et professionnels (EFTP)", indicateurs: "Part des élèves en classes techniques et professionnelles, stages, compétences métier" },
+  { orientation: "Alphabétisation et éducation des adultes", indicateurs: "Adultes inscrits en centre d'alphabétisation" },
   { orientation: "Amélioration des conditions d'études — cantines scolaires", indicateurs: "Élèves bénéficiaires de la cantine, repas servis" },
   { orientation: "Égalité filles-garçons (ODD 4)", indicateurs: "Indice de parité des effectifs, réussite des filles et des garçons" },
   { orientation: "Inclusion — handicap, alphabétisation", indicateurs: "Cours oraux transcrits, comptes en mode Écoute, messages vocaux" },
@@ -153,6 +155,20 @@ export function IndicateursPage() {
               icon={<Soup size={24} />}
               accent="reward"
               sub={`élèves bénéficiaires · ${donnees.cantine.repas} repas`}
+            />
+            <KPITile
+              label="Élèves en EFTP"
+              value={pourcent(donnees.eftp?.part)}
+              icon={<Wrench size={24} />}
+              accent="reward"
+              sub={`${nombre(donnees.eftp?.eleves)} élèves en classes techniques ou professionnelles`}
+            />
+            <KPITile
+              label="Adultes en alphabétisation"
+              value={(donnees.inclusion.apprenants_alphabetisation ?? 0).toLocaleString("fr-FR")}
+              icon={<BookOpenCheck size={24} />}
+              accent="magic"
+              sub={`${donnees.etablissements.par_type.CA ?? 0} centre(s) d'alphabétisation`}
             />
             <KPITile
               label="Cours oraux transcrits"

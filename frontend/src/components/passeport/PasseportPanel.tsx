@@ -65,6 +65,20 @@ export function PasseportPanel({
         </div>
       )}
 
+      {passeport.competences_metier && passeport.competences_metier.length > 0 && (
+        <>
+          <SectionHead eyebrow="Métier" title="Compétences professionnelles validées" />
+          <div className="grid-3" style={{ marginBottom: "28px" }}>
+            {passeport.competences_metier.map((c, i) => (
+              <Card key={`${c.intitule}-${i}`}>
+                <p style={{ margin: "0 0 4px", fontWeight: 700 }}>{c.intitule}</p>
+                <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>Niveau : {c.niveau}</p>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
       <SectionHead eyebrow="Progression" title="Quiz réussis" />
       {passeport.quiz_reussis.length === 0 ? (
         <EmptyState icon={<Award size={20} />} title="Aucun quiz réussi pour le moment" />

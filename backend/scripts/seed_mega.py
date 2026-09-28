@@ -38,7 +38,7 @@ from app.core.config import settings  # noqa: E402
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
 from app.modules.etablissements.models import TypeEtablissement  # noqa: E402
 
-from seed_donnees import alphabetisation, automatisations, demo, economie, evaluations, pedagogie, recrutement, scolarite, services, supervision, vie_classe  # noqa: E402
+from seed_donnees import alphabetisation, automatisations, insertion, demo, economie, evaluations, pedagogie, recrutement, scolarite, services, supervision, vie_classe  # noqa: E402
 from seed_donnees.contexte import MOT_DE_PASSE_COMMUN, Config, Contexte  # noqa: E402
 from seed_donnees.etablissements import creer_etablissements  # noqa: E402
 from seed_donnees.fichiers import Fichiers  # noqa: E402
@@ -96,6 +96,7 @@ def executer(ctx: Contexte) -> None:
                     pedagogie.el_professor_familles(ctx, inscrit)
             pedagogie.el_professor_eleves(ctx, ctx.inscrits_par_etab[etab.id])
             services.actes(ctx, etab, devoirs_par_classe)
+            insertion.peupler(ctx, etab)
             services.transport_et_cantine(ctx, etab)
             services.billetterie(ctx, etab)
             supervision.moderer_contenus(ctx, cours_etab, devoirs_etab)

@@ -38,6 +38,12 @@ def generer_pdf_passeport(passeport: dict) -> bytes:
         y = _ecrire_ligne(page, y, f"- {moyenne['matiere']} : {moyenne['moyenne']:.1f}/100")
     y += 10
 
+    if passeport.get("competences_metier"):
+        y = _ecrire_ligne(page, y, "Compétences professionnelles validées", taille=14, gras=True)
+        for competence in passeport["competences_metier"]:
+            y = _ecrire_ligne(page, y, f"- {competence['intitule']} ({competence['niveau']})")
+        y += 10
+
     y = _ecrire_ligne(page, y, "Quiz réussis", taille=14, gras=True)
     if not passeport["quiz_reussis"]:
         y = _ecrire_ligne(page, y, "Aucun quiz réussi pour le moment.")

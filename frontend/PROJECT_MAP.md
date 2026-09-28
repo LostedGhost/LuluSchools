@@ -321,3 +321,9 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   `components/alphabetisation/QuizOral.tsx` (question et réponses lues, grands boutons numérotés, essai non
   enregistré) ; `ApprenantsAdultesPanel` sur le tableau de bord A+ d'un centre `CA` ; type `CA` ajouté aux
   libellés, filtres de l'annuaire et des cartes, niveaux de `ClassesPage`, photos par défaut.
+- **EFTP, stages, bourses (7.8)** : `pages/eleve/StagesPage.tsx` (`/eleve/stages`) et
+  `pages/admin_etablissement/StagesAdminPage.tsx` (`/admin-etablissement/stages`) ; `components/insertion/
+  ValiderCompetence.tsx` (dans `MesSallesPage`, sous la vie scolaire d'un élève) ; compétences dans
+  `PasseportPanel` ; case « Bourse pour les filières scientifiques » dans `ActesAdminPage` et bandeau
+  d'éligibilité dans `ActesPage` ; « Type d'enseignement » dans `ClassesPage` (ES/UP) ; tuiles EFTP et
+  alphabétisation dans `IndicateursPage` ; `api/insertion.ts`.

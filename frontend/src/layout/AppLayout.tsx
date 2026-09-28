@@ -118,6 +118,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
       { to: "/eleve/bulletin", label: "Bulletin", icon: <Award size={iconSize} /> },
       { to: "/eleve/actes", label: "Actes académiques", icon: <FileText size={iconSize} /> },
       { to: "/eleve/cours-direct", label: "Cours en direct", icon: <Radio size={iconSize} /> },
+      { to: "/eleve/stages", label: "Stages", icon: <Briefcase size={iconSize} /> },
       { to: "/eleve/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
       { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
       // Micro-jobs et marketplace : reserves aux etudiants (UC-57/58) - un eleve de
@@ -159,6 +160,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
       { to: "/admin-etablissement/classes", label: "Classes", icon: <GraduationCap size={iconSize} /> },
       { to: "/admin-etablissement/console", label: "Console établissement", icon: <LayoutGrid size={iconSize} /> },
       { to: "/admin-etablissement/postes", label: "Recrutement", icon: <Briefcase size={iconSize} /> },
+      { to: "/admin-etablissement/stages", label: "Stages", icon: <Handshake size={iconSize} /> },
       { to: "/admin-etablissement/contestations", label: "Contestations", icon: <Scale size={iconSize} /> },
       { to: "/admin-etablissement/actes", label: "Actes académiques", icon: <FileText size={iconSize} /> },
       { to: "/admin-etablissement/referentiels", label: "Référentiels", icon: <Settings size={iconSize} /> },
