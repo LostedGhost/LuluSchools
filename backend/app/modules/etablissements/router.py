@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
+from app.core.territoires import DEPARTEMENTS
 from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.deps import (
     api_error,
@@ -67,6 +68,7 @@ from app.modules.etablissements.schemas import (
     VieScolaireOut,
     VitrinePubliqueOut,
     VitrineTotauxOut,
+    TerritoireUpdate,
 )
 from app.modules.evaluations.models import Bulletin
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
@@ -106,6 +108,8 @@ def creer_etablissement(
         code_etablissement=_generer_code_etablissement(db, payload.type.value),
         latitude=payload.latitude,
         longitude=payload.longitude,
+        departement=payload.departement,
+        commune=payload.commune,
     )
     db.add(etablissement)
     db.flush()
@@ -291,6 +295,12 @@ def annuaire_public(
     return AnnuairePubliqueOut(items=items, total=total, limit=limit, offset=offset)
 
 
+@router.get("/territoires", response_model=dict[str, list[str]])
+def lister_territoires() -> dict[str, list[str]]:
+    """Lot 7.6 : les 12 departements et 77 communes (listes deroulantes, public)."""
+    return {departement: list(communes) for departement, communes in DEPARTEMENTS.items()}
+
+
 @router.get("/{etablissement_id}", response_model=EtablissementOut)
 def obtenir_etablissement(
     etablissement_id: str,
@@ -324,6 +334,28 @@ def mettre_a_jour_localisation(
 
     etablissement.latitude = payload.latitude
     etablissement.longitude = payload.longitude
+    db.commit()
+    db.refresh(etablissement)
+    return etablissement
+
+
+@router.patch("/{etablissement_id}/territoire", response_model=EtablissementOut)
+def mettre_a_jour_territoire(
+    etablissement_id: str,
+    payload: TerritoireUpdate,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(
+        require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)
+    ),
+) -> Etablissement:
+    """Lot 7.6 : departement et commune (liste fermee), memes droits que la localisation."""
+    etablissement = db.get(Etablissement, etablissement_id)
+    if etablissement is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
+    if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
+        _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    etablissement.departement = payload.departement
+    etablissement.commune = payload.commune
     db.commit()
     db.refresh(etablissement)
     return etablissement

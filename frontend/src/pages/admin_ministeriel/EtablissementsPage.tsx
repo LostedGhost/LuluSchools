@@ -23,6 +23,7 @@ import {
 } from "../../components/ui";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { LocationPicker } from "../../components/LocationPicker";
+import { ChoixTerritoire } from "../../components/ChoixTerritoire";
 import { PhotosEtablissementManager } from "../../components/PhotosEtablissementManager";
 import { Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { lienGoogleMaps } from "../../utils/geo";
@@ -42,10 +43,12 @@ export function EtablissementsPage() {
   const [adminEmail, setAdminEmail] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [departement, setDepartement] = useState("");
+  const [commune, setCommune] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
-  const [champErreurs, setChampErreurs] = useState<{ nom?: string; adminNom?: string; adminPrenom?: string; adminEmail?: string; localisation?: string }>({});
+  const [champErreurs, setChampErreurs] = useState<{ nom?: string; adminNom?: string; adminPrenom?: string; adminEmail?: string; localisation?: string; territoire?: string }>({});
 
   // Table + recherche/filtre (UC-25)
   const [recherche, setRecherche] = useState("");
@@ -89,6 +92,7 @@ export function EtablissementsPage() {
     if (!estRempli(latitude) || !estRempli(longitude) || Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       erreurs.localisation = "Coordonnées requises (utilisez le bouton de géolocalisation ou saisissez-les manuellement).";
     }
+    if (!departement || !commune) erreurs.territoire = "Choisissez le département et la commune (indicateurs du ministère).";
     setChampErreurs(erreurs);
     if (Object.keys(erreurs).length > 0) return;
 
@@ -101,6 +105,8 @@ export function EtablissementsPage() {
         admin: { nom: adminNom, prenom: adminPrenom, email: adminEmail },
         latitude: lat,
         longitude: lng,
+        departement,
+        commune,
       });
       setSucces(`Établissement créé. Identifiants temporaires envoyés à ${adminEmail}.`);
       setNom("");
@@ -109,6 +115,8 @@ export function EtablissementsPage() {
       setAdminEmail("");
       setLatitude("");
       setLongitude("");
+      setDepartement("");
+      setCommune("");
       setShowForm(false);
       charger();
     } catch (err) {
@@ -297,6 +305,12 @@ export function EtablissementsPage() {
             {champErreurs.localisation && (
               <p className="text-sm" style={{ color: "var(--action-deep)", margin: 0 }}>{champErreurs.localisation}</p>
             )}
+            <ChoixTerritoire
+              departement={departement}
+              commune={commune}
+              erreur={champErreurs.territoire}
+              onChange={(d, c) => { setDepartement(d); setCommune(c); }}
+            />
             <Btn type="submit" variant="primary" loading={enCours}>
               Créer l'établissement
             </Btn>

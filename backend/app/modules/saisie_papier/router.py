@@ -361,7 +361,7 @@ def enregistrer_inscription_guichet(
                         "Élève de moins de 16 ans : la fiche doit porter la signature du parent ou tuteur (consentement).")
 
     eleve = Eleve(nom=payload.nom.strip(), prenom=payload.prenom.strip(), date_naissance=payload.date_naissance,
-                  nationalite=Nationalite(payload.nationalite), tuteur_id=None)
+                  nationalite=Nationalite(payload.nationalite), sexe=payload.sexe, tuteur_id=None)
     db.add(eleve)
     db.flush()
     inscription = Inscription(

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +15,7 @@ class InscriptionCreate(BaseModel):
     classe_id: str = Field(max_length=36)
     nationalite: Nationalite = Nationalite.NATIONALE
     consentement_parental_donne: bool = False
+    sexe: Literal["F", "M"] | None = None
 
 
 class InscriptionOut(BaseModel):

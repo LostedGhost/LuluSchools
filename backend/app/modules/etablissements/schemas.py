@@ -1,7 +1,8 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from app.core.territoires import verifier_territoire
 from app.modules.etablissements.models import PolitiqueDepassement, StatutEtablissement, StatutRentree, TypeEtablissement
 
 
@@ -22,6 +23,25 @@ class EtablissementCreate(BaseModel):
     admin: AdminEtablissementCreate
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
+    departement: str | None = None
+    commune: str | None = None
+
+    @model_validator(mode="after")
+    def _territoire_connu(self):
+        verifier_territoire(self.departement, self.commune)
+        return self
+
+
+class TerritoireUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    departement: str
+    commune: str
+
+    @model_validator(mode="after")
+    def _territoire_connu(self):
+        verifier_territoire(self.departement, self.commune)
+        return self
 
 
 class EtablissementOut(BaseModel):
@@ -37,6 +57,8 @@ class EtablissementOut(BaseModel):
     description: str | None
     actif: bool
     admission_automatique: bool = False
+    departement: str | None = None
+    commune: str | None = None
 
 
 class ParametresEtablissementUpdate(BaseModel):

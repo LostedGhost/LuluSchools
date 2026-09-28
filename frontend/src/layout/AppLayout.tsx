@@ -42,6 +42,7 @@ import {
   Menu,
   ScanLine,
   Accessibility,
+  BarChart3,
 } from "lucide-react";
 
 import { BandeauHorsLigne } from "../accessibilite/BandeauHorsLigne";
@@ -149,6 +150,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
       { to: "/admin-etablissement/a-traiter", label: "À traiter", court: "À traiter", icon: <Inbox size={iconSize} /> },
       { to: "/admin-etablissement", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
       { to: "/admin-etablissement/saisie-papier", label: "Saisie papier", court: "Papier", icon: <ScanLine size={iconSize} /> },
+      { to: "/admin-etablissement/indicateurs", label: "Indicateurs", icon: <BarChart3 size={iconSize} /> },
       { to: "/admin-etablissement/rentree", label: "Rentrée scolaire", icon: <Send size={iconSize} /> },
       { to: "/admin-etablissement/inscriptions", label: "Inscriptions", icon: <UserCheck size={iconSize} /> },
       { to: "/admin-etablissement/vie-scolaire", label: "Vie scolaire", icon: <BookMarked size={iconSize} /> },
@@ -170,6 +172,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
     return [
       { to: "/admin-ministeriel/a-traiter", label: "À traiter", court: "À traiter", icon: <Inbox size={iconSize} /> },
       { to: "/admin-ministeriel", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
+      { to: "/admin-ministeriel/indicateurs", label: "Indicateurs", court: "Chiffres", icon: <BarChart3 size={iconSize} /> },
       { to: "/admin-ministeriel/etablissements", label: "Établissements", icon: <Building2 size={iconSize} /> },
       { to: "/admin-ministeriel/referentiels", label: "Référentiels", icon: <Settings size={iconSize} /> },
       { to: "/admin-ministeriel/micro-jobs-arbitrage", label: "Arbitrage micro-jobs", icon: <Gavel size={iconSize} /> },

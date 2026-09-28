@@ -137,6 +137,7 @@ def creer_inscription(
                 prenom=payload.prenom.strip(),
                 date_naissance=payload.date_naissance,
                 nationalite=payload.nationalite,
+                sexe=payload.sexe,
                 tuteur_id=utilisateur.id,
             )
             db.add(eleve)

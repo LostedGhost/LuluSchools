@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app.main  # noqa: F401,E402
 from app.core.database import SessionLocal  # noqa: E402
+from app.core.territoires import DEPARTEMENTS  # noqa: E402
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique  # noqa: E402
 from app.modules.billetterie.models import BilletEvenement, Evenement, StatutBillet, StatutEvenement  # noqa: E402
 from app.modules.coffre_fort.models import ModuleDepenseCoffreFort, PlafondFamilial, ValidationParentale  # noqa: E402
@@ -96,6 +97,10 @@ def verifier() -> bool:
                 and any(e == uac[0].id for _, e in signes) and any(v == uac[0].id for v in etab_de_user_eleve.values())
                 else ["UAC absente ou incomplète"])
         c.regle("Chaque établissement a un A+", [e.nom for e in etabs.values() if e.id not in admins.values()])
+        # Lot 7.6 : indicateurs du ministere par departement et par sexe.
+        c.regle("Chaque établissement est rattaché à un département et à une commune qui lui appartient",
+                [e.nom for e in etabs.values() if e.departement not in DEPARTEMENTS or e.commune not in DEPARTEMENTS[e.departement]])
+        c.regle("Le sexe de chaque élève est renseigné (F ou M)", [e.prenom for e in eleves.values() if e.sexe not in ("F", "M")])
 
         # ─── Recrutement ───
         c.regle("Un contrat exige un casier vérifié CONFORME",

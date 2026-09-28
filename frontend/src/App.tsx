@@ -84,6 +84,7 @@ const ReferentielsPage = lazy(() => import("./pages/admin_ministeriel/Referentie
 const UtilisateursMinisterielPage = lazy(() => import("./pages/admin_ministeriel/UtilisateursPage").then((m) => ({ default: m.UtilisateursPage })));
 const ContenusPage = lazy(() => import("./pages/admin_ministeriel/ContenusPage").then((m) => ({ default: m.ContenusPage })));
 const EvenementsSupervisionPage = lazy(() => import("./pages/admin_ministeriel/EvenementsSupervisionPage").then((m) => ({ default: m.EvenementsSupervisionPage })));
+const IndicateursPage = lazy(() => import("./pages/admin_ministeriel/IndicateursPage").then((m) => ({ default: m.IndicateursPage })));
 const JournalAuditPage = lazy(() => import("./pages/admin_ministeriel/JournalAuditPage").then((m) => ({ default: m.JournalAuditPage })));
 
 const MessagerieListPage = lazy(() => import("./pages/messagerie/MessagerieListPage").then((m) => ({ default: m.MessagerieListPage })));
@@ -802,6 +803,22 @@ function App() {
               element={
                 <RequireAuth roles={["admin_ministeriel"]}>
                   <EvenementsSupervisionPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-ministeriel/indicateurs"
+              element={
+                <RequireAuth roles={["admin_ministeriel"]}>
+                  <IndicateursPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/indicateurs"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <IndicateursPage />
                 </RequireAuth>
               }
             />

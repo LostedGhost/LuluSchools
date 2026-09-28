@@ -62,6 +62,20 @@ export interface EtablissementPayload {
   admin: { nom: string; prenom: string; email: string };
   latitude: number;
   longitude: number;
+  departement?: string;
+  commune?: string;
+}
+
+/** Lot 7.6 : les 12 départements et leurs communes (liste fermée, mise en cache). */
+let territoires: Promise<Record<string, string[]>> | null = null;
+export function listerTerritoires(): Promise<Record<string, string[]>> {
+  territoires ??= api.get<Record<string, string[]>>("/etablissements/territoires").then((r) => r.data);
+  territoires.catch(() => (territoires = null));
+  return territoires;
+}
+
+export function mettreAJourTerritoire(etablissementId: string, departement: string, commune: string) {
+  return api.patch<EtablissementOut>(`/etablissements/${etablissementId}/territoire`, { departement, commune });
 }
 
 export function creerEtablissement(payload: EtablissementPayload) {

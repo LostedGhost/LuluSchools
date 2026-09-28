@@ -809,6 +809,8 @@ export function AdminEtabDashboard() {
         etablissementId={etablissement.id}
         latitude={etablissement.latitude}
         longitude={etablissement.longitude}
+        departement={etablissement.departement}
+        commune={etablissement.commune}
       />
       <PhotosEtablissementManager etablissementId={etablissement.id} />
     </div>

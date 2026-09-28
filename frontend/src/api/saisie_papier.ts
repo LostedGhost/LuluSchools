@@ -111,7 +111,7 @@ export interface InscriptionGuichetOut {
 
 export const enregistrerInscriptionGuichet = (documentId: string, payload: {
   classe_id: string; nom: string; prenom: string; date_naissance: string; nationalite: "nationale" | "etrangere";
-  tuteur_nom: string; tuteur_telephone: string | null; consentement_signe: boolean;
+  sexe: "F" | "M" | null; tuteur_nom: string; tuteur_telephone: string | null; consentement_signe: boolean;
 }) => api.post<InscriptionGuichetOut>(`/saisie-papier/${documentId}/inscription`, payload);
 
 export const lireCopies = (devoirId: string, fichiers: File[]) =>

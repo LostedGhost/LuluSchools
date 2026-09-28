@@ -59,6 +59,9 @@ export interface EtablissementOut {
   actif: boolean;
   /** Admission automatique des inscriptions (classes à l'ordre d'arrivée). */
   admission_automatique?: boolean;
+  /** Lot 7.6 : rattachement territorial (12 départements, 77 communes). */
+  departement?: string | null;
+  commune?: string | null;
 }
 
 export interface ClasseOut {

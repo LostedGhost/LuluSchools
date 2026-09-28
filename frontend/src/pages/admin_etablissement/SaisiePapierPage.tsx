@@ -574,7 +574,7 @@ function age(naissance: string) {
 function InscriptionGuichet({ classes, etablissementId, onTermine }: { classes: ClasseOut[]; etablissementId: string; onTermine: () => void }) {
   const demanderConfirmation = useConfirmation();
   const l = useLecture(etablissementId, "fiche_inscription");
-  const [f, setF] = useState({ classe_id: "", nom: "", prenom: "", date_naissance: "", nationalite: "nationale" as "nationale" | "etrangere", tuteur_nom: "", tuteur_telephone: "", consentement_signe: false });
+  const [f, setF] = useState({ classe_id: "", nom: "", prenom: "", date_naissance: "", nationalite: "nationale" as "nationale" | "etrangere", sexe: "" as "" | "F" | "M", tuteur_nom: "", tuteur_telephone: "", consentement_signe: false });
   const [resultat, setResultat] = useState<InscriptionGuichetOut | null>(null);
   const maj = (v: Partial<typeof f>) => setF((x) => ({ ...x, ...v }));
 
@@ -601,7 +601,7 @@ function InscriptionGuichet({ classes, etablissementId, onTermine }: { classes: 
     l.setEnCours(true);
     l.setErreur(null);
     try {
-      setResultat((await enregistrerInscriptionGuichet(l.lecture!.document_id, { ...f, tuteur_telephone: f.tuteur_telephone.trim() || null })).data);
+      setResultat((await enregistrerInscriptionGuichet(l.lecture!.document_id, { ...f, sexe: f.sexe || null, tuteur_telephone: f.tuteur_telephone.trim() || null })).data);
       onTermine();
     } catch (err) {
       l.setErreur(messageErreur(err));
@@ -645,6 +645,13 @@ function InscriptionGuichet({ classes, etablissementId, onTermine }: { classes: 
         <Field label="Nationalité">
           <Select value={f.nationalite} onChange={(e) => maj({ nationalite: e.target.value as typeof f.nationalite })}>
             <option value="nationale">Béninoise</option><option value="etrangere">Étrangère</option>
+          </Select>
+        </Field>
+        <Field label="Sexe (facultatif)">
+          <Select value={f.sexe} onChange={(e) => maj({ sexe: e.target.value as typeof f.sexe })}>
+            <option value="">Non précisé</option>
+            <option value="F">Fille</option>
+            <option value="M">Garçon</option>
           </Select>
         </Field>
         <Field label="Nom de l'élève" required><TextInput value={f.nom} onChange={(e) => maj({ nom: e.target.value })} /></Field>

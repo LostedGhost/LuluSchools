@@ -63,7 +63,7 @@ def inscrire_classe(ctx: Contexte, etab: Etablissement, classe: Classe) -> None:
         naissance = _date_naissance(ctx, classe.niveau)
         genre = ctx.rng.choice("MF")
         eleve = Eleve(
-            id=new_id(), nom=famille.nom, prenom=ctx.prenom(genre), date_naissance=naissance,
+            id=new_id(), nom=famille.nom, prenom=ctx.prenom(genre), date_naissance=naissance, sexe=genre,
             nationalite=Nationalite.NATIONALE if ctx.rng.random() < 0.92 else Nationalite.ETRANGERE,
             tuteur_id=famille.tuteur.id,
         )

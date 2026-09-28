@@ -310,3 +310,9 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   `public/audio/ecoute/index.json` + `<langue>/<clé>.mp3` (aucun enregistrement livré pour l'instant ;
   repli sur la voix française). Messages vocaux : `components/messagerie/MessageVocal.tsx`
   (MediaRecorder Opus 24 kbit/s, 2 min max ; lecture à la demande), branchés dans `ConversationPage`.
+- **Pilotage (7.6)** : `pages/admin_ministeriel/IndicateursPage.tsx` (routes `/admin-ministeriel/indicateurs`
+  et `/admin-etablissement/indicateurs`, menu « Indicateurs ») : filtres année/département, tuiles, tableau
+  par département avec barre d'effectifs, encart « Alignement PAG », export tableur ; `api/indicateurs.ts`.
+  `components/ChoixTerritoire.tsx` (création d'établissement A++, `LocalisationEtablissementManager` A+).
+  Sexe facultatif dans `NouvelleInscriptionPage` et l'inscription au guichet. La tuile « Couverture
+  académique » codée en dur du tableau A++ est remplacée par les élèves inscrits réels.

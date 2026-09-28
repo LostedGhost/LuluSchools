@@ -14,6 +14,7 @@ import {
   type ReferentielOut,
 } from "../../api/evaluations_gouvernance";
 import type { EtablissementOut } from "../../types/api";
+import { obtenirIndicateurs, type IndicateursOut } from "../../api/indicateurs";
 import {
   Building2,
   BookOpen,
@@ -36,14 +37,17 @@ export function AdminMinisterielDashboard() {
   const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
   const [referentiels, setReferentiels] = useState<ReferentielOut[]>([]);
   const [loading, setLoading] = useState(true);
+  const [indicateurs, setIndicateurs] = useState<IndicateursOut | null>(null);
 
   const chargerDonnees = async () => {
     setLoading(true);
     try {
-      const [resEtabs, resRefs] = await Promise.allSettled([
+      const [resEtabs, resRefs, resIndicateurs] = await Promise.allSettled([
         listerEtablissements(),
         listerReferentiels(),
+        obtenirIndicateurs(),
       ]);
+      if (resIndicateurs.status === "fulfilled") setIndicateurs(resIndicateurs.value.data);
 
       if (resEtabs.status === "fulfilled") {
         setEtablissements(resEtabs.value.data);
@@ -405,13 +409,19 @@ export function AdminMinisterielDashboard() {
             sub={`${countValides} sur ${totalRefs} pondérations certifiées`}
           />
 
-          <KPITile
-            label="Couverture académique"
-            value={loading ? <Skeleton height="32px" width="60px" /> : 3}
-            accent="primary"
-            icon={<GraduationCap size={24} />}
-            sub="Filières EP, ES & UP"
-          />
+          <Link to="/admin-ministeriel/indicateurs" style={{ textDecoration: "none" }}>
+            <KPITile
+              label="Élèves inscrits cette année"
+              value={loading ? <Skeleton height="32px" width="60px" /> : (indicateurs?.eleves.total ?? 0).toLocaleString("fr-FR")}
+              accent="primary"
+              icon={<GraduationCap size={24} />}
+              sub={
+                indicateurs?.eleves.indice_parite != null
+                  ? `Parité filles/garçons : ${indicateurs.eleves.indice_parite.toLocaleString("fr-FR")} · voir les indicateurs`
+                  : "Voir les indicateurs de pilotage"
+              }
+            />
+          </Link>
         </div>
       </div>
 

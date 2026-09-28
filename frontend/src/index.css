@@ -1267,3 +1267,15 @@ html[data-donnees-reduites] .hero-glow { display: none; }
   background: var(--primary-deep); color: var(--on-primary); font: inherit; font-weight: 700; cursor: pointer;
 }
 .ecoute-accord:disabled { opacity: .6; }
+
+/* Indicateurs de pilotage (Lot 7.6) — une seule teinte (effectifs = magnitude), valeurs écrites. */
+.indicateurs-filtres { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.indicateurs-filtres > * { min-width: 180px; }
+.indicateurs-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); margin-top: 8px; }
+.indicateurs-table th, .indicateurs-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+.indicateurs-table thead th { font-weight: 700; color: var(--ink-soft); background: var(--surface-2); }
+.indicateurs-table tbody th { font-weight: 600; color: var(--ink); }
+.indicateur-barre { position: relative; display: flex; align-items: center; gap: 8px; min-height: 20px; }
+.indicateur-barre-remplie { display: block; height: 12px; min-width: 2px; border-radius: 0 4px 4px 0; background: var(--primary-deep); }
+.indicateur-barre-valeur { font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.table-defilante { width: 100%; overflow-x: auto; }

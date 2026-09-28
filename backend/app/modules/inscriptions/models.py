@@ -35,6 +35,9 @@ class Eleve(Base):
     nom: Mapped[str] = mapped_column(String(100))
     prenom: Mapped[str] = mapped_column(String(100))
     date_naissance: Mapped[date] = mapped_column(Date)
+    # Lot 7.6 : « F » ou « M », facultatif. Finalite declaree : statistiques de parite du
+    # ministere, toujours agregees (jamais de case de moins de 5 eleves).
+    sexe: Mapped[str | None] = mapped_column(String(1), nullable=True)
     nationalite: Mapped[Nationalite] = mapped_column(Enum(Nationalite), default=Nationalite.NATIONALE)
     matricule: Mapped[str | None] = mapped_column(String(30), unique=True, index=True, nullable=True)
     # UC-42/57 (lot admin etablissement) : upload reserve au titulaire du compte

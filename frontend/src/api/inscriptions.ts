@@ -7,6 +7,8 @@ export interface InscriptionPayload {
   date_naissance: string;
   classe_id: string;
   nationalite: Nationalite;
+  /** Lot 7.6 : facultatif, sert uniquement aux statistiques de parité (agrégées). */
+  sexe?: "F" | "M";
   consentement_parental_donne: boolean;
 }
 

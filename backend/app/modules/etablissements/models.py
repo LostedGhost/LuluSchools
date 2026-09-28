@@ -58,6 +58,10 @@ class Etablissement(Base):
     # objectif produit : une geolocalisation pour TOUS les etablissements, a terme.
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Lot 7.6 : rattachement territorial (liste fermee app.core.territoires) pour les
+    # indicateurs du ministere par departement et par commune.
+    departement: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    commune: Mapped[str | None] = mapped_column(String(60), nullable=True)
     # Texte libre affiche sur la fiche etablissement (UC-23, lot admin ministeriel) - meme
     # esprit que EtablissementPhoto, jamais obligatoire (aucun etablissement existant n'en a).
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

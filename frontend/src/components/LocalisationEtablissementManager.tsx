@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { mettreAJourLocalisation } from "../api/etablissements";
+import { mettreAJourLocalisation, mettreAJourTerritoire } from "../api/etablissements";
+import { ChoixTerritoire } from "./ChoixTerritoire";
 import { messageErreur } from "../api/client";
 import { lienGoogleMaps } from "../utils/geo";
 import { LocationPicker } from "./LocationPicker";
@@ -15,11 +16,20 @@ export function LocalisationEtablissementManager({
   etablissementId,
   latitude,
   longitude,
+  departement: departementInitial = null,
+  commune: communeInitiale = null,
 }: {
   etablissementId: string;
   latitude: number | null;
   longitude: number | null;
+  departement?: string | null;
+  commune?: string | null;
 }) {
+  // Lot 7.6 : département et commune (indicateurs du ministère par territoire).
+  const [departement, setDepartement] = useState(departementInitial ?? "");
+  const [commune, setCommune] = useState(communeInitiale ?? "");
+  const [territoireEnregistre, setTerritoireEnregistre] = useState(!!communeInitiale);
+
   const [modeEdition, setModeEdition] = useState(false);
   const [lat, setLat] = useState(latitude?.toString() ?? "");
   const [lng, setLng] = useState(longitude?.toString() ?? "");
@@ -48,6 +58,21 @@ export function LocalisationEtablissementManager({
       setErreur(messageErreur(err, "Impossible d'enregistrer la localisation."));
     } finally {
       setEnCours(false);
+    }
+  };
+
+  const enregistrerTerritoire = async () => {
+    if (!departement || !commune) {
+      setErreur("Choisissez le département et la commune.");
+      return;
+    }
+    setErreur(null);
+    try {
+      await mettreAJourTerritoire(etablissementId, departement, commune);
+      setTerritoireEnregistre(true);
+      setSucces("Département et commune enregistrés.");
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'enregistrer le département et la commune."));
     }
   };
 
@@ -84,6 +109,23 @@ export function LocalisationEtablissementManager({
           </Btn>
         </div>
       )}
+      <div className="card" style={{ marginTop: "12px" }}>
+        {!territoireEnregistre && (
+          <p style={{ margin: "0 0 10px", color: "var(--ink-soft)" }}>
+            Indiquez le département et la commune : sans eux, votre établissement n'apparaît pas dans les statistiques territoriales du ministère.
+          </p>
+        )}
+        <ChoixTerritoire
+          departement={departement}
+          commune={commune}
+          onChange={(d, c) => { setDepartement(d); setCommune(c); setTerritoireEnregistre(false); }}
+        />
+        {!territoireEnregistre && (
+          <Btn size="sm" variant="primary" onClick={enregistrerTerritoire} style={{ marginTop: "10px" }}>
+            Enregistrer le département et la commune
+          </Btn>
+        )}
+      </div>
     </div>
   );
 }

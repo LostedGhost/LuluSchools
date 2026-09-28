@@ -85,6 +85,7 @@ class InscriptionGuichet(BaseModel):
     prenom: str = Field(min_length=1, max_length=100)
     date_naissance: date
     nationalite: Literal["nationale", "etrangere"] = "nationale"
+    sexe: Literal["F", "M"] | None = None
     tuteur_nom: str = Field(min_length=1, max_length=200)
     tuteur_telephone: str | None = Field(default=None, max_length=30)
     # Pour un eleve de moins de 16 ans : la fiche porte la signature du parent (Art. 446).

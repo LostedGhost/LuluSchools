@@ -18,6 +18,7 @@ export function NouvelleInscriptionPage() {
   const [prenom, setPrenom] = useState("");
   const [dateNaissance, setDateNaissance] = useState("");
   const [nationalite, setNationalite] = useState<Nationalite>("nationale");
+  const [sexe, setSexe] = useState<"" | "F" | "M">("");
   const [consentement, setConsentement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
@@ -67,6 +68,7 @@ export function NouvelleInscriptionPage() {
         date_naissance: dateNaissance,
         classe_id: classeId,
         nationalite,
+        sexe: sexe || undefined,
         consentement_parental_donne: consentement,
       });
       navigate("/tuteur", { replace: true });
@@ -163,6 +165,17 @@ export function NouvelleInscriptionPage() {
                 >
                   <option value="nationale">Béninoise</option>
                   <option value="etrangere">Étrangère</option>
+                </Select>
+              </Field>
+
+              <Field
+                label="Sexe"
+                helper="Facultatif. Sert uniquement aux statistiques nationales sur l'égalité filles-garçons, jamais affiché nominativement."
+              >
+                <Select value={sexe} onChange={(e) => setSexe(e.target.value as "" | "F" | "M")}>
+                  <option value="">Ne pas préciser</option>
+                  <option value="F">Fille</option>
+                  <option value="M">Garçon</option>
                 </Select>
               </Field>
             </div>

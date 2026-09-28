@@ -472,3 +472,14 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
 - Messagerie : `POST /conversations/{id}/messages-vocaux` (audio ≤ 2 Mo, ≤ 120 s, LuluFiles ; `contenu`
   = « Message vocal (m:ss) ») et `GET /messages/{id}/audio` (lien signé, membres seulement) ;
   `MessageOut.est_vocal`/`duree_audio_s`. Migration `0023_messages_vocaux`.
+
+### app/modules/indicateurs/ (7.6, suivi-évaluation PAG) + territoire et parité
+- `app/core/territoires.py` : 12 départements / 77 communes (liste fermée, `verifier_territoire`).
+  `Etablissement.departement`/`commune` (création A++, `PATCH /etablissements/{id}/territoire`,
+  `GET /etablissements/territoires` public) ; `Eleve.sexe` (« F »/« M », facultatif à l'inscription et au guichet).
+- `GET /admin/indicateurs` (+ `.csv`, séparateur « ; », BOM) : établissements, effectifs et indice de parité,
+  taux de réussite (bulletins ≥ 50/100) par sexe, assiduité, élèves par enseignant sous contrat, cantine,
+  inclusion (cours oraux transcrits, comptes en mode Écoute, messages vocaux), tableau par département.
+  A++ : national ou par département ; A+ : forcé sur son établissement. Cases < 5 élèves masquées (`None`).
+- Migration `0024_territoires_parite` ; seed : territoire de chaque établissement (villes connues, sinon
+  chef-lieu d'un département tiré au sort pondéré) et sexe des élèves ; `verifier_seed.py` : 2 règles de plus.
