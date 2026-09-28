@@ -50,6 +50,7 @@ def test_bulletin_de_la_periode_en_pdf(client, classe_avec_enseignant_et_eleve):
     assert reponse.status_code == 200
     texte = _texte(reponse.content)
     assert "BULLETIN DE NOTES" in texte and "Mathématiques" in texte
+    assert "Devoir de maths" in texte and "non rendu (0)" in texte  # detail des evaluations
     assert "Moyenne générale pondérée : 0.0 / 100" in texte  # devoir non rendu apres l'echeance
     assert "en attente de délibération" in texte
 

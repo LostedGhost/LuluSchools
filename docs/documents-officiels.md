@@ -18,8 +18,10 @@ PDF de base n'ont ni tiret long, ni apostrophe typographique, ni « œ », qui s
 ## Détails
 
 - **Bulletin** (`GET /eleves/{id}/bulletins/pdf?classe_id=&periode=`) : identité, période et
-  ses dates, moyenne par matière (coefficient, nombre de devoirs), moyenne générale pondérée,
-  décision du conseil de classe (ou « en attente de délibération »). Mêmes droits que la
+  ses dates ; pour chaque matière, son coefficient, sa moyenne et le **détail de ses évaluations**
+  (date, intitulé, note obtenue sur son barème, équivalent sur 100, « non rendu (0) » pour une
+  copie manquante après l'échéance) ; moyenne générale pondérée et décision du conseil de classe
+  (ou « en attente de délibération »). Pages de suite automatiques. Mêmes droits que la
   consultation du bulletin.
 - **Contrat** (`GET /contrats/{id}/pdf`) : parties, poste, dates, syllabus complet (pages
   supplémentaires si besoin) et bloc de signature — image du tracé, horodatage, empreinte
