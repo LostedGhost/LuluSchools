@@ -25,6 +25,7 @@ from app.modules.vie_scolaire import models as vie_scolaire_models  # noqa: F401
 from app.modules.audit import models as audit_models  # noqa: F401
 from app.modules.coffre_fort import models as coffre_fort_models  # noqa: F401
 from app.modules.marketplace import models as marketplace_models  # noqa: F401
+from app.modules.saisie_papier import models as saisie_papier_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

@@ -184,6 +184,24 @@ class FakeLLMClient:
         self.triage_signalement = {"gravite": "faible", "resume": "Désaccord sans gravité.", "decision": "classer"}
         self.avis_litige = {"decision": "acceptee", "justification": "L'article ne correspond pas à l'annonce."}
         self.echec_assistance = False
+        # Saisie papier : lecture renvoyee selon le debut de la consigne ("copie" -> nom lu)
+        self.lectures_papier: dict[str, dict] = {}
+        self.noms_copies: list[str] = []
+        self.echec_lecture_papier = False
+        self.consignes_papier: list[str] = []
+
+    def lire_document_papier(self, consigne: str, images: list) -> dict:
+        from app.core.llm import LectureDocumentError
+
+        self.consignes_papier.append(consigne)
+        if self.echec_lecture_papier:
+            raise LectureDocumentError("echec simule")
+        if "nom de l'élève écrit sur la copie" in consigne:
+            return {"nom": self.noms_copies.pop(0) if self.noms_copies else None}
+        for cle, reponse in self.lectures_papier.items():
+            if cle in consigne:
+                return reponse
+        return {}
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:

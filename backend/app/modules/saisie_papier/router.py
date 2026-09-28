@@ -28,7 +28,7 @@ from app.core.documents import DocumentIllisibleError, telecharger_borne
 from app.core.email import BrevoEmailClient, get_email_client
 from app.core.files import TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import FreeLLMClient, LectureDocumentError, get_llm_client
-from app.core.schemas import LienFichierOut
+from app.modules.evaluations.schemas import LienFichierOut
 from app.modules.etablissements.models import AffectationEnseignant, Classe, Etablissement, annee_academique_courante
 from app.modules.evaluations.models import (
     BaremeDevoir, Devoir, NatureEvaluation, QuestionDevoir, Soumission, StatutSoumission,
@@ -536,6 +536,7 @@ def signer_contrat_sur_papier(
     contrat.statut = StatutContrat.SIGNE
     contrat.signature_horodatage = datetime.now(timezone.utc)
     contrat.signature_hash_document = hashlib.sha256(contrat.syllabus.encode("utf-8")).hexdigest()
+    contrat.signature_image_lulufiles_id = file_id  # « Voir la signature » ouvre la photo du contrat signe
     document = DocumentPapier(etablissement_id=contrat.etablissement_id, type=TypeDocumentPapier.CONTRAT_SIGNE,
                               fichiers=[file_id], saisi_par_id=admin.id)
     db.add(document)
