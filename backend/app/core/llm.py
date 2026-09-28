@@ -45,6 +45,10 @@ class AssistanceAdminError(Exception):
     (triage de signalement, avis sur un litige, syllabus de contrat)."""
 
 
+class LectureDocumentError(Exception):
+    """Lecture d'un document papier photographie (saisie papier) impossible."""
+
+
 class DigestFamilleError(Exception):
     """Levee quand FreeLLM ne peut pas generer le digest hebdomadaire du Radar familial (UC-36)."""
 
@@ -514,6 +518,27 @@ class FreeLLMClient:
             return json.loads(texte[debut : fin + 1])
         except json.JSONDecodeError as exc:
             raise erreur_cls(f"JSON invalide : {texte!r}") from exc
+
+    def lire_document_papier(self, consigne: str, images: list[tuple[bytes, str]]) -> dict:
+        """Lecture d'un document papier photographie (saisie papier) -> objet JSON. Delai plus
+        long que les autres appels : une page manuscrite prend 20 a 60 s a lire (ADR-002)."""
+        contenu: list[dict] = [{"type": "text", "text": consigne}]
+        for image, type_image in images:
+            contenu.append({"type": "image_url", "image_url": {"url": f"data:{type_image};base64,{base64.standard_b64encode(image).decode()}"}})
+        try:
+            response = self._client.with_options(timeout=240.0, max_retries=0).chat.completions.create(
+                model="auto", messages=[{"role": "user", "content": contenu}]
+            )
+        except OpenAIError as exc:
+            raise LectureDocumentError("FreeLLM indisponible ou a refuse la requete.") from exc
+        texte = _texte_ou_erreur(response, LectureDocumentError)
+        debut, fin = texte.find("{"), texte.rfind("}")
+        if debut == -1 or fin == -1:
+            raise LectureDocumentError(f"Reponse non interpretable : {texte[:200]!r}")
+        try:
+            return json.loads(texte[debut : fin + 1])
+        except json.JSONDecodeError as exc:
+            raise LectureDocumentError(f"JSON invalide : {texte[:200]!r}") from exc
 
     def analyser_reclamation(self, copie: str, motif: str) -> str:
         consigne = (
