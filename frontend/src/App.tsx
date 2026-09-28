@@ -70,6 +70,7 @@ import { ContestationsPage } from "./pages/admin_etablissement/ContestationsPage
 import { ActesAdminPage } from "./pages/admin_etablissement/ActesAdminPage";
 import { ReferentielsEtabPage } from "./pages/admin_etablissement/ReferentielsEtabPage";
 import { SaisiePapierPage } from "./pages/admin_etablissement/SaisiePapierPage";
+import { BulletinsEnfantPage } from "./pages/tuteur/BulletinsEnfantPage";
 import { ServicesScolairesAdminPage } from "./pages/admin_etablissement/ServicesScolairesAdminPage";
 import { EvenementsAdminPage } from "./pages/admin_etablissement/EvenementsAdminPage";
 
@@ -246,6 +247,14 @@ function App() {
               element={
                 <RequireAuth roles={["tuteur"]}>
                   <RadarFamilialPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/bulletins"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <BulletinsEnfantPage />
                 </RequireAuth>
               }
             />
