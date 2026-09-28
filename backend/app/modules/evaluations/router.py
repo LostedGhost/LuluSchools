@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
@@ -32,7 +33,10 @@ from app.modules.evaluations.models import (
 from app.modules.evaluations.schemas import (
     AdminDevoirOut,
     AdminDevoirPageOut,
+    BulletinDetailOut,
     BulletinOut,
+    EvaluationDuBulletinOut,
+    MatiereDuBulletinOut,
     CorrectionNoteGlobaleRequest,
     CorrectionRequest,
     DevoirCreate,
@@ -874,9 +878,24 @@ def _coefficient_pour(db: Session, niveau: str, matiere: str) -> float:
     return referentiel.coefficient if referentiel is not None else 1.0
 
 
+@dataclass(frozen=True)
+class NoteDuBulletin:
+    """Une evaluation comptee dans le bulletin d'une periode (detail du bulletin PDF)."""
+
+    devoir: Devoir
+    note: float | None  # note brute sur `total` ; None = copie non rendue (compte 0)
+    total: float
+    sur_100: float
+    coefficient: float
+
+
 def notes_de_la_periode(db: Session, eleve: Eleve, classe_id: str, periode: str) -> list[tuple[str, float, float]]:
-    """(matiere, note sur 100, coefficient) de chaque devoir SOMMATIF de la periode qui
-    compte dans le bulletin. Chaque devoir est normalise sur 100 (note / somme des
+    """(matiere, note sur 100, coefficient) de chaque devoir comptant dans le bulletin."""
+    return [(n.devoir.matiere, n.sur_100, n.coefficient) for n in evaluations_de_la_periode(db, eleve, classe_id, periode)]
+
+
+def evaluations_de_la_periode(db: Session, eleve: Eleve, classe_id: str, periode: str) -> list[NoteDuBulletin]:
+    """Chaque devoir SOMMATIF de la periode qui compte dans le bulletin, par date. Chaque devoir est normalise sur 100 (note / somme des
     points_max de ses questions), pondere par le coefficient (niveau, matiere) du
     referentiel valide en vigueur - defaut 1.0 (UC-09). Un devoir compte des qu'il est
     corrige (meme avant son echeance) ; sans soumission, il compte 0 une fois l'echeance
@@ -901,8 +920,8 @@ def notes_de_la_periode(db: Session, eleve: Eleve, classe_id: str, periode: str)
         .all()
     )
 
-    notes: list[tuple[str, float, float]] = []
-    for devoir in devoirs:
+    notes: list[NoteDuBulletin] = []
+    for devoir in sorted(devoirs, key=lambda d: d.date_limite):
         points_max_devoir = sum(q.points_max for q in devoir.questions) or 1.0
         soumission = (
             db.query(Soumission)
@@ -915,13 +934,14 @@ def notes_de_la_periode(db: Session, eleve: Eleve, classe_id: str, periode: str)
         if soumission is None:
             if not devoir_clos:
                 continue  # pas encore d'echeance passee : rien a compter pour l'instant
-            note_normalisee = 0.0
+            note_normalisee, note_brute = 0.0, None
         elif soumission.statut == StatutSoumission.CORRIGEE and soumission.note is not None:
-            note_normalisee = (soumission.note / points_max_devoir) * 100
+            note_normalisee, note_brute = (soumission.note / points_max_devoir) * 100, soumission.note
         else:
             continue  # echec_correction en attente de revision manuelle : exclu pour l'instant
 
-        notes.append((devoir.matiere, note_normalisee, _coefficient_pour(db, classe.niveau, devoir.matiere)))
+        notes.append(NoteDuBulletin(devoir, note_brute, points_max_devoir, note_normalisee,
+                                    _coefficient_pour(db, classe.niveau, devoir.matiere)))
     return notes
 
 
@@ -1018,6 +1038,33 @@ def obtenir_bulletin(
     return _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
 
 
+@router.get("/eleves/{eleve_utilisateur_id}/bulletins/detail", response_model=BulletinDetailOut)
+def obtenir_bulletin_detaille(
+    eleve_utilisateur_id: str,
+    classe_id: str,
+    periode: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_BULLETIN)),
+) -> BulletinDetailOut:
+    """Bulletin + detail par matiere (coefficient, moyenne, chaque evaluation et sa note) -
+    le meme contenu que le bulletin PDF, pour l'ecran « Mon bulletin »."""
+    eleve, _ = _eleve_et_classe_du_bulletin(db, utilisateur, eleve_utilisateur_id, classe_id)
+    bulletin = _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
+    evaluations = evaluations_de_la_periode(db, eleve, classe_id, periode)
+    par_matiere: dict[str, list[NoteDuBulletin]] = {}
+    for n in evaluations:
+        par_matiere.setdefault(n.devoir.matiere, []).append(n)
+    matieres = [
+        MatiereDuBulletinOut(
+            matiere=matiere, coefficient=coefficient, moyenne=moyenne,
+            evaluations=[EvaluationDuBulletinOut(devoir_id=n.devoir.id, titre=n.devoir.titre, date=n.devoir.date_limite,
+                                                 note=n.note, total=n.total, sur_100=n.sur_100) for n in par_matiere[matiere]],
+        )
+        for matiere, moyenne, coefficient, _ in moyennes_par_matiere([(n.devoir.matiere, n.sur_100, n.coefficient) for n in evaluations])
+    ]
+    return BulletinDetailOut(bulletin=BulletinOut.model_validate(bulletin), matieres=matieres)
+
+
 @router.get("/eleves/{eleve_utilisateur_id}/bulletins/pdf")
 def telecharger_bulletin_pdf(
     eleve_utilisateur_id: str,
@@ -1030,8 +1077,9 @@ def telecharger_bulletin_pdf(
     decision du conseil). Memes droits que la consultation du bulletin."""
     eleve, classe = _eleve_et_classe_du_bulletin(db, utilisateur, eleve_utilisateur_id, classe_id)
     bulletin = _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
-    matieres = moyennes_par_matiere(notes_de_la_periode(db, eleve, classe_id, periode))
-    contenu = generer_pdf_bulletin(db, eleve, classe, bulletin, matieres)
+    evaluations = evaluations_de_la_periode(db, eleve, classe_id, periode)
+    matieres = moyennes_par_matiere([(n.devoir.matiere, n.sur_100, n.coefficient) for n in evaluations])
+    contenu = generer_pdf_bulletin(db, eleve, classe, bulletin, matieres, evaluations)
     nom = f"bulletin-{periode}-{(eleve.matricule or eleve.nom).lower()}.pdf"
     return Response(contenu, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{nom}"'})
 

@@ -27,6 +27,7 @@ from app.core.llm import get_llm_client
 from app.modules.recrutement.automatisation import renoter_tache
 from app.modules.administration.a_traiter import router as a_traiter_router
 from app.modules.administration.compteurs import router as compteurs_router
+from app.modules.saisie_papier.router import router as saisie_papier_router
 from app.modules.pedagogie.el_professor_chat import router as el_professor_chat_router
 from app.modules.pedagogie.router import router as pedagogie_router
 from app.modules.identite.router import admin_router as identite_admin_router
@@ -171,6 +172,7 @@ app.include_router(pedagogie_router, prefix="/api/v1")
 app.include_router(el_professor_chat_router, prefix="/api/v1")
 app.include_router(a_traiter_router, prefix="/api/v1")
 app.include_router(compteurs_router, prefix="/api/v1")
+app.include_router(saisie_papier_router, prefix="/api/v1")
 app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")

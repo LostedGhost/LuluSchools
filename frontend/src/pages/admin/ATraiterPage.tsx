@@ -37,6 +37,7 @@ const LIENS_A_PLUS: Record<string, string> = {
   contestations_recrutement: "/admin-etablissement/contestations",
   actes: "/admin-etablissement/actes",
   alertes: "/admin-etablissement/alertes-el-professor",
+  saisies_papier: "/admin-etablissement/saisie-papier",
   signalements_messages: "/admin-etablissement/signalements",
   signalements_annonces: "/admin-etablissement/marketplace",
   litiges_marketplace: "/admin-etablissement/marketplace",

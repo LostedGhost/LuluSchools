@@ -1,12 +1,12 @@
 import { libelle } from "../../utils/libelles";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { obtenirBulletin, periodesDeLaClasse, telechargerBulletinPdf, type PeriodeOut } from "../../api/evaluations";
+import { obtenirBulletinDetaille, periodesDeLaClasse, telechargerBulletinPdf, type MatiereDuBulletin, type PeriodeOut } from "../../api/evaluations";
 import { ouvrirBlobPdf } from "../../utils/telechargerBlob";
 import { codeErreur, messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { BulletinOut } from "../../types/api";
-import { Card, ErrorBanner, EmptyState, Btn, SkeletonCard } from "../../components/ui";
+import { Badge, Card, ErrorBanner, EmptyState, Btn, SectionHead, SkeletonCard } from "../../components/ui";
 import { ScoreBurst } from "../../components/gamification";
 import { Award, BarChart3, ChevronRight, FileDown } from "lucide-react";
 
@@ -17,6 +17,7 @@ export function BulletinPage() {
   const [periodes, setPeriodes] = useState<PeriodeOut[]>([]);
   const [periode, setPeriode] = useState<string | null>(null);
   const [bulletin, setBulletin] = useState<BulletinOut | null>(null);
+  const [matieres, setMatieres] = useState<MatiereDuBulletin[]>([]);
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(!!profil.classe_id);
 
@@ -51,8 +52,12 @@ export function BulletinPage() {
     setChargement(true);
     setErreur(null);
     setBulletin(null);
-    obtenirBulletin(profil.id, profil.classe_id, periode)
-      .then((res) => setBulletin(res.data))
+    setMatieres([]);
+    obtenirBulletinDetaille(profil.id, profil.classe_id, periode)
+      .then((res) => {
+        setBulletin(res.data.bulletin);
+        setMatieres(res.data.matieres);
+      })
       .catch((err) => {
         // Aucun devoir encore evalue : situation normale en debut de periode, pas une erreur.
         if (codeErreur(err) !== "aucun_devoir_evalue") setErreur(messageErreur(err, "Aucune moyenne disponible pour cette période."));
@@ -126,11 +131,47 @@ export function BulletinPage() {
             <Btn variant="primary" leftIcon={<FileDown size={16} />} loading={pdfEnCours} onClick={telechargerPdf} style={{ marginBottom: "12px" }}>
               Télécharger le bulletin (PDF)
             </Btn>
-            <Link to="/eleve/passeport" style={{ textDecoration: "none" }}>
+          </div>
+
+          <div style={{ gridColumn: "1 / -1" }}>
+            <SectionHead title="Détail par matière" desc="Chaque note est ramenée sur 100, puis pondérée par le coefficient de sa matière." />
+            <div className="space-y-3">
+              {matieres.map((m) => (
+                <Card key={m.matiere}>
+                  <div className="flex flex-wrap items-center justify-between gap-2" style={{ marginBottom: "8px" }}>
+                    <h3 style={{ margin: 0, fontSize: "var(--text-lg)", color: "var(--ink)" }}>{m.matiere}</h3>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm" style={{ color: "var(--ink-soft)" }}>coef. {m.coefficient.toLocaleString("fr-FR")}</span>
+                      <Badge tone={m.moyenne >= 50 ? "success" : "error"}>{m.moyenne.toFixed(1)} / 100</Badge>
+                    </span>
+                  </div>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                    {m.evaluations.map((e) => (
+                      <li key={e.devoir_id} className="flex items-center gap-3" style={{ padding: "8px 0", borderTop: "1px solid var(--border)" }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <Link to={`/eleve/devoirs/${e.devoir_id}`} style={{ color: "var(--ink)" }}>{e.titre}</Link>
+                          <span className="text-sm" style={{ display: "block", color: "var(--ink-faint)" }}>
+                            {new Date(e.date).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
+                          </span>
+                        </span>
+                        {e.note === null ? (
+                          <Badge tone="error">Non rendu (0)</Badge>
+                        ) : (
+                          <strong style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>
+                            {e.note.toLocaleString("fr-FR")} / {e.total.toLocaleString("fr-FR")}
+                          </strong>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              ))}
+            </div>
+            <Link to="/eleve/passeport" style={{ textDecoration: "none", display: "block", marginTop: "12px" }}>
               <Card hover style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <Award size={20} style={{ color: "var(--reward-deep)", flexShrink: 0 }} />
                 <span style={{ flex: 1, fontSize: "var(--text-sm)", color: "var(--ink)" }}>
-                  Le bulletin PDF détaille vos moyennes par matière ; votre passeport de compétences les suit sur toute l'année.
+                  Votre passeport de compétences suit vos moyennes par matière sur toute l'année.
                 </span>
                 <ChevronRight size={16} style={{ color: "var(--ink-faint)" }} />
               </Card>

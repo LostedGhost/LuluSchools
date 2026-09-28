@@ -50,6 +50,7 @@ def test_bulletin_de_la_periode_en_pdf(client, classe_avec_enseignant_et_eleve):
     assert reponse.status_code == 200
     texte = _texte(reponse.content)
     assert "BULLETIN DE NOTES" in texte and "Mathématiques" in texte
+    assert "Devoir de maths" in texte and "non rendu (0)" in texte  # detail des evaluations
     assert "Moyenne générale pondérée : 0.0 / 100" in texte  # devoir non rendu apres l'echeance
     assert "en attente de délibération" in texte
 
@@ -108,3 +109,18 @@ def test_certificat_de_reussite_livre_apres_decision_favorable(client, classe_av
     assert livree["statut"] == "acceptee" and livree["document_final_lulufiles_id"]
     certificat = _texte(contenus["certificat_reussite.pdf"])
     assert "CERTIFICAT DE RÉUSSITE" in certificat and "Admis(e) en classe supérieure" in certificat
+
+
+def test_bulletin_detaille_pour_l_ecran(client, classe_avec_enseignant_et_eleve):
+    ctx = classe_avec_enseignant_et_eleve
+    _creer_devoir(client, ctx, datetime.now(timezone.utc) - timedelta(days=2), matiere="Mathématiques")
+    detail = client.get(
+        f"/api/v1/eleves/{_extraire_sub(ctx)}/bulletins/detail",
+        params={"classe_id": ctx["classe"]["id"], "periode": periode_courante(client, ctx["classe"]["id"], ctx["eleve_headers"])},
+        headers=ctx["eleve_headers"],
+    ).json()
+    assert detail["bulletin"]["moyenne_generale"] == 0
+    matiere = detail["matieres"][0]
+    assert matiere["matiere"] == "Mathématiques" and matiere["coefficient"] == 1
+    assert matiere["evaluations"][0]["titre"] == "Devoir de maths" and matiere["evaluations"][0]["note"] is None
+    assert matiere["evaluations"][0]["total"] == 20

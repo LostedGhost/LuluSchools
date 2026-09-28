@@ -69,6 +69,7 @@ import { RecrutementPage } from "./pages/admin_etablissement/RecrutementPage";
 import { ContestationsPage } from "./pages/admin_etablissement/ContestationsPage";
 import { ActesAdminPage } from "./pages/admin_etablissement/ActesAdminPage";
 import { ReferentielsEtabPage } from "./pages/admin_etablissement/ReferentielsEtabPage";
+import { SaisiePapierPage } from "./pages/admin_etablissement/SaisiePapierPage";
 import { ServicesScolairesAdminPage } from "./pages/admin_etablissement/ServicesScolairesAdminPage";
 import { EvenementsAdminPage } from "./pages/admin_etablissement/EvenementsAdminPage";
 
@@ -530,6 +531,16 @@ function App() {
                 <RequireAuth roles={["admin_etablissement"]}>
                   <AdminEtabProvider>
                     <ConsoleEtablissementPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin-etablissement/saisie-papier"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <SaisiePapierPage />
                   </AdminEtabProvider>
                 </RequireAuth>
               }

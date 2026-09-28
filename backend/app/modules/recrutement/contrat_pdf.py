@@ -19,6 +19,7 @@ from app.core.files import FileStorageError, LuluFilesClient
 from app.modules.etablissements.models import Etablissement
 from app.modules.identite.models import Utilisateur
 from app.modules.recrutement.models import Candidature, Contrat, Poste, StatutContrat
+from app.modules.saisie_papier.models import DocumentPapier, TypeDocumentPapier
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,18 @@ def generer_pdf_contrat(db: Session, contrat: Contrat, files_client: LuluFilesCl
     y += 10
     page.insert_text((pdf.MARGE, y), pdf.latin1("Signature de l'enseignant"), fontsize=12, fontname="hebo", color=pdf.ENCRE)
     y += 12
-    if signe:
+    papier = db.query(DocumentPapier).filter(
+        DocumentPapier.objet_id == contrat.id, DocumentPapier.type == TypeDocumentPapier.CONTRAT_SIGNE
+    ).first() if signe else None
+    if papier is not None:
+        saisi_par = db.get(Utilisateur, papier.saisi_par_id)
+        page.insert_text((pdf.MARGE, y + 14), pdf.latin1("Contrat signé à la main sur papier."), fontsize=10, fontname="hebo", color=pdf.ENCRE)
+        page.insert_text((pdf.MARGE, y + 30), pdf.latin1(
+            f"Photo de l'exemplaire signé enregistrée le {papier.enregistre_le or papier.created_at:%d/%m/%Y} par "
+            f"{saisi_par.prenom} {saisi_par.nom} (administration) ; l'original est conservé par l'établissement."),
+            fontsize=9, color=pdf.ENCRE)
+        page.insert_text((pdf.MARGE, y + 44), f"Empreinte SHA-256 du syllabus : {contrat.signature_hash_document}", fontsize=7.5, color=pdf.GRIS)
+    elif signe:
         image = _image_signature(files_client, contrat.signature_image_lulufiles_id) if contrat.signature_image_lulufiles_id else None
         if not image:
             page.insert_text((pdf.MARGE, y + 40), "(image du tracé de signature momentanément indisponible)", fontsize=9, color=pdf.GRIS)

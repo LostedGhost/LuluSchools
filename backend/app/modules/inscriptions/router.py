@@ -227,10 +227,13 @@ def _places_restantes(db: Session, classe: Classe) -> int:
     return classe.capacite - prises
 
 
-def valider_inscription_interne(db: Session, inscription: Inscription, email_client: BrevoEmailClient) -> None:
+def valider_inscription_interne(db: Session, inscription: Inscription, email_client: BrevoEmailClient) -> str | None:
     """Validation d'une inscription SOUMISE (compte eleve, matricule, identifiants envoyes
     au tuteur). Partagee par la validation unitaire, la validation en lot et l'admission
-    automatique. Valide et commite, ou leve ValidationImpossible sans rien modifier."""
+    automatique. Valide et commite, ou leve ValidationImpossible sans rien modifier.
+    Renvoie le mot de passe provisoire d'un compte eleve nouvellement cree (None pour une
+    reinscription) : pour une inscription au guichet sans compte parent, l'administration
+    remet les identifiants imprimes a la famille (saisie_papier)."""
     classe = db.get(Classe, inscription.classe_id)
     if inscription.statut == StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL:
         raise ValidationImpossible("consentement_manquant", "Le consentement parental n'a pas encore été donné.")
@@ -245,7 +248,7 @@ def valider_inscription_interne(db: Session, inscription: Inscription, email_cli
         # regeneres (regle du matricule) - aucun nouvel identifiant a envoyer.
         inscription.statut = StatutInscription.VALIDEE
         db.commit()
-        return
+        return None
 
     etablissement = db.get(Etablissement, classe.etablissement_id)
     matricule = _generer_matricule(db, etablissement.type, eleve.nationalite)
@@ -283,6 +286,7 @@ def valider_inscription_interne(db: Session, inscription: Inscription, email_cli
 
     inscription.statut = StatutInscription.VALIDEE
     db.commit()
+    return mot_de_passe_temporaire
 
 
 def admettre_automatiquement(db: Session, inscription: Inscription, email_client: BrevoEmailClient) -> None:

@@ -9,7 +9,7 @@ n'apparait que si elle contient quelque chose.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -42,6 +42,7 @@ from app.modules.micro_jobs.models import (
     StatutMissionMicroJob,
 )
 from app.modules.pedagogie.models import AlerteElProfessor
+from app.modules.saisie_papier.models import DocumentPapier, StatutDocumentPapier, TypeDocumentPapier
 from app.modules.recrutement.automatisation import TENTATIVES_MAX
 from app.modules.recrutement.models import (
     Candidature,
@@ -208,6 +209,23 @@ def _sections_etablissement(db: Session, etab_id: str) -> list[Section | None]:
         "Les attestations, relevés de notes et certificats de réussite (après délibération) sont livrés automatiquement ; "
         "restent ici les autres actes et les réclamations (avis de l'IA joint).",
         [_acte(d) for d in demandes],
+    ))
+
+    # Saisies papier commencees (photo lue) mais pas encore validees
+    libelles_papier = {
+        TypeDocumentPapier.FEUILLE_NOTES: "Feuille de notes", TypeDocumentPapier.FEUILLE_APPEL: "Feuille d'appel",
+        TypeDocumentPapier.COURS: "Cours écrit", TypeDocumentPapier.FICHE_INSCRIPTION: "Fiche d'inscription",
+        TypeDocumentPapier.COPIE: "Copie d'élève",
+    }
+    en_cours = db.query(DocumentPapier).filter(
+        DocumentPapier.etablissement_id == etab_id, DocumentPapier.statut == StatutDocumentPapier.LU,
+        DocumentPapier.created_at < datetime.now(timezone.utc) - timedelta(minutes=30),
+    ).order_by(DocumentPapier.created_at).all()
+    sections.append(_section(
+        "saisies_papier", "Saisies papier à terminer",
+        "Documents photographiés et lus par l'IA, mais jamais validés : terminez-les ou reprenez la photo.",
+        [Element(id=d.id, libelle=libelles_papier.get(d.type, "Document"), detail=f"photographié le {d.created_at:%d/%m/%Y à %H:%M}")
+         for d in en_cours],
     ))
 
     # Moderation

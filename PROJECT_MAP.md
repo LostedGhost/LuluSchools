@@ -61,7 +61,9 @@ automatisations, actions groupées, IA qui prépare, remboursements Kkiapay auto
 guide de première connexion, bulletins par trimestre/semestre, messages accentués ; voir
 `docs/audit-ergonomie-2026-09-28.md`), puis **documents officiels** (bulletin PDF par période,
 contrat signé en PDF, certificat de réussite automatique, conseil de classe ; voir
-`docs/documents-officiels.md`). 331 tests au vert
+`docs/documents-officiels.md`), puis **saisie papier** pour les personnes sans smartphone
+(feuille de notes, appel, cours, copies, inscription au guichet, consentement et contrat signés
+sur papier ; migration `0020` ; voir `docs/saisie-papier.md`). 341 tests au vert
 sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.
