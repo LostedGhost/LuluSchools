@@ -137,3 +137,8 @@ export function rechercherEnseignantsSignes(etablissementId: string, q?: string)
     params: q ? { q } : undefined,
   });
 }
+
+/** Contrat en PDF (copie conforme une fois signé, sinon version « en attente de signature »). */
+export function telechargerContratPdf(contratId: string) {
+  return api.get<Blob>(`/contrats/${contratId}/pdf`, { responseType: "blob" });
+}

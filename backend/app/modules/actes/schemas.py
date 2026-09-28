@@ -16,7 +16,7 @@ class TypeActeCreate(BaseModel):
     condition_eligibilite: str | None = None
     schema_formulaire: list[ChampFormulaire] | None = None
     # Genere et livre automatiquement des le paiement ; None = traitement manuel.
-    modele_document: Literal["attestation_scolarite", "releve_notes"] | None = None
+    modele_document: Literal["attestation_scolarite", "releve_notes", "certificat_reussite"] | None = None
 
 
 class TypeActeOut(BaseModel):

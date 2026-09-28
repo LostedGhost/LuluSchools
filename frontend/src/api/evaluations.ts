@@ -134,3 +134,16 @@ export interface CorrectionManuellePayload {
 export function corrigerSoumission(soumissionId: string, reponses: CorrectionManuellePayload[]) {
   return api.post<SoumissionOut>(`/soumissions/${soumissionId}/corriger`, { reponses });
 }
+
+/** Bulletin officiel d'une période, en PDF (blob : l'appel porte le jeton d'authentification). */
+export function telechargerBulletinPdf(eleveUtilisateurId: string, classeId: string, periode: string) {
+  return api.get<Blob>(`/eleves/${eleveUtilisateurId}/bulletins/pdf`, {
+    params: { classe_id: classeId, periode },
+    responseType: "blob",
+  });
+}
+
+/** Décision du conseil de classe (fige le bulletin ; « admis » déclenche le certificat de réussite). */
+export function validerPassage(bulletinId: string, decision: string) {
+  return api.post<BulletinOut>(`/bulletins/${bulletinId}/valider-passage`, { decision });
+}

@@ -19,6 +19,7 @@ from app.core.deps import (
     verifier_portee_etablissement,
 )
 from app.core.conversion import convertir_en_image
+from app.modules.recrutement.contrat_pdf import generer_pdf_contrat
 from app.modules.recrutement.automatisation import (
     echeance_fin_annee,
     reconduire_en_lot,
@@ -840,6 +841,35 @@ def obtenir_lien_signature_contrat(
     files_client: LuluFilesClient = Depends(get_files_client),
     utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> LienFichierOut:
+    contrat = _contrat_consultable(db, utilisateur, contrat_id)
+    if not contrat.signature_image_lulufiles_id:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce contrat n'est pas encore signé.")
+
+    try:
+        url = files_client.get_signed_link(contrat.signature_image_lulufiles_id, disposition="inline")
+    except FileStorageError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez réessayer."
+        ) from exc
+    return LienFichierOut(url=url)
+
+
+@router.get("/contrats/{contrat_id}/pdf")
+def telecharger_contrat_pdf(
+    contrat_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> Response:
+    """Contrat en PDF : copie conforme du contrat signe (image de la signature, horodatage,
+    empreinte) ou, avant signature, le meme document marque « en attente de signature »."""
+    contrat = _contrat_consultable(db, utilisateur, contrat_id)
+    contenu = generer_pdf_contrat(db, contrat, files_client)
+    return Response(contenu, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="contrat-{contrat.id[:8]}.pdf"'})
+
+
+def _contrat_consultable(db: Session, utilisateur: Utilisateur, contrat_id: str) -> Contrat:
     contrat = db.get(Contrat, contrat_id)
     if contrat is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Contrat introuvable.")
@@ -856,16 +886,7 @@ def obtenir_lien_signature_contrat(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce contrat ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         _verifier_admin_de_l_etablissement(db, utilisateur, contrat.etablissement_id)
-    if not contrat.signature_image_lulufiles_id:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce contrat n'est pas encore signé.")
-
-    try:
-        url = files_client.get_signed_link(contrat.signature_image_lulufiles_id, disposition="inline")
-    except FileStorageError as exc:
-        raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez réessayer."
-        ) from exc
-    return LienFichierOut(url=url)
+    return contrat
 
 
 @router.post(

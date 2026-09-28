@@ -59,7 +59,9 @@ automatisations, actions groupées, IA qui prépare, remboursements Kkiapay auto
 `0019`, voir `docs/simplification-administration.md`), puis **audit d'ergonomie** des 79 pages
 (menu mobile complet, confirmations, notifications, libellés, pastilles `GET /me/compteurs`,
 guide de première connexion, bulletins par trimestre/semestre, messages accentués ; voir
-`docs/audit-ergonomie-2026-09-28.md`). 327 tests au vert
+`docs/audit-ergonomie-2026-09-28.md`), puis **documents officiels** (bulletin PDF par période,
+contrat signé en PDF, certificat de réussite automatique, conseil de classe ; voir
+`docs/documents-officiels.md`). 331 tests au vert
 sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.

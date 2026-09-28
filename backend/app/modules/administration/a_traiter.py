@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import require_roles
 from app.core.moderation import ORDRE_GRAVITE
+from app.modules.actes.generation import CERTIFICAT_REUSSITE, _inscription_courante, bulletin_favorable
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
 from app.modules.billetterie.models import BilletEvenement, Evenement, StatutBillet
 from app.modules.etablissements.models import AdminEtablissement, AffectationEnseignant, Classe, annee_academique_courante
@@ -188,15 +189,25 @@ def _sections_etablissement(db: Session, etab_id: str) -> list[Section | None]:
         DemandeActeAcademique.eleve_id.in_(eleve_ids), DemandeActeAcademique.statut == StatutDemandeActe.EN_TRAITEMENT,
     ).all() if eleve_ids else []
     types = {t.id: t for t in db.query(TypeActeAcademique).filter(TypeActeAcademique.etablissement_id == etab_id)}
+
+    def _acte(d: DemandeActeAcademique) -> Element:
+        type_acte = types.get(d.type_acte_id)
+        detail = ("Réclamation : " + (d.reference_evaluation or "")) if d.est_reclamation else (type_acte.nom if type_acte else "Acte")
+        # "auto" : acte a modele dont la livraison automatique a echoue, relancable en un clic.
+        groupe = "auto" if type_acte and type_acte.modele_document else None
+        if type_acte and type_acte.modele_document == CERTIFICAT_REUSSITE:
+            inscription = _inscription_courante(db, d.eleve)
+            classe = classes.get(inscription.classe_id) if inscription else None
+            if classe is None or bulletin_favorable(db, d.eleve, classe) is None:
+                groupe = None
+                detail += " — en attente d'une décision favorable du conseil de classe (sinon, à délivrer à la main)"
+        return Element(id=d.id, libelle=f"{d.eleve.prenom} {d.eleve.nom}", detail=detail, ia=d.analyse_ia, groupe=groupe)
+
     sections.append(_section(
         "actes", "Actes et réclamations à traiter",
-        "Les attestations et relevés de notes sont livrés automatiquement ; restent ici les autres actes et les réclamations (avis de l'IA joint).",
-        [Element(id=d.id, libelle=f"{d.eleve.prenom} {d.eleve.nom}",
-                 detail=("Réclamation : " + (d.reference_evaluation or "")) if d.est_reclamation else types[d.type_acte_id].nom if d.type_acte_id in types else "Acte",
-                 ia=d.analyse_ia,
-                 # "auto" : acte a modele dont la livraison automatique a echoue, relancable en un clic.
-                 groupe="auto" if d.type_acte_id in types and types[d.type_acte_id].modele_document else None)
-         for d in demandes],
+        "Les attestations, relevés de notes et certificats de réussite (après délibération) sont livrés automatiquement ; "
+        "restent ici les autres actes et les réclamations (avis de l'IA joint).",
+        [_acte(d) for d in demandes],
     ))
 
     # Moderation

@@ -128,6 +128,19 @@ const LIBELLES: Record<string, string> = {
   semestre1: "1er semestre",
   semestre2: "2e semestre",
 
+  // Décisions du conseil de classe
+  admis: "Admis(e) en classe supérieure",
+  admis_annee_validee: "Année validée",
+  redouble: "Autorisé(e) à redoubler",
+  reoriente: "Réorienté(e)",
+  passage: "Admis(e) en classe supérieure",
+  passage_classe_superieure: "Admis(e) en classe supérieure",
+
+  // Actes générés automatiquement
+  attestation_scolarite: "Attestation de scolarité",
+  releve_notes: "Relevé de notes",
+  certificat_reussite: "Certificat de réussite",
+
   // Coffre-fort
   pretee: "Prêtée",
 

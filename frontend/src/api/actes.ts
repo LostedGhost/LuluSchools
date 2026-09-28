@@ -50,7 +50,7 @@ export interface TypeActePayload {
   condition_eligibilite?: string;
   schema_formulaire?: ChampFormulaire[];
   /** Acte généré et livré automatiquement dès le paiement. */
-  modele_document?: "attestation_scolarite" | "releve_notes" | null;
+  modele_document?: "attestation_scolarite" | "releve_notes" | "certificat_reussite" | null;
 }
 
 export function creerTypeActe(etablissementId: string, payload: TypeActePayload) {

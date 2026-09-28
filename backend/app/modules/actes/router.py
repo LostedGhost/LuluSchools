@@ -419,7 +419,7 @@ def generer_document_acte(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "generation_impossible",
-            "Ce document ne peut pas être généré automatiquement (type d'acte sans modèle, demande non payée ou stockage indisponible).",
+            "Ce document ne peut pas être généré automatiquement (type d'acte sans modèle, demande non payée, stockage indisponible ou, pour un certificat de réussite, aucune décision favorable du conseil de classe).",
         )
     db.refresh(demande)
     return demande

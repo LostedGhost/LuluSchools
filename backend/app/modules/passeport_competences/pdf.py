@@ -1,5 +1,7 @@
 import pymupdf as fitz
 
+from app.core.pdf_officiel import latin1
+
 LARGEUR_PAGE = 595.0  # A4 portrait, en points
 HAUTEUR_PAGE = 842.0
 MARGE = 50.0
@@ -14,7 +16,7 @@ def _ecrire_ligne(page: "fitz.Page", y: float, texte: str, *, taille: float = 11
     if y > HAUTEUR_PAGE - MARGE:
         return y
     police = "hebo" if gras else "helv"
-    page.insert_text((MARGE, y), texte, fontsize=taille, fontname=police)
+    page.insert_text((MARGE, y), latin1(texte), fontsize=taille, fontname=police)
     return y + taille * 1.6
 
 

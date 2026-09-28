@@ -37,6 +37,13 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/evaluations/` — enrichi (UC-26) : nature formative/sommative, sujet/barème en document, soumission par copie image
 - `app/modules/pedagogie/` — enrichi (UC-27) : El Professor côté enseignant (conseil éducatif/moral/professionnel) + garde-fou d'alerte
 - `app/modules/pedagogie/el_professor_chat.py` (2026-09-27) — interface de conversation commune aux 4 personas : `POST /el-professor/{persona}/sessions/{id}/flux` (SSE, pièce jointe image/PDF), `PATCH`/`DELETE` d'une conversation, `GET/POST /el-professor/eleve/sessions` (aide générale sans cours), `POST /el-professor/synthese-vocale`. Réutilise les contrôles d'accès et `_detecter_signal_alerte` de `router.py` ; persistance après le flux via `get_session_factory`. Côté élève, seule la question déclenche l'alerte (origine `ELEVE`, exclue de la vue tuteur) et une consigne « détresse » est ajoutée avant l'appel.
+- **Documents officiels (2026-09-28, `docs/documents-officiels.md`)** : `app/core/pdf_officiel.py`
+  (mise en page commune, `latin1()`) ; `evaluations/bulletin_pdf.py` + `GET /eleves/{id}/bulletins/pdf`
+  (`notes_de_la_periode` / `moyennes_par_matiere` partagés avec le calcul du bulletin) ;
+  `evaluations/decisions.py` (décisions du conseil, `est_favorable`) ; `recrutement/contrat_pdf.py`
+  + `GET /contrats/{id}/pdf` (`_contrat_consultable` factorise les droits) ; modèle d'acte
+  `certificat_reussite` (`actes/generation.py`, livré par `valider_passage` sur décision
+  favorable). Tests : `tests/test_documents_officiels.py`.
 - **Audit d'ergonomie (2026-09-28, `docs/audit-ergonomie-2026-09-28.md`)** :
   `app/core/messages_validation.py` (erreurs 422 en phrases françaises, branché dans
   `main.py`) ; `app/modules/administration/compteurs.py` (`GET /me/compteurs` : pastilles du

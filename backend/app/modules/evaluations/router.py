@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,7 +13,11 @@ from app.core.deps import api_error, get_current_user, require_roles
 from app.core.files import TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
+from app.modules.actes.generation import CERTIFICAT_REUSSITE, livrer_en_arriere_plan
+from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
 from app.modules.evaluations import periodes as periodes_evaluation
+from app.modules.evaluations.decisions import est_favorable
+from app.modules.evaluations.bulletin_pdf import generer_pdf_bulletin
 from app.modules.evaluations.models import (
     Bulletin,
     Devoir,
@@ -869,21 +874,13 @@ def _coefficient_pour(db: Session, niveau: str, matiere: str) -> float:
     return referentiel.coefficient if referentiel is not None else 1.0
 
 
-def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str, periode: str) -> Bulletin:
-    """Moyenne PONDEREE : chaque devoir est normalise sur 100 (note / somme des
-    points_max de ses questions), puis pondere par le coefficient (niveau, matiere) du
-    referentiel valide en vigueur - defaut 1.0 si aucun referentiel ne couvre la
-    matiere (UC-09). Un devoir compte des qu'il est corrige (meme avant son echeance
-    formelle) ; sans soumission, il ne compte comme 0 qu'une fois l'echeance passee -
-    avant, on n'a simplement pas encore de resultat a inclure."""
-    existant = (
-        db.query(Bulletin)
-        .filter(Bulletin.eleve_id == eleve.id, Bulletin.classe_id == classe_id, Bulletin.periode == periode)
-        .first()
-    )
-    if existant is not None and existant.valide_par_conseil:
-        return existant  # fige des la deliberation : une correction ulterieure ne le modifie plus
-
+def notes_de_la_periode(db: Session, eleve: Eleve, classe_id: str, periode: str) -> list[tuple[str, float, float]]:
+    """(matiere, note sur 100, coefficient) de chaque devoir SOMMATIF de la periode qui
+    compte dans le bulletin. Chaque devoir est normalise sur 100 (note / somme des
+    points_max de ses questions), pondere par le coefficient (niveau, matiere) du
+    referentiel valide en vigueur - defaut 1.0 (UC-09). Un devoir compte des qu'il est
+    corrige (meme avant son echeance) ; sans soumission, il compte 0 une fois l'echeance
+    passee - avant, il n'y a simplement pas encore de resultat."""
     classe = db.get(Classe, classe_id)
     etablissement = db.get(Etablissement, classe.etablissement_id)
     periode_evaluee = periodes_evaluation.trouver(etablissement.type, classe.annee_academique, periode)
@@ -904,8 +901,7 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
         .all()
     )
 
-    notes_ponderees = []
-    poids_total = 0.0
+    notes: list[tuple[str, float, float]] = []
     for devoir in devoirs:
         points_max_devoir = sum(q.points_max for q in devoir.questions) or 1.0
         soumission = (
@@ -925,16 +921,39 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
         else:
             continue  # echec_correction en attente de revision manuelle : exclu pour l'instant
 
-        coefficient = _coefficient_pour(db, classe.niveau, devoir.matiere)
-        notes_ponderees.append(note_normalisee * coefficient)
-        poids_total += coefficient
+        notes.append((devoir.matiere, note_normalisee, _coefficient_pour(db, classe.niveau, devoir.matiere)))
+    return notes
 
+
+def moyennes_par_matiere(notes: list[tuple[str, float, float]]) -> list[tuple[str, float, float, int]]:
+    """(matiere, moyenne sur 100, coefficient, nombre de devoirs), par ordre alphabetique."""
+    par_matiere: dict[str, list[tuple[float, float]]] = {}
+    for matiere, note, coefficient in notes:
+        par_matiere.setdefault(matiere, []).append((note, coefficient))
+    return [
+        (matiere, sum(n for n, _ in lignes) / len(lignes), lignes[0][1], len(lignes))
+        for matiere, lignes in sorted(par_matiere.items())
+    ]
+
+
+def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str, periode: str) -> Bulletin:
+    """Moyenne generale PONDEREE des devoirs de la periode (voir notes_de_la_periode)."""
+    existant = (
+        db.query(Bulletin)
+        .filter(Bulletin.eleve_id == eleve.id, Bulletin.classe_id == classe_id, Bulletin.periode == periode)
+        .first()
+    )
+    if existant is not None and existant.valide_par_conseil:
+        return existant  # fige des la deliberation : une correction ulterieure ne le modifie plus
+
+    notes = notes_de_la_periode(db, eleve, classe_id, periode)
+    poids_total = sum(c for _, _, c in notes)
     if poids_total == 0:
         raise api_error(
             status.HTTP_404_NOT_FOUND, "aucun_devoir_evalue", "Aucun devoir clos et évalué pour cette période."
         )
 
-    moyenne = sum(notes_ponderees) / poids_total
+    moyenne = sum(n * c for _, n, c in notes) / poids_total
 
     bulletin = (
         db.query(Bulletin)
@@ -978,22 +997,48 @@ def periodes_de_la_classe(
     ]
 
 
+_ROLES_BULLETIN = (
+    RoleUtilisateur.ELEVE,
+    RoleUtilisateur.TUTEUR,
+    RoleUtilisateur.ENSEIGNANT,
+    RoleUtilisateur.ADMIN_ETABLISSEMENT,
+    RoleUtilisateur.ADMIN_MINISTERIEL,
+)
+
+
 @router.get("/eleves/{eleve_utilisateur_id}/bulletins", response_model=BulletinOut)
 def obtenir_bulletin(
     eleve_utilisateur_id: str,
     classe_id: str,
     periode: str,
     db: Session = Depends(get_db),
-    utilisateur: Utilisateur = Depends(
-        require_roles(
-            RoleUtilisateur.ELEVE,
-            RoleUtilisateur.TUTEUR,
-            RoleUtilisateur.ENSEIGNANT,
-            RoleUtilisateur.ADMIN_ETABLISSEMENT,
-            RoleUtilisateur.ADMIN_MINISTERIEL,
-        )
-    ),
+    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_BULLETIN)),
 ) -> Bulletin:
+    eleve, _ = _eleve_et_classe_du_bulletin(db, utilisateur, eleve_utilisateur_id, classe_id)
+    return _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
+
+
+@router.get("/eleves/{eleve_utilisateur_id}/bulletins/pdf")
+def telecharger_bulletin_pdf(
+    eleve_utilisateur_id: str,
+    classe_id: str,
+    periode: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_BULLETIN)),
+) -> Response:
+    """Bulletin officiel d'une periode en PDF (moyennes par matiere, moyenne generale,
+    decision du conseil). Memes droits que la consultation du bulletin."""
+    eleve, classe = _eleve_et_classe_du_bulletin(db, utilisateur, eleve_utilisateur_id, classe_id)
+    bulletin = _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
+    matieres = moyennes_par_matiere(notes_de_la_periode(db, eleve, classe_id, periode))
+    contenu = generer_pdf_bulletin(db, eleve, classe, bulletin, matieres)
+    nom = f"bulletin-{periode}-{(eleve.matricule or eleve.nom).lower()}.pdf"
+    return Response(contenu, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{nom}"'})
+
+
+def _eleve_et_classe_du_bulletin(
+    db: Session, utilisateur: Utilisateur, eleve_utilisateur_id: str, classe_id: str
+) -> tuple[Eleve, Classe]:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Élève introuvable.")
@@ -1025,15 +1070,17 @@ def obtenir_bulletin(
     )
     if inscrit is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cet élève n'est pas inscrit dans cette classe.")
-
-    return _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
+    return eleve, classe
 
 
 @router.post("/bulletins/{bulletin_id}/valider-passage", response_model=BulletinOut)
 def valider_passage(
     bulletin_id: str,
     payload: ValiderPassageRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    session_factory: sessionmaker = Depends(get_session_factory),
+    files_client: LuluFilesClient = Depends(get_files_client),
     enseignant: Utilisateur = Depends(require_roles(RoleUtilisateur.ENSEIGNANT)),
 ) -> Bulletin:
     """UC-09 : le calcul automatique ne decide jamais seul d'une decision lourde
@@ -1050,6 +1097,21 @@ def valider_passage(
     bulletin.valide_par_conseil = True
     db.commit()
     db.refresh(bulletin)
+    # Decision favorable : les certificats de reussite deja demandes (et payes) par l'eleve
+    # sont generes et livres sans attendre l'A+.
+    if est_favorable(bulletin.decision_passage):
+        en_attente = (
+            db.query(DemandeActeAcademique.id)
+            .join(TypeActeAcademique, TypeActeAcademique.id == DemandeActeAcademique.type_acte_id)
+            .filter(
+                DemandeActeAcademique.eleve_id == bulletin.eleve_id,
+                DemandeActeAcademique.statut == StatutDemandeActe.EN_TRAITEMENT,
+                TypeActeAcademique.modele_document == CERTIFICAT_REUSSITE,
+            )
+            .all()
+        )
+        for (demande_id,) in en_attente:
+            background_tasks.add_task(livrer_en_arriere_plan, session_factory, demande_id, files_client)
     return bulletin
 
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { libelle } from "../../utils/libelles";
+import { ouvrirBlobPdf } from "../../utils/telechargerBlob";
 import { useConfirmation } from "../../components/Modale";
 import { useAdminEtab } from "../../admin/AdminEtabContext";
 import {
@@ -8,6 +9,7 @@ import {
   creerContrat,
   creerPoste,
   listerContratsEtablissement,
+  telechargerContratPdf,
   listerPostes,
   noterDocumentManuellement,
   obtenirLienDocumentCandidature,
@@ -39,7 +41,7 @@ import {
   TextInput,
 } from "../../components/ui";
 import { FormulaireBuilder } from "../../components/FormulaireBuilder";
-import { Briefcase, ExternalLink, FileSignature, FileWarning, Plus, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react";
+import { Briefcase, ExternalLink, FileDown, FileSignature, FileWarning, Plus, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react";
 import { estRempli, erreurDateFuture } from "../../utils/validation";
 
 const RECONDUCTION_FENETRE_JOURS = 30;
@@ -557,10 +559,23 @@ export function RecrutementPage() {
                           Échéance : {new Date(c.date_fin).toLocaleDateString("fr-FR")}
                         </span>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
                         <Badge tone={c.statut === "signe" ? "success" : "pending"}>
                           {c.statut === "signe" ? "Signé" : "En attente de signature"}
                         </Badge>
+                        <Btn
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<FileDown size={14} />}
+                          aria-label={`Contrat de ${c.enseignant_prenom} ${c.enseignant_nom} en PDF`}
+                          onClick={() =>
+                            telechargerContratPdf(c.id)
+                              .then((res) => ouvrirBlobPdf(res.data, `contrat-${c.enseignant_nom}.pdf`))
+                              .catch((err) => setErreur(messageErreur(err, "Impossible de générer le contrat.")))
+                          }
+                        >
+                          PDF
+                        </Btn>
                         {reconductible && (
                           <Btn
                             variant="outline"

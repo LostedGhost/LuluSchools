@@ -1,12 +1,14 @@
+import { libelle } from "../../utils/libelles";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { obtenirBulletin, periodesDeLaClasse, type PeriodeOut } from "../../api/evaluations";
+import { obtenirBulletin, periodesDeLaClasse, telechargerBulletinPdf, type PeriodeOut } from "../../api/evaluations";
+import { ouvrirBlobPdf } from "../../utils/telechargerBlob";
 import { codeErreur, messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { BulletinOut } from "../../types/api";
 import { Card, ErrorBanner, EmptyState, Btn, SkeletonCard } from "../../components/ui";
 import { ScoreBurst } from "../../components/gamification";
-import { Award, BarChart3, ChevronRight } from "lucide-react";
+import { Award, BarChart3, ChevronRight, FileDown } from "lucide-react";
 
 export function BulletinPage() {
   const profil = useEleveProfil();
@@ -29,6 +31,19 @@ export function BulletinPage() {
   }, [profil.classe_id]);
 
   const periodeChoisie = periodes.find((p) => p.code === periode);
+  const [pdfEnCours, setPdfEnCours] = useState(false);
+  const telechargerPdf = async () => {
+    if (!profil.classe_id || !periode) return;
+    setPdfEnCours(true);
+    try {
+      const res = await telechargerBulletinPdf(profil.id, profil.classe_id, periode);
+      ouvrirBlobPdf(res.data, `bulletin-${periode}.pdf`);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de générer le bulletin pour le moment."));
+    } finally {
+      setPdfEnCours(false);
+    }
+  };
   const aVenir = periodeChoisie ? new Date(periodeChoisie.debut) > new Date() : false;
 
   useEffect(() => {
@@ -98,7 +113,7 @@ export function BulletinPage() {
             <p className="text-label" style={{ color: "var(--ink-soft)", marginBottom: "8px" }}>Appréciation générale</p>
             {bulletin.valide_par_conseil ? (
               <p className="text-title" style={{ color: "var(--ink)" }}>
-                {bulletin.decision_passage}
+                {libelle(bulletin.decision_passage)}
               </p>
             ) : (
               <p style={{ color: "var(--ink-faint)" }}>
@@ -108,11 +123,14 @@ export function BulletinPage() {
           </Card>
 
           <div style={{ gridColumn: "1 / -1" }}>
+            <Btn variant="primary" leftIcon={<FileDown size={16} />} loading={pdfEnCours} onClick={telechargerPdf} style={{ marginBottom: "12px" }}>
+              Télécharger le bulletin (PDF)
+            </Btn>
             <Link to="/eleve/passeport" style={{ textDecoration: "none" }}>
               <Card hover style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <Award size={20} style={{ color: "var(--reward-deep)", flexShrink: 0 }} />
                 <span style={{ flex: 1, fontSize: "var(--text-sm)", color: "var(--ink)" }}>
-                  Pour le détail de vos moyennes par matière, consultez votre passeport de compétences.
+                  Le bulletin PDF détaille vos moyennes par matière ; votre passeport de compétences les suit sur toute l'année.
                 </span>
                 <ChevronRight size={16} style={{ color: "var(--ink-faint)" }} />
               </Card>

@@ -233,7 +233,7 @@ export function PostulerPage() {
                 style={{ fontSize: "11px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "5px" }}
               >
                 <FileText size={12} aria-hidden="true" /> {libelle(crit.type_document)} (Coeff. {crit.coefficient}, Min.{" "}
-                {crit.seuil_minimal}/20)
+                {crit.seuil_minimal}/100)
               </span>
             ))}
             <span
@@ -393,7 +393,7 @@ export function PostulerPage() {
                         color: "var(--ink-soft)",
                       }}
                     >
-                      Pondération : Coeff {critere.coefficient} (Seuil {critere.seuil_minimal}/20)
+                      Pondération : Coeff {critere.coefficient} (Seuil {critere.seuil_minimal}/100)
                     </span>
                   </div>
 
