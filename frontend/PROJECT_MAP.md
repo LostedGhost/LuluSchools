@@ -327,3 +327,9 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   `PasseportPanel` ; case « Bourse pour les filières scientifiques » dans `ActesAdminPage` et bandeau
   d'éligibilité dans `ActesPage` ; « Type d'enseignement » dans `ClassesPage` (ES/UP) ; tuiles EFTP et
   alphabétisation dans `IndicateursPage` ; `api/insertion.ts`.
+- **File d'attente hors ligne (UC-80)** : `hors_ligne/fileAttente.ts` — `envoyerOuMettreEnAttente(url, corps, libellé)`
+  envoie avec une clé `X-Cle-Idempotence` ; sans réponse réseau, garde l'envoi (`localStorage` `lulu-file-attente`)
+  et le rejoue à l'événement `online`, à la reconnexion (`AuthContext`) ou via « Réessayer » du `BandeauHorsLigne` ;
+  vidée à la déconnexion. Branchée sur les réponses de devoir (`DevoirDetailPage`), les messages texte
+  (`ConversationPage`) et la vie scolaire saisie par l'enseignant (`MesSallesPage`). Jamais de paiement ni de fichier.
+  Vérifié en réel : message envoyé site coupé, livré une seule fois au retour.

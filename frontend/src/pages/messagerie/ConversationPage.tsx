@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { TAILLE_PAGE_MESSAGES, listerMessages, masquerMessage, mesConversations, envoyerMessage, envoyerMessageVocal, signalerMessage } from "../../api/messagerie";
+import { TAILLE_PAGE_MESSAGES, listerMessages, masquerMessage, mesConversations, envoyerMessageVocal, signalerMessage } from "../../api/messagerie";
 import { messageErreur } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import type { ConversationOut, MessageOut } from "../../types/api";
@@ -8,6 +8,7 @@ import { Btn, EmptyState, ErrorBanner, Skeleton, TextArea } from "../../componen
 import { ArrowLeft, Flag, MessageCircle, Send, Trash2, Users } from "lucide-react";
 import { useConfirmation } from "../../components/Modale";
 import { BoutonMessageVocal, LecteurMessageVocal } from "../../components/messagerie/MessageVocal";
+import { envoyerOuMettreEnAttente } from "../../hors_ligne/fileAttente";
 
 export function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -62,8 +63,14 @@ export function ConversationPage() {
     setEnvoiEnCours(true);
     setErreur(null);
     try {
-      const res = await envoyerMessage(conversationId, contenu.trim());
-      setMessages((prev) => [...prev, res.data]);
+      // Lot 7.5 : sans réseau, le message part au retour de la connexion.
+      const resultat = await envoyerOuMettreEnAttente<MessageOut>(
+        `/conversations/${conversationId}/messages`,
+        { contenu: contenu.trim() },
+        "Message",
+      );
+      if (resultat.statut === "envoye") setMessages((prev) => [...prev, resultat.data]);
+      else setErreur("Pas de connexion : votre message partira tout seul au retour du réseau.");
       setContenu("");
     } catch (err) {
       setErreur(messageErreur(err, "Impossible d'envoyer ce message."));

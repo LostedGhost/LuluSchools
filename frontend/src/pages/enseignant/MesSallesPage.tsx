@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ValiderCompetence } from "../../components/insertion/ValiderCompetence";
+import { envoyerOuMettreEnAttente } from "../../hors_ligne/fileAttente";
 import { listerElevesDeLaClasse, mesClassesAffectees } from "../../api/etablissements";
-import { creerEntreeVieScolaire, listerVieScolaireEleve } from "../../api/vie_scolaire";
+import { listerVieScolaireEleve } from "../../api/vie_scolaire";
 import { messageErreur } from "../../api/client";
 import type { EleveClasseOut, EntreeVieScolaireOut, NatureEntreeVieScolaire, SalleEnseignantOut } from "../../types/api";
 import {
@@ -209,13 +210,14 @@ function VieScolaireEleve({
     }
     setEnCours(true);
     try {
-      await creerEntreeVieScolaire(classeId, eleveId, {
-        nature,
-        matiere: entreeGlobale ? null : matiere.trim(),
-        description: description.trim(),
-      });
+      // Lot 7.5 : l'appel se fait aussi en classe sans réseau ; l'entrée part au retour de la connexion.
+      const resultat = await envoyerOuMettreEnAttente(
+        `/classes/${classeId}/eleves/${eleveId}/vie-scolaire`,
+        { nature, matiere: entreeGlobale ? null : matiere.trim(), description: description.trim() },
+        "Vie scolaire",
+      );
       setDescription("");
-      setSucces("Entrée enregistrée.");
+      setSucces(resultat.statut === "envoye" ? "Entrée enregistrée." : "Pas de connexion : l'entrée partira au retour du réseau.");
       charger();
     } catch (err) {
       setErreur(messageErreur(err, "Impossible d'enregistrer cette entrée."));

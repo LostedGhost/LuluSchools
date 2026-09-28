@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { maSoumission, obtenirDevoir, obtenirLienSujetDocument, soumettreDevoir, soumettreDevoirParCopieImage } from "../../api/evaluations";
+import { maSoumission, obtenirDevoir, obtenirLienSujetDocument, soumettreDevoirParCopieImage } from "../../api/evaluations";
+import { envoyerOuMettreEnAttente } from "../../hors_ligne/fileAttente";
 import { messageErreur } from "../../api/client";
 import type { DevoirOut, SoumissionOut } from "../../types/api";
 import {
@@ -30,6 +31,7 @@ export function DevoirDetailPage() {
   const [reponses, setReponses] = useState<Record<string, string>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [enAttente, setEnAttente] = useState(false);
   const [enCoursCopieImage, setEnCoursCopieImage] = useState(false);
   const [lienSujet, setLienSujet] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,11 +92,14 @@ export function DevoirDetailPage() {
     setErreur(null);
     setEnCours(true);
     try {
-      const { data } = await soumettreDevoir(
-        devoirId,
-        devoir.questions.map((q) => ({ question_id: q.id, texte_reponse: reponses[q.id] })),
+      // Lot 7.5 : sans réseau, les réponses partent automatiquement au retour de la connexion.
+      const resultat = await envoyerOuMettreEnAttente<SoumissionOut>(
+        `/devoirs/${devoirId}/soumissions`,
+        { reponses: devoir.questions.map((q) => ({ question_id: q.id, texte_reponse: reponses[q.id] })) },
+        `Devoir « ${devoir.titre} »`,
       );
-      setSoumission(data);
+      if (resultat.statut === "envoye") setSoumission(resultat.data);
+      else setEnAttente(true);
     } catch (err) {
       setErreur(messageErreur(err, "Impossible de soumettre le devoir."));
     } finally {
@@ -138,6 +143,11 @@ export function DevoirDetailPage() {
       </Card>
 
       <ErrorBanner>{erreur}</ErrorBanner>
+      {enAttente && (
+        <p role="status" className="bandeau-hors-ligne" style={{ position: "static", borderRadius: "var(--radius-md)", marginBottom: "var(--space-4)" }}>
+          Pas de connexion : vos réponses sont gardées sur ce téléphone et partiront toutes seules au retour du réseau.
+        </p>
+      )}
 
       {dejaSoumis && soumission && (
         <div className="anim-slide-up delay-1 space-y-6">

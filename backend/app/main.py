@@ -41,6 +41,7 @@ from app.modules.micro_jobs.router import router as micro_jobs_router
 from app.modules.paiements.router import router as kkiapay_webhook_router
 from app.modules.passeport_competences.router import router as passeport_competences_router
 from app.modules.radar_familial.router import router as radar_familial_router
+from app.core.idempotence import IdempotenceMiddleware
 from app.modules.accessibilite.router import router as accessibilite_router
 from app.modules.ecoute.router import router as ecoute_router
 from app.modules.indicateurs.router import router as indicateurs_router
@@ -93,6 +94,8 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="LuluSchools API", version="0.1.0", lifespan=lifespan)
 
+# Lot 7.5 (UC-80) : rejeu sans double effet des envois mis en file d'attente hors ligne.
+app.add_middleware(IdempotenceMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allow_origins,

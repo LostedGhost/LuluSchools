@@ -508,3 +508,9 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   (`insertion/service.py`) ; `GET /bourses/eligibilite-scientifique` (pré-contrôle élève/tuteur).
 - Migration `0026_eftp_stages_bourses` ; seed : `seed_donnees/insertion.py` (classes techniques marquées,
   offres et candidatures, compétences, type d'acte « bourse » en ES et UP).
+
+### app/core/idempotence.py (7.5, UC-80 file d'attente hors ligne)
+- `IdempotenceMiddleware` : un POST portant `X-Cle-Idempotence` (UUID) et un jeton valide renvoie, s'il est rejoué,
+  la première réponse 2xx mémorisée pour (utilisateur, chemin, clé) — en-tête `X-Idempotence-Rejeu: 1` — au lieu de
+  refaire l'action. Échecs non mémorisés ; entrées purgées après 7 jours ; jamais bloquant si la table est indisponible.
+  Session via `get_session_factory` (surchargée par les tests). Migration `0027_requetes_idempotentes`.
