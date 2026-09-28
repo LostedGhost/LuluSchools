@@ -22,7 +22,8 @@ PDF de base n'ont ni tiret long, ni apostrophe typographique, ni « œ », qui s
   (date, intitulé, note obtenue sur son barème, équivalent sur 100, « non rendu (0) » pour une
   copie manquante après l'échéance) ; moyenne générale pondérée et décision du conseil de classe
   (ou « en attente de délibération »). Pages de suite automatiques. Mêmes droits que la
-  consultation du bulletin.
+  consultation du bulletin. Le même détail s'affiche à l'écran « Mon bulletin » de l'élève
+  (`GET /eleves/{id}/bulletins/detail`).
 - **Contrat** (`GET /contrats/{id}/pdf`) : parties, poste, dates, syllabus complet (pages
   supplémentaires si besoin) et bloc de signature — image du tracé, horodatage, empreinte
   SHA-256 du syllabus signé, mention de signature électronique simple (art. 284-285). Avant

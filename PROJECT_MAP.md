@@ -63,7 +63,7 @@ guide de première connexion, bulletins par trimestre/semestre, messages accentu
 contrat signé en PDF, certificat de réussite automatique, conseil de classe ; voir
 `docs/documents-officiels.md`), puis **saisie papier** pour les personnes sans smartphone
 (feuille de notes, appel, cours, copies, inscription au guichet, consentement et contrat signés
-sur papier ; migration `0020` ; voir `docs/saisie-papier.md`). 340 tests au vert
+sur papier ; migration `0020` ; voir `docs/saisie-papier.md`). 341 tests au vert
 sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.

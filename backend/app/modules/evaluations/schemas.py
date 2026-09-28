@@ -156,6 +156,27 @@ class ReferentielOut(BaseModel):
     propose_pour_id: str | None
 
 
+class EvaluationDuBulletinOut(BaseModel):
+    devoir_id: str
+    titre: str
+    date: datetime
+    note: float | None  # None : copie non rendue apres l'echeance (compte 0)
+    total: float
+    sur_100: float
+
+
+class MatiereDuBulletinOut(BaseModel):
+    matiere: str
+    coefficient: float
+    moyenne: float
+    evaluations: list[EvaluationDuBulletinOut]
+
+
+class BulletinDetailOut(BaseModel):
+    bulletin: "BulletinOut"
+    matieres: list[MatiereDuBulletinOut]
+
+
 class BulletinOut(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 

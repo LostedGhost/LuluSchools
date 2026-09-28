@@ -33,7 +33,10 @@ from app.modules.evaluations.models import (
 from app.modules.evaluations.schemas import (
     AdminDevoirOut,
     AdminDevoirPageOut,
+    BulletinDetailOut,
     BulletinOut,
+    EvaluationDuBulletinOut,
+    MatiereDuBulletinOut,
     CorrectionNoteGlobaleRequest,
     CorrectionRequest,
     DevoirCreate,
@@ -1033,6 +1036,33 @@ def obtenir_bulletin(
 ) -> Bulletin:
     eleve, _ = _eleve_et_classe_du_bulletin(db, utilisateur, eleve_utilisateur_id, classe_id)
     return _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
+
+
+@router.get("/eleves/{eleve_utilisateur_id}/bulletins/detail", response_model=BulletinDetailOut)
+def obtenir_bulletin_detaille(
+    eleve_utilisateur_id: str,
+    classe_id: str,
+    periode: str,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(*_ROLES_BULLETIN)),
+) -> BulletinDetailOut:
+    """Bulletin + detail par matiere (coefficient, moyenne, chaque evaluation et sa note) -
+    le meme contenu que le bulletin PDF, pour l'ecran « Mon bulletin »."""
+    eleve, _ = _eleve_et_classe_du_bulletin(db, utilisateur, eleve_utilisateur_id, classe_id)
+    bulletin = _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
+    evaluations = evaluations_de_la_periode(db, eleve, classe_id, periode)
+    par_matiere: dict[str, list[NoteDuBulletin]] = {}
+    for n in evaluations:
+        par_matiere.setdefault(n.devoir.matiere, []).append(n)
+    matieres = [
+        MatiereDuBulletinOut(
+            matiere=matiere, coefficient=coefficient, moyenne=moyenne,
+            evaluations=[EvaluationDuBulletinOut(devoir_id=n.devoir.id, titre=n.devoir.titre, date=n.devoir.date_limite,
+                                                 note=n.note, total=n.total, sur_100=n.sur_100) for n in par_matiere[matiere]],
+        )
+        for matiere, moyenne, coefficient, _ in moyennes_par_matiere([(n.devoir.matiere, n.sur_100, n.coefficient) for n in evaluations])
+    ]
+    return BulletinDetailOut(bulletin=BulletinOut.model_validate(bulletin), matieres=matieres)
 
 
 @router.get("/eleves/{eleve_utilisateur_id}/bulletins/pdf")

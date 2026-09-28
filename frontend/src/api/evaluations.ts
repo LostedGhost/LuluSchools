@@ -135,6 +135,29 @@ export function corrigerSoumission(soumissionId: string, reponses: CorrectionMan
   return api.post<SoumissionOut>(`/soumissions/${soumissionId}/corriger`, { reponses });
 }
 
+export interface EvaluationDuBulletin {
+  devoir_id: string;
+  titre: string;
+  date: string;
+  note: number | null; // null : copie non rendue après l'échéance (compte 0)
+  total: number;
+  sur_100: number;
+}
+
+export interface MatiereDuBulletin {
+  matiere: string;
+  coefficient: number;
+  moyenne: number;
+  evaluations: EvaluationDuBulletin[];
+}
+
+/** Bulletin et détail par matière (chaque évaluation et sa note), comme le bulletin PDF. */
+export function obtenirBulletinDetaille(eleveUtilisateurId: string, classeId: string, periode: string) {
+  return api.get<{ bulletin: BulletinOut; matieres: MatiereDuBulletin[] }>(`/eleves/${eleveUtilisateurId}/bulletins/detail`, {
+    params: { classe_id: classeId, periode },
+  });
+}
+
 /** Bulletin officiel d'une période, en PDF (blob : l'appel porte le jeton d'authentification). */
 export function telechargerBulletinPdf(eleveUtilisateurId: string, classeId: string, periode: string) {
   return api.get<Blob>(`/eleves/${eleveUtilisateurId}/bulletins/pdf`, {

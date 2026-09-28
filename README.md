@@ -198,6 +198,6 @@ Premier déploiement au Bénin : conformité suivie article par article contre l
 
 ## Statut du projet
 
-**340 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend ; ergonomie auditée page par page le 2026-09-28 ([rapport](docs/audit-ergonomie-2026-09-28.md), script `frontend/scripts/audit_ergonomie.js`).
+**341 tests backend passants** (SQLite et PostgreSQL, dont 49 de sécurité issus de l'[audit du 2026-09-27](docs/audit-securite-2026-09-27.md)), `tsc -b` + `vite build` + `oxlint` au vert côté frontend ; ergonomie auditée page par page le 2026-09-28 ([rapport](docs/audit-ergonomie-2026-09-28.md), script `frontend/scripts/audit_ergonomie.js`).
 6 lots livrés (Phase 1 → Phase 6 + volets Professeur et Élève/Tuteur), détail complet et
 limites connues dans l'[audit des fonctionnalités](docs/audit-fonctionnalites-plateforme.md).
