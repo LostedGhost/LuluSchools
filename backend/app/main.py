@@ -76,9 +76,9 @@ async def lifespan(_app: FastAPI):
 
         planificateur = BackgroundScheduler(timezone="UTC")
         planificateur.add_job(_purger_casiers_expires_tache, "interval", hours=6)
-        planificateur.add_job(
-            renoter_tache, "interval", hours=1, args=[SessionLocal, get_llm_client(), get_files_client()]
-        )
+        # Fabriques et non instances : un client cree au demarrage fait echouer tout le
+        # serveur si une cle manque (incident Render du 2026-09-28, FREELLM_API_KEY vide).
+        planificateur.add_job(renoter_tache, "interval", hours=1, args=[SessionLocal, get_llm_client, get_files_client])
         planificateur.start()
         _purger_casiers_expires_tache()
     yield

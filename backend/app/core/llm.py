@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 import json
 import re
 import wave
@@ -9,6 +10,8 @@ from collections.abc import Iterator
 from openai import OpenAI, OpenAIError
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentScoringError(Exception):
@@ -276,8 +279,14 @@ class FreeLLMClient:
     def __init__(self) -> None:
         # Sans timeout explicite, le SDK attend jusqu'a 10 min (x3 tentatives) : un appel
         # synchrone (quiz, El Professor) bloquerait un worker de la plateforme d'autant.
+        # Cle absente (variable d'environnement non renseignee) : le client se cree quand meme,
+        # et chaque appel echoue proprement (erreur d'authentification convertie en erreur
+        # metier par chaque methode) au lieu de faire tomber la requete - ou le demarrage.
+        if not settings.freellm_api_key:
+            logger.error("FREELLM_API_KEY absente : les fonctions d'IA renverront une erreur.")
         self._client = OpenAI(
-            base_url=settings.freellm_base_url, api_key=settings.freellm_api_key, timeout=60.0, max_retries=1
+            base_url=settings.freellm_base_url, api_key=settings.freellm_api_key or "cle-freellm-absente",
+            timeout=60.0, max_retries=1,
         )
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:

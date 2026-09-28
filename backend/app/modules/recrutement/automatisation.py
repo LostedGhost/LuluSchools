@@ -81,8 +81,15 @@ def renoter_documents(db: Session, llm_client: FreeLLMClient, files_client: Lulu
     return notes
 
 
-def renoter_tache(session_factory: sessionmaker, llm_client: FreeLLMClient, files_client: LuluFilesClient) -> None:
-    """Tache planifiee (APScheduler, voir main.py)."""
+def renoter_tache(session_factory: sessionmaker, fabrique_llm, fabrique_fichiers) -> None:
+    """Tache planifiee (APScheduler, voir main.py). Les clients sont crees ici, a chaque
+    execution : une configuration incomplete (cle FreeLLM absente) fait echouer la tache,
+    jamais le demarrage du serveur."""
+    try:
+        llm_client, files_client = fabrique_llm(), fabrique_fichiers()
+    except Exception:
+        logger.exception("renotation automatique : clients indisponibles (configuration FreeLLM/LuluFiles ?)")
+        return
     db = session_factory()
     try:
         n = renoter_documents(db, llm_client, files_client)

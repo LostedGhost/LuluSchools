@@ -1,4 +1,3 @@
-from conftest import periode_courante
 """Test de bout en bout (etape 5 de la methode lucio-dev) : rejoue l'enchainement REEL
 des cas d'utilisation de la Phase 1, dans l'ordre d'usage, avec les memes objets qui
 circulent d'un module a l'autre. Contrairement aux tests unitaires par module (qui
@@ -10,6 +9,11 @@ Les regles metier deja couvertes par les tests unitaires (contestation, revision
 manuelle, cas limites d'age/capacite, etc.) ne sont pas repetees ici : ce test suit
 le chemin nominal complet, UC-01 a UC-10.
 """
+
+from conftest import periode_courante
+
+from app.core.config import settings
+
 
 import io
 from datetime import date, datetime, timedelta, timezone
@@ -38,7 +42,9 @@ def _changer_mot_de_passe(client, headers, ancien, nouveau="NouveauMdp1"):
     assert reponse.status_code == 200
 
 
-def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_client, fake_llm_client, admin_ministeriel_headers):
+def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_client, fake_llm_client, admin_ministeriel_headers, monkeypatch):
+    # Secret du webhook fixe pour le test : ne depend pas d'un .env local (vide en CI).
+    monkeypatch.setattr(settings, "kkiapay_secret", "secret-de-test")
     # ---------------------------------------------------------------
     # 1. Le ministere cree l'etablissement -> premier compte A+ provisionne
     # ---------------------------------------------------------------
@@ -424,6 +430,4 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
 
 
 def _secret_de_test() -> str:
-    from app.core.config import settings
-
     return settings.kkiapay_secret
