@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { GuideDemarrage } from "../../components/GuideDemarrage";
-import { BoutonBulletinPdf } from "../../components/BoutonBulletinPdf";
 import { Link, useNavigate } from "react-router-dom";
 import { donnerConsentementParental, mesInscriptions } from "../../api/inscriptions";
 import { creerConversationDm } from "../../api/messagerie";
@@ -333,12 +332,9 @@ export function TuteurDashboard() {
                   </Btn>
                 )}
                 {inscription.statut === "validee" && inscription.eleve_utilisateur_id && (
-                  <BoutonBulletinPdf
-                    eleveUtilisateurId={inscription.eleve_utilisateur_id}
-                    classeId={inscription.classe_id}
-                    prenom={inscription.eleve_prenom}
-                    onErreur={setErreur}
-                  />
+                  <Link to={`/tuteur/bulletins?enfant=${inscription.eleve_utilisateur_id}`} className="btn btn-outline btn-sm">
+                    <Award size={14} aria-hidden="true" /> Bulletin de {inscription.eleve_prenom}
+                  </Link>
                 )}
                 {inscription.statut === "validee" && inscription.eleve_utilisateur_id && (
                   cameraAutoriseeIds.has(inscription.id) ? (

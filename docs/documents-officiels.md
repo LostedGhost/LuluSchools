@@ -10,7 +10,7 @@ PDF de base n'ont ni tiret long, ni apostrophe typographique, ni « œ », qui s
 | Attestation de scolarité | Dès le paiement de la demande (ou tout de suite si gratuite) | Élève (document livré), A+ | Actes académiques |
 | Relevé de notes | Idem | Idem | Actes académiques |
 | **Certificat de réussite** | Dès qu'une décision **favorable** du conseil de classe existe : à la demande si elle existe déjà, sinon au moment où le conseil la prononce | Idem | Actes académiques (modèle « certificat de réussite » à choisir par l'A+) |
-| **Bulletin de notes** (par période) | À la demande, calculé à l'instant | Élève, parent, enseignants de la classe, A+, A++ | Bulletin (élève), « Mes enfants » (parent), Conseil de classe (professeur principal) |
+| **Bulletin de notes** (par période) | À la demande, calculé à l'instant | Élève, parent, enseignants de la classe, A+, A++ | Mon bulletin (élève), Bulletins (parent), Conseil de classe (professeur principal) |
 | **Contrat d'enseignement** | À la demande | Enseignant concerné, A+ de l'établissement, A++ | Mes contrats (enseignant), Recrutement (A+) |
 | Passeport de compétences | À la demande | Élève, parent | Passeport |
 | Tickets transport/cantine, billets | À l'achat | Acheteur | Services, Billetterie |
@@ -22,8 +22,9 @@ PDF de base n'ont ni tiret long, ni apostrophe typographique, ni « œ », qui s
   (date, intitulé, note obtenue sur son barème, équivalent sur 100, « non rendu (0) » pour une
   copie manquante après l'échéance) ; moyenne générale pondérée et décision du conseil de classe
   (ou « en attente de délibération »). Pages de suite automatiques. Mêmes droits que la
-  consultation du bulletin. Le même détail s'affiche à l'écran « Mon bulletin » de l'élève
-  (`GET /eleves/{id}/bulletins/detail`).
+  consultation du bulletin. Le même détail s'affiche à l'écran « Mon bulletin » de l'élève et, côté
+  parent, dans « Bulletins » (un onglet par enfant ; lien « Bulletin de … » sur « Mes enfants »)
+  — `GET /eleves/{id}/bulletins/detail`, composant partagé `components/bulletin/BulletinDetail.tsx`.
 - **Contrat** (`GET /contrats/{id}/pdf`) : parties, poste, dates, syllabus complet (pages
   supplémentaires si besoin) et bloc de signature — image du tracé, horodatage, empreinte
   SHA-256 du syllabus signé, mention de signature électronique simple (art. 284-285). Avant

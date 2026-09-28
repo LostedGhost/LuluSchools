@@ -93,6 +93,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
   if (role === "tuteur") {
     return [
       { to: "/tuteur", label: "Mes enfants", icon: <Users size={iconSize} />, end: true },
+      { to: "/tuteur/bulletins", label: "Bulletins", icon: <Award size={iconSize} /> },
       { to: "/tuteur/nouvelle-inscription", label: "Nouvelle inscription", icon: <UserCheck size={iconSize} /> },
       { to: "/tuteur/el-professor", label: "El Professor", court: "El Prof", icon: <Sparkles size={iconSize} /> },
       { to: "/tuteur/services", label: "Transport & cantine", icon: <Bus size={iconSize} /> },
