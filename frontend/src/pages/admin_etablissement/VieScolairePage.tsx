@@ -136,7 +136,7 @@ export function VieScolairePage() {
                       <span className="text-sm" style={{ color: "var(--ink-soft)", marginLeft: "8px" }}>{libelle(b.periode)}</span>
                     </div>
                     <span className="monospace" style={{ fontWeight: 700, color: "var(--primary-deep)" }}>
-                      {b.moyenne_generale.toFixed(2)}/20 {b.decision_passage ? `— ${b.decision_passage}` : ""}
+                      {b.moyenne_generale.toFixed(1)} / 100 {b.decision_passage ? `— ${libelle(b.decision_passage)}` : ""}
                     </span>
                   </div>
                 </Card>

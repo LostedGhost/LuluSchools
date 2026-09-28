@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { mesContrats, obtenirLienSignatureContrat, signerContrat } from "../../api/recrutement";
+import { mesContrats, obtenirLienSignatureContrat, signerContrat, telechargerContratPdf } from "../../api/recrutement";
+import { ouvrirBlobPdf } from "../../utils/telechargerBlob";
 import { messageErreur } from "../../api/client";
 import type { ContratOut } from "../../types/api";
 import { Badge, Card, ErrorBanner, SectionHead, Btn, EmptyState } from "../../components/ui";
 import { SignatureCanvas } from "../../components/SignatureCanvas";
-import { ExternalLink, PenLine } from "lucide-react";
+import { ExternalLink, FileDown, PenLine } from "lucide-react";
 
 export function MesContratsPage() {
   const [contrats, setContrats] = useState<ContratOut[]>([]);
@@ -21,6 +22,19 @@ export function MesContratsPage() {
       window.open(res.data.url, "_blank", "noopener,noreferrer");
     } catch (err) {
       setErreur(messageErreur(err, "Impossible d'ouvrir la signature pour le moment."));
+    } finally {
+      setLienEnCoursId(null);
+    }
+  };
+
+  const telechargerPdf = async (contratId: string) => {
+    setLienEnCoursId(`pdf-${contratId}`);
+    setErreur(null);
+    try {
+      const res = await telechargerContratPdf(contratId);
+      ouvrirBlobPdf(res.data, `contrat-${contratId.slice(0, 8)}.pdf`);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible de générer le contrat pour le moment."));
     } finally {
       setLienEnCoursId(null);
     }
@@ -69,7 +83,7 @@ export function MesContratsPage() {
               <div className="mb-4 flex items-center justify-between border-b pb-4" style={{ borderColor: 'var(--border)' }}>
                 <div>
                   <h3 className="text-title text-ink">Contrat Enseignant</h3>
-                  <p className="text-sm text-ink-soft">Jusqu'au {c.date_fin}</p>
+                  <p className="text-sm text-ink-soft">Jusqu'au {new Date(c.date_fin).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</p>
                 </div>
                 <Badge tone={c.statut === "signe" ? "success" : "pending"}>
                   {c.statut === "signe" ? "Signé" : "En attente"}
@@ -93,14 +107,26 @@ export function MesContratsPage() {
                       </Btn>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
-                      <Btn variant="reward" onClick={() => setContratASigner(c.id)} className="w-full" leftIcon={<PenLine size={16} />}>
+                    <div className="flex flex-wrap gap-2">
+                      <Btn variant="outline" loading={lienEnCoursId === `pdf-${c.id}`} onClick={() => telechargerPdf(c.id)} leftIcon={<FileDown size={16} />}>
+                        Lire le contrat (PDF)
+                      </Btn>
+                      <Btn variant="reward" onClick={() => setContratASigner(c.id)} className="flex-1" leftIcon={<PenLine size={16} />}>
                         Signer ce contrat
                       </Btn>
                     </div>
                   )
                 ) : (
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Btn
+                      variant="primary"
+                      size="sm"
+                      loading={lienEnCoursId === `pdf-${c.id}`}
+                      onClick={() => telechargerPdf(c.id)}
+                      leftIcon={<FileDown size={14} />}
+                    >
+                      Télécharger le contrat signé (PDF)
+                    </Btn>
                     <Btn
                       variant="outline"
                       size="sm"

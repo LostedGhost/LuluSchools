@@ -35,7 +35,7 @@ export function ActesAdminPage() {
   const [nom, setNom] = useState("");
   const [prix, setPrix] = useState(0);
   const [piecesRequises, setPiecesRequises] = useState("");
-  const [modeleDocument, setModeleDocument] = useState<"" | "attestation_scolarite" | "releve_notes">("");
+  const [modeleDocument, setModeleDocument] = useState<"" | "attestation_scolarite" | "releve_notes" | "certificat_reussite">("");
   const [schemaFormulaire, setSchemaFormulaire] = useState<ChampFormulaire[]>([]);
   const [motifParId, setMotifParId] = useState<Record<string, string>>({});
   const [livraisonEnCoursId, setLivraisonEnCoursId] = useState<string | null>(null);
@@ -146,6 +146,7 @@ export function ActesAdminPage() {
                 <option value="">Traitée à la main (vous téléversez le document)</option>
                 <option value="attestation_scolarite">Automatique : attestation de scolarité générée et livrée dès le paiement</option>
                 <option value="releve_notes">Automatique : relevé de notes généré et livré dès le paiement</option>
+                <option value="certificat_reussite">Automatique : certificat de réussite, dès la décision favorable du conseil de classe</option>
               </Select>
             </Field>
             <Field label="Pièces requises (description)" error={champErreurs.piecesRequises}>

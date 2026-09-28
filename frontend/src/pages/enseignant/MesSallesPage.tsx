@@ -18,6 +18,7 @@ import {
   TextInput,
 } from "../../components/ui";
 import { estRempli } from "../../utils/validation";
+import { ConseilDeClasse } from "../../components/ConseilDeClasse";
 import { School, Star, User, Users } from "lucide-react";
 
 const NATURE_LABEL: Record<NatureEntreeVieScolaire, string> = {
@@ -108,6 +109,8 @@ export function MesSallesPage() {
                   ) : elevesParSalle[salle.id].length === 0 ? (
                     <EmptyState icon={<User size={20} />} title="Aucun élève inscrit" />
                   ) : (
+                    <>
+                    {salle.est_professeur_principal && <ConseilDeClasse classeId={salle.id} eleves={elevesParSalle[salle.id]} />}
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {elevesParSalle[salle.id].map((eleve) => (
                         <div key={eleve.eleve_id}>
@@ -146,6 +149,7 @@ export function MesSallesPage() {
                         </div>
                       ))}
                     </div>
+                    </>
                   )}
                 </div>
               )}

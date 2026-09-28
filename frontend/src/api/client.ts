@@ -68,6 +68,15 @@ export function rafraichirUneFois(): Promise<string | null> {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // Téléchargement (responseType "blob") : le corps d'erreur JSON arrive en Blob ; on le
+    // relit pour que messageErreur/codeErreur affichent le vrai message du serveur.
+    if (error.response?.data instanceof Blob && error.response.data.type.includes("json")) {
+      try {
+        error.response.data = JSON.parse(await error.response.data.text());
+      } catch {
+        /* corps illisible : message générique */
+      }
+    }
     const requeteOriginale = error.config as RequeteAvecRetry | undefined;
     // Un 401 sur /auth/* (mauvais mot de passe, code OTP errone...) est une reponse
     // metier a afficher sur place : jamais un motif de rafraichissement ni de redirection.
