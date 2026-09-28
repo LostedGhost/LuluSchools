@@ -128,6 +128,7 @@ class MeOut(BaseModel):
     mot_de_passe_temporaire: bool
     est_etudiant: bool
     telephone: str | None = None
+    preferences_accessibilite: dict | None = None
 
 
 class MiseAJourProfilRequest(BaseModel):

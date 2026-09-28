@@ -100,7 +100,7 @@ export function CartesPage() {
             <ArrowLeft size={16} /> Accueil
           </Link>
           <span style={{ fontFamily: "var(--font-brand)", fontSize: "var(--text-xl)", color: "var(--ink)" }}>
-            Lulu<span style={{ color: "var(--primary)" }}>·</span>Schools
+            Lulu<span style={{ color: "var(--primary-deep)" }}>·</span>Schools
           </span>
           <Link to="/etablissements" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--ink-soft)", fontWeight: 600, fontSize: "var(--text-sm)", textDecoration: "none" }}>
             <Building2 size={16} /> Annuaire

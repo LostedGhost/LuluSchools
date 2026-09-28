@@ -324,7 +324,7 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
                 marginBottom: "20px",
               }}
             >
-              <Mail size={24} style={{ color: "var(--primary)", flexShrink: 0 }} />
+              <Mail size={24} style={{ color: "var(--primary-deep)", flexShrink: 0 }} />
               <div>
                 <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: "var(--text-sm)" }}>
                   Code envoyé à {email}
@@ -428,7 +428,7 @@ export function SignupPage({ role }: { role: "tuteur" | "enseignant" }) {
         {etape === 1 && (
           <p style={{ textAlign: "center", marginTop: "20px", fontSize: "var(--text-sm)", color: "var(--ink-faint)" }}>
             Déjà un compte ?{" "}
-            <Link to="/connexion" style={{ color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}>
+            <Link to="/connexion" style={{ color: "var(--primary-deep)", fontWeight: 700, textDecoration: "none" }}>
               Se connecter
             </Link>
           </p>

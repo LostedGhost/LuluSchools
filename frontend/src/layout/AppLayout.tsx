@@ -41,7 +41,11 @@ import {
   Inbox,
   Menu,
   ScanLine,
+  Accessibility,
 } from "lucide-react";
+
+import { BandeauHorsLigne } from "../accessibilite/BandeauHorsLigne";
+import { AccessibiliteHote, BoutonAccessibilite, ouvrirPanneauAccessibilite } from "../accessibilite/BarreAccessibilite";
 
 /* ═══════════════════════════════════════════════════════════════
    Dark mode context
@@ -345,6 +349,7 @@ function DesktopSidebar({
 
         {/* Dark mode + Déconnexion */}
         <div style={{ display: "flex", gap: "8px", justifyContent: collapsed ? "center" : "flex-start", flexWrap: "wrap" }}>
+          <BoutonAccessibilite />
           <button
             onClick={toggleTheme}
             className="btn btn-ghost btn-icon btn-sm"
@@ -457,7 +462,18 @@ function BottomNav({ items, compteurs }: { items: NavItem[]; compteurs: Compteur
             </NavLink>
           ))}
         </div>
-        <div style={{ display: "flex", gap: "8px", marginTop: "14px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", gap: "8px", marginTop: "14px", paddingTop: "12px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOuvert(false);
+              ouvrirPanneauAccessibilite();
+            }}
+            className="btn btn-ghost btn-sm"
+            style={{ gap: "6px" }}
+          >
+            <Accessibility size={15} aria-hidden="true" /> Accessibilité
+          </button>
           <button type="button" onClick={toggle} className="btn btn-ghost btn-sm" style={{ gap: "6px" }}>
             {dark ? <Sun size={15} /> : <Moon size={15} />} {dark ? "Mode clair" : "Mode sombre"}
           </button>
@@ -525,7 +541,8 @@ function MobileHeader() {
         </div>
       </NavLink>
       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-        <button onClick={toggle} className="btn btn-ghost btn-icon btn-sm" aria-label="Basculer le thème">
+        <BoutonAccessibilite />
+        <button onClick={toggle} className="btn btn-ghost btn-icon btn-sm" aria-label={dark ? "Activer le mode clair" : "Activer le mode sombre"}>
           {dark ? <Sun size={16} /> : <Moon size={16} />}
         </button>
         {utilisateur && (
@@ -563,14 +580,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
        pour ne pas entrer en collision avec la barre de navigation mobile. */
     return (
       <div style={{ minHeight: "100dvh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
-        <div style={{ flex: 1 }}>{children}</div>
+        <a href="#main-content" className="lien-evitement">Aller au contenu</a>
+        <BandeauHorsLigne />
+        <main id="main-content" tabIndex={-1} style={{ flex: 1, outline: "none" }}>
+          {children}
+        </main>
         <Footer />
+        <BoutonAccessibilite variante="flottant" />
+        <AccessibiliteHote />
       </div>
     );
   }
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)" }}>
+      <a href="#main-content" className="lien-evitement">Aller au contenu</a>
+      <AccessibiliteHote />
       {/* Sidebar desktop (masquée < 768px via CSS) */}
       {items.length > 0 && (
         <DesktopSidebar
@@ -593,6 +618,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         tabIndex={-1}
         aria-label="Contenu principal"
       >
+        <BandeauHorsLigne />
         {children}
       </main>
 

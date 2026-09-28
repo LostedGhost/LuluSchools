@@ -23,7 +23,7 @@ function computePasswordStrength(pwd: string): {
   if (score <= 1) return { percent: 20, label: "Très faible", color: "var(--action)" };
   if (score === 2) return { percent: 40, label: "Faible", color: "var(--action-deep)" };
   if (score === 3) return { percent: 65, label: "Moyen", color: "var(--reward-deep)" };
-  if (score === 4) return { percent: 85, label: "Fort", color: "var(--primary)" };
+  if (score === 4) return { percent: 85, label: "Fort", color: "var(--primary-deep)" };
   return { percent: 100, label: "Excellent", color: "var(--primary-deep)" };
 }
 

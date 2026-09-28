@@ -194,11 +194,20 @@
     --clr-surface-2:     #1A251E;
     --clr-border:        #263229;
     --clr-border-strong: #34423A;
+    /* Sur un vert clair, le texte des boutons doit être foncé pour rester lisible. */
+    --on-primary: #06120B;
+  --on-action: #06120B;
+  --on-info: #06120B;
+  --on-magic: #06120B;
+    --on-action: #06120B;
+    --on-info: #06120B;
+    --on-magic: #06120B;
   }
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
+  --on-primary: #06120B;
 
   --clr-green-500:  #34C97D;
   --clr-green-300:  #7FE3A8;
@@ -305,7 +314,7 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 .text-ink     { color: var(--ink); }
 .text-soft    { color: var(--ink-soft); }
 .text-faint   { color: var(--ink-faint); }
-.text-primary { color: var(--primary); }
+.text-primary { color: var(--primary-deep); }
 .text-reward  { color: var(--reward-deep); }
 .text-action  { color: var(--action-deep); }
 .text-info    { color: var(--info-deep); }
@@ -360,11 +369,13 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 .btn:focus-visible { outline: 2.5px solid var(--primary); outline-offset: 2px; }
 
 .btn-primary {
-  background: var(--primary);
+  /* Vert foncé : texte blanc à 5,3:1 (WCAG AA), le vert de marque n'atteignait que 3,3:1. */
+  background: var(--primary-deep);
   color: var(--on-primary);
   box-shadow: var(--shadow-sm);
 }
-.btn-primary:hover { background: var(--primary-deep); box-shadow: var(--shadow-md); }
+.btn-primary:hover { background: var(--primary-900); box-shadow: var(--shadow-md); }
+[data-theme="dark"] .btn-primary:hover { background: var(--primary); }
 
 .btn-reward {
   background: var(--reward);
@@ -477,6 +488,10 @@ button, a, [role="button"], select, summary { cursor: pointer; }
   border: 1px solid transparent;
   line-height: 1;
   white-space: nowrap;
+  /* Un nom d'établissement très long ne doit jamais élargir la page (téléphone). */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
@@ -1087,4 +1102,126 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 /* Téléphone : un libellé de bouton long passe à la ligne au lieu de déborder de l'écran */
 @media (max-width: 640px) {
   .btn { white-space: normal; text-align: center; max-width: 100%; line-height: 1.3; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACCESSIBILITÉ (Lot 7) — préférences posées sur <html> par
+   accessibilite/AccessibiliteContext.tsx. Aucune page n'a à les connaître.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Lien d'évitement : premier élément atteint au clavier, invisible sinon. */
+.lien-evitement {
+  position: absolute; left: 12px; top: -60px; z-index: calc(var(--z-toast) + 1);
+  padding: 10px 16px; border-radius: var(--radius-sm);
+  background: var(--ink); color: var(--bg); font-weight: 700; text-decoration: none;
+  transition: top var(--dur-fast) ease;
+}
+.lien-evitement:focus { top: 12px; }
+#main-content:focus { outline: none; }
+
+/* Taille du texte : les jetons typographiques sont en rem, ils suivent la racine. */
+html[data-taille="grand"] { font-size: 112.5%; }
+html[data-taille="tres_grand"] { font-size: 125%; }
+html[data-taille="grand"] .tile-key,
+html[data-taille="tres_grand"] .tile-key,
+html[data-taille="grand"] .bottom-nav-item,
+html[data-taille="tres_grand"] .bottom-nav-item { font-size: var(--text-xs); }
+
+/* Contraste élevé : textes secondaires au niveau du texte principal, bordures visibles. */
+html[data-contraste] {
+  --ink-soft: var(--clr-ink-900);
+  --ink-faint: var(--clr-ink-700);
+  --border: var(--clr-ink-500);
+  --border-strong: var(--clr-ink-700);
+  --primary-deep: var(--clr-green-900);
+}
+html[data-contraste][data-theme="dark"] { --primary-deep: var(--clr-green-300); }
+html[data-contraste] a:not(.btn):not(.bottom-nav-item):not(.lien-evitement) { text-decoration: underline; text-underline-offset: 3px; }
+html[data-contraste] :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+html[data-contraste] .card, html[data-contraste] .modale { border-width: 2px; }
+
+/* Espacement renforcé (WCAG 1.4.12) : interligne, espacement des mots et des lettres. */
+html[data-espacement] :where(p, li, span, a, label, td, th, dd, dt, h1, h2, h3, h4, button, input, textarea, select) {
+  line-height: 1.8 !important;
+  letter-spacing: .08em !important;
+  word-spacing: .16em !important;
+}
+html[data-espacement] p { margin-bottom: 1.2em; }
+
+/* Animations réduites sur demande (en plus de prefers-reduced-motion). */
+html[data-animations-reduites] { scroll-behavior: auto; }
+html[data-animations-reduites] *, html[data-animations-reduites] *::before, html[data-animations-reduites] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
+}
+
+/* Données réduites : pas d'effets décoratifs coûteux à peindre sur un téléphone modeste. */
+html[data-donnees-reduites] .hero-glow { display: none; }
+
+/* Bouton flottant (pages publiques) */
+.a11y-bouton-flottant {
+  position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: var(--z-sticky);
+  width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--surface);
+  background: var(--primary-deep); color: #fff; display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-md, 0 6px 20px rgba(0,0,0,.18)); cursor: pointer;
+}
+.a11y-bouton-flottant:hover { background: var(--primary-900); }
+.a11y-bouton-flottant:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+/* Mini-lecteur de la lecture à voix haute */
+.a11y-mini-lecteur {
+  position: fixed; top: calc(10px + env(safe-area-inset-top)); left: 0; right: 0; margin: 0 auto; width: max-content; max-width: calc(100vw - 24px);
+  z-index: var(--z-toast); display: flex; align-items: center; gap: 4px;
+  padding: 4px 6px 4px 14px; border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--ink); border: 1.5px solid var(--primary);
+  box-shadow: 0 6px 20px rgba(0,0,0,.18);
+}
+.a11y-mini-texte { font-size: var(--text-sm); font-weight: 600; margin: 0 6px; white-space: nowrap; }
+
+/* Panneau */
+.a11y-section { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.a11y-section:first-child { padding-top: 0; }
+.a11y-section:last-child { border-bottom: none; }
+.a11y-titre { font-family: var(--font-display); font-size: var(--text-base); font-weight: 700; margin: 0 0 10px; color: var(--ink); }
+.a11y-option { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+.a11y-option input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--primary-deep); }
+.a11y-option-libelle { display: block; font-weight: 600; color: var(--ink); }
+.a11y-option-aide { display: block; font-size: var(--text-sm); color: var(--ink-faint); margin: 6px 0 0; }
+.a11y-segments { display: inline-flex; border: 1.5px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
+.a11y-segment {
+  min-width: 64px; min-height: 44px; padding: 0 14px; border: none; background: var(--surface); color: var(--ink);
+  font-family: var(--font-display); font-weight: 700; font-size: var(--text-base); cursor: pointer;
+}
+.a11y-segment + .a11y-segment { border-left: 1.5px solid var(--border-strong); }
+.a11y-segment[aria-pressed="true"] { background: var(--primary-deep); color: #fff; }
+
+/* Barre du haut de la page d'accueil : se replie sur deux lignes sur téléphone
+   (débordement horizontal trouvé pendant l'audit d'accessibilité du Lot 7). */
+.landing-topbar {
+  max-width: 1200px; margin: 0 auto; padding: 0 24px; min-height: 68px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px 12px;
+}
+.landing-nav { display: flex; gap: 6px; background: var(--surface-2); border-radius: var(--radius-pill); padding: 5px; }
+.landing-hero > * { min-width: 0; }
+.text-display { overflow-wrap: break-word; }
+@media (max-width: 640px) {
+  .landing-topbar { flex-wrap: wrap; padding: 10px 16px; }
+  .landing-nav { order: 3; width: 100%; justify-content: space-between; overflow-x: auto; }
+  .landing-nav > * { padding: 8px 10px !important; white-space: nowrap; }
+}
+.landing-xp-demo { padding: 48px; }
+.landing-xp-grille { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+.landing-xp-grille > * { min-width: 0; }
+@media (max-width: 768px) {
+  .landing-xp-demo { padding: 24px 18px; }
+  .landing-xp-grille { grid-template-columns: 1fr; gap: 28px; }
+}
+
+/* Bandeau hors ligne (Lot 7.5) */
+.bandeau-hors-ligne {
+  position: sticky; top: 0; z-index: calc(var(--z-sticky) + 1);
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  background: var(--reward-tint, #FDF0DB); color: var(--ink); border-bottom: 1px solid var(--border-strong);
+  font-size: var(--text-sm); font-weight: 600;
 }

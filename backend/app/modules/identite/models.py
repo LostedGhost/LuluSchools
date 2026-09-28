@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -46,6 +46,10 @@ class Utilisateur(Base):
     # Tout refresh token emis avant cette date est refuse (changement ou reinitialisation
     # du mot de passe = fermeture des autres sessions).
     mot_de_passe_modifie_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Lot 7.2 (accessibilite) : taille du texte, contraste, mode Ecoute... suivent la
+    # personne d'un appareil a l'autre (telephone partage, cybercafe). Schema valide par
+    # app.modules.accessibilite.schemas.PreferencesAccessibilite ; None = reglages par defaut.
+    preferences_accessibilite: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 

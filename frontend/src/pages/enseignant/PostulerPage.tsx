@@ -170,7 +170,7 @@ export function PostulerPage() {
 
             <div className="flex flex-wrap items-center gap-4 text-sm" style={{ color: "var(--ink-soft)" }}>
               <div className="flex items-center gap-1.5 font-medium">
-                <Building2 size={16} style={{ color: "var(--primary)" }} />
+                <Building2 size={16} style={{ color: "var(--primary-deep)" }} />
                 <span>
                   {etablissement ? etablissement.nom : "Établissement d'accueil"}
                 </span>

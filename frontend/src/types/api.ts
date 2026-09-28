@@ -31,6 +31,8 @@ export interface MeOut {
   mot_de_passe_temporaire: boolean;
   est_etudiant: boolean;
   telephone: string | null;
+  /** Lot 7.2 : réglages d'accessibilité synchronisés sur le compte (null = défaut). */
+  preferences_accessibilite?: import("../api/accessibilite").PreferencesAccessibilite | null;
 }
 
 export interface TuteurOut {

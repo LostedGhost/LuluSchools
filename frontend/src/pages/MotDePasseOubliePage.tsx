@@ -71,7 +71,7 @@ export function MotDePasseOubliePage() {
     >
       <div className="card anim-float-in" style={{ width: "100%", maxWidth: "440px" }}>
         <div style={{ textAlign: "center", marginBottom: "28px" }}>
-          <KeyRound size={36} style={{ color: "var(--primary)", margin: "0 auto 12px", display: "block" }} />
+          <KeyRound size={36} style={{ color: "var(--primary-deep)", margin: "0 auto 12px", display: "block" }} />
           <h1 className="text-title" style={{ margin: "0 0 6px", color: "var(--ink)" }}>
             Mot de passe oublié
           </h1>
@@ -144,7 +144,7 @@ export function MotDePasseOubliePage() {
 
         <hr className="divider-dashed" />
         <p style={{ textAlign: "center", margin: 0 }}>
-          <Link to="/connexion" style={{ color: "var(--primary)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
+          <Link to="/connexion" style={{ color: "var(--primary-deep)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
             ← Retour à la connexion
           </Link>
         </p>

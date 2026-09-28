@@ -83,7 +83,7 @@ export function VieScolairePage() {
               {dossier.photo_url ? (
                 <img
                   src={dossier.photo_url}
-                  alt=""
+                  alt="Photo de l’élève"
                   style={{ width: "72px", height: "72px", borderRadius: "var(--radius-md)", objectFit: "cover" }}
                 />
               ) : (

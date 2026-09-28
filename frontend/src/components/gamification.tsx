@@ -37,7 +37,14 @@ export function XPBar({
           {current.toLocaleString("fr-FR")} / {max.toLocaleString("fr-FR")} XP
         </span>
       </div>
-      <div className="xp-track" role="progressbar" aria-valuenow={current} aria-valuemin={0} aria-valuemax={max}>
+      <div
+        className="xp-track"
+        role="progressbar"
+        aria-valuenow={current}
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-label={level !== undefined ? `Progression du niveau ${level}` : "Progression"}
+      >
         <div className="xp-fill" style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -70,7 +77,8 @@ export function LevelBadge({
     <div
       className={`medal medal-${variant}`}
       style={{ width: size, height: size }}
-      aria-label={`Niveau ${level ?? ""} — ${variant}`}
+      role="img"
+      aria-label={variant === "locked" ? "Niveau verrouillé" : `Niveau ${level ?? ""}`}
     >
       {level !== undefined && variant !== "locked" ? (
         <span
@@ -109,6 +117,7 @@ export function MedalRow({ medals }: { medals: MedalDef[] }) {
           key={m.id}
           className={`medal medal-${m.variant}`}
           title={m.label}
+          role="img"
           aria-label={m.label}
           style={{ width: 44, height: 44 }}
         >
@@ -125,7 +134,7 @@ export function MedalRow({ medals }: { medals: MedalDef[] }) {
 
 export function StreakPill({ days }: { days: number }) {
   return (
-    <div className="streak-pill" aria-label={`Série de ${days} jours`}>
+    <div className="streak-pill" role="img" aria-label={`Série de ${days} jours`}>
       <Flame size={15} aria-hidden="true" />
       <span>
         {days} jour{days > 1 ? "s" : ""} de suite

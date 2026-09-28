@@ -158,7 +158,7 @@ export function LoginPage() {
             </Field>
 
             {messageSucces && !erreur && (
-              <p role="status" style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--primary)" }}>
+              <p role="status" style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--primary-deep)" }}>
                 {messageSucces}
               </p>
             )}
@@ -167,7 +167,7 @@ export function LoginPage() {
             <p style={{ margin: 0, textAlign: "right" }}>
               <Link
                 to="/mot-de-passe-oublie"
-                style={{ color: "var(--primary)", fontSize: "var(--text-xs)", textDecoration: "none" }}
+                style={{ color: "var(--primary-deep)", fontSize: "var(--text-xs)", textDecoration: "none" }}
               >
                 Mot de passe oublié ?
               </Link>
@@ -192,7 +192,7 @@ export function LoginPage() {
           Pas encore de compte ?{" "}
           <Link
             to="/inscription-tuteur"
-            style={{ color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}
+            style={{ color: "var(--primary-deep)", fontWeight: 700, textDecoration: "none" }}
           >
             Tuteur
           </Link>

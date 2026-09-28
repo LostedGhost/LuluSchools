@@ -1,5 +1,3 @@
-import { ATraiterPage } from "./pages/admin/ATraiterPage";
-import { ATraiterEtablissementPage } from "./pages/admin/ATraiterEtablissementPage";
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ConfirmationProvider } from "./components/Modale";
@@ -9,93 +7,108 @@ import { RedirectIfAuthenticated } from "./auth/RedirectIfAuthenticated";
 import { AppLayout, ThemeProvider } from "./layout/AppLayout";
 import { EleveProfileProvider } from "./eleve/EleveProfileContext";
 import { AdminEtabProvider } from "./admin/AdminEtabContext";
+import { AccessibiliteProvider } from "./accessibilite/AccessibiliteContext";
 
 import { LandingPage } from "./pages/LandingPage";
-import { EtablissementsAnnuairePage } from "./pages/EtablissementsAnnuairePage";
+
+// Toutes les autres pages sont chargées à la demande (Lot 7.5, connectivité limitée) :
+// un visiteur ne télécharge que le code des écrans qu’il ouvre réellement.
+const ATraiterPage = lazy(() => import("./pages/admin/ATraiterPage").then((m) => ({ default: m.ATraiterPage })));
+const ATraiterEtablissementPage = lazy(() => import("./pages/admin/ATraiterEtablissementPage").then((m) => ({ default: m.ATraiterEtablissementPage })));
+const EtablissementsAnnuairePage = lazy(() => import("./pages/EtablissementsAnnuairePage").then((m) => ({ default: m.EtablissementsAnnuairePage })));
 // Chargée à la demande : Leaflet + react-leaflet ne doivent jamais alourdir le
 // bundle des autres pages (même principe que StarfieldScene, voir LandingPage.tsx).
 const CartesPage = lazy(() => import("./pages/CartesPage").then((m) => ({ default: m.CartesPage })));
-import { LoginPage } from "./pages/LoginPage";
-import { SignupPage } from "./pages/SignupPage";
-import { ChangePasswordPage } from "./pages/ChangePasswordPage";
-import { MotDePasseOubliePage } from "./pages/MotDePasseOubliePage";
-import { DashboardRedirect } from "./pages/DashboardRedirect";
-import { NotFoundPage } from "./pages/NotFoundPage";
+const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const SignupPage = lazy(() => import("./pages/SignupPage").then((m) => ({ default: m.SignupPage })));
+const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage").then((m) => ({ default: m.ChangePasswordPage })));
+const MotDePasseOubliePage = lazy(() => import("./pages/MotDePasseOubliePage").then((m) => ({ default: m.MotDePasseOubliePage })));
+const DashboardRedirect = lazy(() => import("./pages/DashboardRedirect").then((m) => ({ default: m.DashboardRedirect })));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
 
-import { TuteurDashboard } from "./pages/tuteur/TuteurDashboard";
-import { NouvelleInscriptionPage } from "./pages/tuteur/NouvelleInscriptionPage";
-import { ServicesScolairesPage as TuteurServicesScolairesPage } from "./pages/tuteur/ServicesScolairesPage";
-import { VieScolaireEnfantPage } from "./pages/tuteur/VieScolaireEnfantPage";
-import { DevoirsEnfantPage } from "./pages/tuteur/DevoirsEnfantPage";
-import { MarketplaceEnfantPage } from "./pages/tuteur/MarketplaceEnfantPage";
-import { SessionsLiveEnfantPage } from "./pages/tuteur/SessionsLiveEnfantPage";
-import { ElProfessorTuteurPage } from "./pages/tuteur/ElProfessorTuteurPage";
-import { CoffreFortPage } from "./pages/tuteur/CoffreFortPage";
-import { RadarFamilialPage } from "./pages/tuteur/RadarFamilialPage";
-import { PasseportEnfantPage } from "./pages/tuteur/PasseportEnfantPage";
+const TuteurDashboard = lazy(() => import("./pages/tuteur/TuteurDashboard").then((m) => ({ default: m.TuteurDashboard })));
+const NouvelleInscriptionPage = lazy(() => import("./pages/tuteur/NouvelleInscriptionPage").then((m) => ({ default: m.NouvelleInscriptionPage })));
+const TuteurServicesScolairesPage = lazy(() => import("./pages/tuteur/ServicesScolairesPage").then((m) => ({ default: m.ServicesScolairesPage })));
+const VieScolaireEnfantPage = lazy(() => import("./pages/tuteur/VieScolaireEnfantPage").then((m) => ({ default: m.VieScolaireEnfantPage })));
+const DevoirsEnfantPage = lazy(() => import("./pages/tuteur/DevoirsEnfantPage").then((m) => ({ default: m.DevoirsEnfantPage })));
+const MarketplaceEnfantPage = lazy(() => import("./pages/tuteur/MarketplaceEnfantPage").then((m) => ({ default: m.MarketplaceEnfantPage })));
+const SessionsLiveEnfantPage = lazy(() => import("./pages/tuteur/SessionsLiveEnfantPage").then((m) => ({ default: m.SessionsLiveEnfantPage })));
+const ElProfessorTuteurPage = lazy(() => import("./pages/tuteur/ElProfessorTuteurPage").then((m) => ({ default: m.ElProfessorTuteurPage })));
+const CoffreFortPage = lazy(() => import("./pages/tuteur/CoffreFortPage").then((m) => ({ default: m.CoffreFortPage })));
+const RadarFamilialPage = lazy(() => import("./pages/tuteur/RadarFamilialPage").then((m) => ({ default: m.RadarFamilialPage })));
+const PasseportEnfantPage = lazy(() => import("./pages/tuteur/PasseportEnfantPage").then((m) => ({ default: m.PasseportEnfantPage })));
 
-import { EleveDashboard } from "./pages/eleve/EleveDashboard";
-import { CoursListPage } from "./pages/eleve/CoursListPage";
-import { CoursDetailPage } from "./pages/eleve/CoursDetailPage";
-import { QuizPage } from "./pages/eleve/QuizPage";
-import { DevoirsListPage } from "./pages/eleve/DevoirsListPage";
-import { DevoirDetailPage } from "./pages/eleve/DevoirDetailPage";
-import { BulletinPage } from "./pages/eleve/BulletinPage";
-import { ActesPage } from "./pages/eleve/ActesPage";
-import { CoursDirectPage } from "./pages/eleve/CoursDirectPage";
-import { ServicesScolairesPage as EleveServicesScolairesPage } from "./pages/eleve/ServicesScolairesPage";
-import { ElProfessorElevePage } from "./pages/eleve/ElProfessorElevePage";
-import { PasseportPage } from "./pages/eleve/PasseportPage";
+const EleveDashboard = lazy(() => import("./pages/eleve/EleveDashboard").then((m) => ({ default: m.EleveDashboard })));
+const CoursListPage = lazy(() => import("./pages/eleve/CoursListPage").then((m) => ({ default: m.CoursListPage })));
+const CoursDetailPage = lazy(() => import("./pages/eleve/CoursDetailPage").then((m) => ({ default: m.CoursDetailPage })));
+const QuizPage = lazy(() => import("./pages/eleve/QuizPage").then((m) => ({ default: m.QuizPage })));
+const DevoirsListPage = lazy(() => import("./pages/eleve/DevoirsListPage").then((m) => ({ default: m.DevoirsListPage })));
+const DevoirDetailPage = lazy(() => import("./pages/eleve/DevoirDetailPage").then((m) => ({ default: m.DevoirDetailPage })));
+const BulletinPage = lazy(() => import("./pages/eleve/BulletinPage").then((m) => ({ default: m.BulletinPage })));
+const ActesPage = lazy(() => import("./pages/eleve/ActesPage").then((m) => ({ default: m.ActesPage })));
+const CoursDirectPage = lazy(() => import("./pages/eleve/CoursDirectPage").then((m) => ({ default: m.CoursDirectPage })));
+const EleveServicesScolairesPage = lazy(() => import("./pages/eleve/ServicesScolairesPage").then((m) => ({ default: m.ServicesScolairesPage })));
+const ElProfessorElevePage = lazy(() => import("./pages/eleve/ElProfessorElevePage").then((m) => ({ default: m.ElProfessorElevePage })));
+const PasseportPage = lazy(() => import("./pages/eleve/PasseportPage").then((m) => ({ default: m.PasseportPage })));
 
-import { EnseignantDashboard } from "./pages/enseignant/EnseignantDashboard";
-import { PostesListPage } from "./pages/enseignant/PostesListPage";
-import { PostulerPage } from "./pages/enseignant/PostulerPage";
-import { MesCandidaturesPage } from "./pages/enseignant/MesCandidaturesPage";
-import { MesContratsPage } from "./pages/enseignant/MesContratsPage";
-import { MesCoursPage } from "./pages/enseignant/MesCoursPage";
-import { MesDevoirsPage } from "./pages/enseignant/MesDevoirsPage";
-import { SessionsLivePage } from "./pages/enseignant/SessionsLivePage";
-import { MesSallesPage } from "./pages/enseignant/MesSallesPage";
-import { ElProfessorPage } from "./pages/enseignant/ElProfessorPage";
-import { SalleLivePage } from "./pages/cours_direct/SalleLivePage";
+const EnseignantDashboard = lazy(() => import("./pages/enseignant/EnseignantDashboard").then((m) => ({ default: m.EnseignantDashboard })));
+const PostesListPage = lazy(() => import("./pages/enseignant/PostesListPage").then((m) => ({ default: m.PostesListPage })));
+const PostulerPage = lazy(() => import("./pages/enseignant/PostulerPage").then((m) => ({ default: m.PostulerPage })));
+const MesCandidaturesPage = lazy(() => import("./pages/enseignant/MesCandidaturesPage").then((m) => ({ default: m.MesCandidaturesPage })));
+const MesContratsPage = lazy(() => import("./pages/enseignant/MesContratsPage").then((m) => ({ default: m.MesContratsPage })));
+const MesCoursPage = lazy(() => import("./pages/enseignant/MesCoursPage").then((m) => ({ default: m.MesCoursPage })));
+const MesDevoirsPage = lazy(() => import("./pages/enseignant/MesDevoirsPage").then((m) => ({ default: m.MesDevoirsPage })));
+const SessionsLivePage = lazy(() => import("./pages/enseignant/SessionsLivePage").then((m) => ({ default: m.SessionsLivePage })));
+const MesSallesPage = lazy(() => import("./pages/enseignant/MesSallesPage").then((m) => ({ default: m.MesSallesPage })));
+const ElProfessorPage = lazy(() => import("./pages/enseignant/ElProfessorPage").then((m) => ({ default: m.ElProfessorPage })));
+const SalleLivePage = lazy(() => import("./pages/cours_direct/SalleLivePage").then((m) => ({ default: m.SalleLivePage })));
 
-import { AdminEtabDashboard } from "./pages/admin_etablissement/AdminEtabDashboard";
-import { ClassesPage } from "./pages/admin_etablissement/ClassesPage";
-import { ConsoleEtablissementPage } from "./pages/admin_etablissement/ConsoleEtablissementPage";
-import { RentreePage } from "./pages/admin_etablissement/RentreePage";
-import { VieScolairePage } from "./pages/admin_etablissement/VieScolairePage";
-import { InscriptionsAValiderPage } from "./pages/admin_etablissement/InscriptionsAValiderPage";
-import { RecrutementPage } from "./pages/admin_etablissement/RecrutementPage";
-import { ContestationsPage } from "./pages/admin_etablissement/ContestationsPage";
-import { ActesAdminPage } from "./pages/admin_etablissement/ActesAdminPage";
-import { ReferentielsEtabPage } from "./pages/admin_etablissement/ReferentielsEtabPage";
-import { SaisiePapierPage } from "./pages/admin_etablissement/SaisiePapierPage";
-import { BulletinsEnfantPage } from "./pages/tuteur/BulletinsEnfantPage";
-import { ServicesScolairesAdminPage } from "./pages/admin_etablissement/ServicesScolairesAdminPage";
-import { EvenementsAdminPage } from "./pages/admin_etablissement/EvenementsAdminPage";
+const AdminEtabDashboard = lazy(() => import("./pages/admin_etablissement/AdminEtabDashboard").then((m) => ({ default: m.AdminEtabDashboard })));
+const ClassesPage = lazy(() => import("./pages/admin_etablissement/ClassesPage").then((m) => ({ default: m.ClassesPage })));
+const ConsoleEtablissementPage = lazy(() => import("./pages/admin_etablissement/ConsoleEtablissementPage").then((m) => ({ default: m.ConsoleEtablissementPage })));
+const RentreePage = lazy(() => import("./pages/admin_etablissement/RentreePage").then((m) => ({ default: m.RentreePage })));
+const VieScolairePage = lazy(() => import("./pages/admin_etablissement/VieScolairePage").then((m) => ({ default: m.VieScolairePage })));
+const InscriptionsAValiderPage = lazy(() => import("./pages/admin_etablissement/InscriptionsAValiderPage").then((m) => ({ default: m.InscriptionsAValiderPage })));
+const RecrutementPage = lazy(() => import("./pages/admin_etablissement/RecrutementPage").then((m) => ({ default: m.RecrutementPage })));
+const ContestationsPage = lazy(() => import("./pages/admin_etablissement/ContestationsPage").then((m) => ({ default: m.ContestationsPage })));
+const ActesAdminPage = lazy(() => import("./pages/admin_etablissement/ActesAdminPage").then((m) => ({ default: m.ActesAdminPage })));
+const ReferentielsEtabPage = lazy(() => import("./pages/admin_etablissement/ReferentielsEtabPage").then((m) => ({ default: m.ReferentielsEtabPage })));
+const SaisiePapierPage = lazy(() => import("./pages/admin_etablissement/SaisiePapierPage").then((m) => ({ default: m.SaisiePapierPage })));
+const BulletinsEnfantPage = lazy(() => import("./pages/tuteur/BulletinsEnfantPage").then((m) => ({ default: m.BulletinsEnfantPage })));
+const ServicesScolairesAdminPage = lazy(() => import("./pages/admin_etablissement/ServicesScolairesAdminPage").then((m) => ({ default: m.ServicesScolairesAdminPage })));
+const EvenementsAdminPage = lazy(() => import("./pages/admin_etablissement/EvenementsAdminPage").then((m) => ({ default: m.EvenementsAdminPage })));
 
-import { AdminMinisterielDashboard } from "./pages/admin_ministeriel/AdminMinisterielDashboard";
-import { EtablissementsPage } from "./pages/admin_ministeriel/EtablissementsPage";
-import { ReferentielsPage } from "./pages/admin_ministeriel/ReferentielsPage";
-import { UtilisateursPage as UtilisateursMinisterielPage } from "./pages/admin_ministeriel/UtilisateursPage";
-import { ContenusPage } from "./pages/admin_ministeriel/ContenusPage";
-import { EvenementsSupervisionPage } from "./pages/admin_ministeriel/EvenementsSupervisionPage";
-import { JournalAuditPage } from "./pages/admin_ministeriel/JournalAuditPage";
+const AdminMinisterielDashboard = lazy(() => import("./pages/admin_ministeriel/AdminMinisterielDashboard").then((m) => ({ default: m.AdminMinisterielDashboard })));
+const EtablissementsPage = lazy(() => import("./pages/admin_ministeriel/EtablissementsPage").then((m) => ({ default: m.EtablissementsPage })));
+const ReferentielsPage = lazy(() => import("./pages/admin_ministeriel/ReferentielsPage").then((m) => ({ default: m.ReferentielsPage })));
+const UtilisateursMinisterielPage = lazy(() => import("./pages/admin_ministeriel/UtilisateursPage").then((m) => ({ default: m.UtilisateursPage })));
+const ContenusPage = lazy(() => import("./pages/admin_ministeriel/ContenusPage").then((m) => ({ default: m.ContenusPage })));
+const EvenementsSupervisionPage = lazy(() => import("./pages/admin_ministeriel/EvenementsSupervisionPage").then((m) => ({ default: m.EvenementsSupervisionPage })));
+const JournalAuditPage = lazy(() => import("./pages/admin_ministeriel/JournalAuditPage").then((m) => ({ default: m.JournalAuditPage })));
 
-import { MessagerieListPage } from "./pages/messagerie/MessagerieListPage";
-import { ConversationPage } from "./pages/messagerie/ConversationPage";
-import { SignalementsPage } from "./pages/admin_etablissement/SignalementsPage";
-import { AlertesElProfessorPage } from "./pages/admin_etablissement/AlertesElProfessorPage";
-import { BilletteriePage } from "./pages/billetterie/BilletteriePage";
-import { ValiderAccesPage } from "./pages/controle_acces/ValiderAccesPage";
-import { MicroJobsPage } from "./pages/micro_jobs/MicroJobsPage";
-import { MicroJobsArbitragePage } from "./pages/admin_ministeriel/MicroJobsArbitragePage";
-import { MarketplacePage } from "./pages/eleve/MarketplacePage";
-import { MarketplaceAdminPage } from "./pages/admin_etablissement/MarketplaceAdminPage";
-import { MentionsLegalesPage } from "./pages/legal/MentionsLegalesPage";
-import { PolitiqueConfidentialitePage } from "./pages/legal/PolitiqueConfidentialitePage";
-import { CGUPage } from "./pages/legal/CGUPage";
-import { PolitiqueCookiesPage } from "./pages/legal/PolitiqueCookiesPage";
+const MessagerieListPage = lazy(() => import("./pages/messagerie/MessagerieListPage").then((m) => ({ default: m.MessagerieListPage })));
+const ConversationPage = lazy(() => import("./pages/messagerie/ConversationPage").then((m) => ({ default: m.ConversationPage })));
+const SignalementsPage = lazy(() => import("./pages/admin_etablissement/SignalementsPage").then((m) => ({ default: m.SignalementsPage })));
+const AlertesElProfessorPage = lazy(() => import("./pages/admin_etablissement/AlertesElProfessorPage").then((m) => ({ default: m.AlertesElProfessorPage })));
+const BilletteriePage = lazy(() => import("./pages/billetterie/BilletteriePage").then((m) => ({ default: m.BilletteriePage })));
+const ValiderAccesPage = lazy(() => import("./pages/controle_acces/ValiderAccesPage").then((m) => ({ default: m.ValiderAccesPage })));
+const MicroJobsPage = lazy(() => import("./pages/micro_jobs/MicroJobsPage").then((m) => ({ default: m.MicroJobsPage })));
+const MicroJobsArbitragePage = lazy(() => import("./pages/admin_ministeriel/MicroJobsArbitragePage").then((m) => ({ default: m.MicroJobsArbitragePage })));
+const MarketplacePage = lazy(() => import("./pages/eleve/MarketplacePage").then((m) => ({ default: m.MarketplacePage })));
+const MarketplaceAdminPage = lazy(() => import("./pages/admin_etablissement/MarketplaceAdminPage").then((m) => ({ default: m.MarketplaceAdminPage })));
+const MentionsLegalesPage = lazy(() => import("./pages/legal/MentionsLegalesPage").then((m) => ({ default: m.MentionsLegalesPage })));
+const PolitiqueConfidentialitePage = lazy(() => import("./pages/legal/PolitiqueConfidentialitePage").then((m) => ({ default: m.PolitiqueConfidentialitePage })));
+const CGUPage = lazy(() => import("./pages/legal/CGUPage").then((m) => ({ default: m.CGUPage })));
+const PolitiqueCookiesPage = lazy(() => import("./pages/legal/PolitiqueCookiesPage").then((m) => ({ default: m.PolitiqueCookiesPage })));
+
+/** Écran d’attente pendant le téléchargement d’une page (annoncé aux lecteurs d’écran). */
+function ChargementPage() {
+  return (
+    <div className="page-content" role="status" aria-live="polite">
+      <span className="sr-only">Chargement de la page…</span>
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -103,7 +116,9 @@ function App() {
       <ThemeProvider>
       <ConfirmationProvider>
       <AuthProvider>
+      <AccessibiliteProvider>
         <AppLayout>
+          <Suspense fallback={<ChargementPage />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/etablissements" element={<EtablissementsAnnuairePage />} />
@@ -801,7 +816,9 @@ function App() {
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          </Suspense>
         </AppLayout>
+      </AccessibiliteProvider>
       </AuthProvider>
       </ConfirmationProvider>
       </ThemeProvider>

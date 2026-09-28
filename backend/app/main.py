@@ -41,6 +41,7 @@ from app.modules.micro_jobs.router import router as micro_jobs_router
 from app.modules.paiements.router import router as kkiapay_webhook_router
 from app.modules.passeport_competences.router import router as passeport_competences_router
 from app.modules.radar_familial.router import router as radar_familial_router
+from app.modules.accessibilite.router import router as accessibilite_router
 from app.modules.recrutement.router import router as recrutement_router
 from app.modules.services_scolaires.router import router as services_scolaires_router
 from app.modules.vie_scolaire.router import router as vie_scolaire_router
@@ -161,6 +162,7 @@ app.include_router(identite_router, prefix="/api/v1")
 app.include_router(enseignant_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(me_router, prefix="/api/v1")
+app.include_router(accessibilite_router, prefix="/api/v1")
 app.include_router(identite_admin_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(etablissements_router, prefix="/api/v1")

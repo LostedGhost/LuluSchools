@@ -123,7 +123,7 @@ export function EleveDashboard() {
             <Skeleton height="60px" />
           ) : aRendre.length === 0 ? (
             <p className="text-sm" style={{ display: "flex", alignItems: "center", gap: "8px", margin: 0, color: "var(--ink-soft)" }}>
-              <CircleCheck size={18} aria-hidden="true" style={{ color: "var(--primary)" }} /> Rien à rendre pour le moment.
+              <CircleCheck size={18} aria-hidden="true" style={{ color: "var(--primary-deep)" }} /> Rien à rendre pour le moment.
             </p>
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>

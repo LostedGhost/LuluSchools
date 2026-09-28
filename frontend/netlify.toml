@@ -37,3 +37,9 @@
     Permissions-Policy = "camera=(self), microphone=(self), geolocation=(self), payment=(self)"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.kkiapay.me; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://images.pexels.com https://*.tile.openstreetmap.org https://lulufiles-api.onrender.com https://*.kkiapay.me; media-src 'self' blob: https://lulufiles-api.onrender.com; connect-src 'self' https://*.kkiapay.me; frame-src https://*.kkiapay.me; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+# Lot 7.5 : le service worker doit toujours être revalidé (nouvelle version = nouveau cache).
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

@@ -1,0 +1,17 @@
+{
+  "name": "LuluSchools — plateforme nationale de l'éducation",
+  "short_name": "LuluSchools",
+  "description": "Cours, devoirs, bulletins et vie scolaire, accessibles même avec une connexion faible.",
+  "lang": "fr",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F7F5",
+  "theme_color": "#0F7A45",
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icone-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

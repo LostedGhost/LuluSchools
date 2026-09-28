@@ -273,3 +273,27 @@ Détail : `docs/audit-securite-2026-09-27.md`. Côté frontend :
 - `.env.example` documente `VITE_KKIAPAY_PUBLIC_KEY`/`VITE_KKIAPAY_SANDBOX` — `.env` local non commité (gitignore racine).
 - `.claude/launch.json` (racine du dépôt) définit le serveur de dev `frontend` pour `preview_start`, sur le port 5173.
 - **Piège Vite/HMR rencontré (2 fois)** : supprimer une constante/un export encore référencé par une closure déjà montée (ex. retirer `TYPE_ICON` d'un fichier pendant qu'un composant l'utilisant est déjà rendu) peut laisser le module graph de Vite dans un état incohérent — `ReferenceError` en plein render, alors que `tsc --noEmit` est propre (la source ne référence plus rien d'indéfini, c'est un état HMR fantôme, pas un vrai bug). Un simple rechargement de page ne suffit pas toujours : `rm -rf node_modules/.vite` puis relancer complètement le serveur de dev (pas juste un `--reload`) résout le problème.
+
+## Lot 7 — Conformité PAG et inclusion (2026-09-28)
+Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
+- **Accessibilité (7.1/7.2)** : `src/accessibilite/` — `AccessibiliteContext.tsx` (préférences posées en
+  attributs sur `<html>` : `data-taille`, `data-contraste`, `data-espacement`, `data-animations-reduites`,
+  `data-donnees-reduites` ; traduites en styles dans la section « ACCESSIBILITÉ » de `index.css` ;
+  `localStorage` `ls-accessibilite` + synchronisation `PUT /me/preferences-accessibilite`),
+  `lecteurVocal.ts` (lecture à voix haute unique pour toute l'app : `speechSynthesis`, repli serveur,
+  `useEtatLecture`), `BarreAccessibilite.tsx` (`AccessibiliteHote` monté une fois dans `AppLayout`,
+  `BoutonAccessibilite` : flottant sur les pages publiques, dans la barre latérale, entrée
+  « Accessibilité » du menu « Plus » sur téléphone ; raccourcis Alt+A / Alt+L). `public/preferences-initiales.js`
+  applique thème et réglages avant le premier rendu (pas de flash). Lien « Aller au contenu » et `<main>`
+  sur toutes les mises en page, `lang="fr"`.
+- **Contrastes** : `.btn-primary` sur `--primary-deep` et texte vert en `--primary-deep` (le vert de marque
+  n'atteignait que 3,3:1) ; en thème sombre, texte foncé sur les boutons colorés (`--on-*`).
+- **Audit** : `scripts/audit_accessibilite.js` (axe-core, WCAG 2.1 AA, dans une iframe, même principe
+  que `audit_ergonomie.js`). Critère : 0 violation critique/sérieuse — atteint sur 22 pages (5 rôles,
+  clair/sombre, 375 px et 1280 px).
+- **Connectivité limitée (7.5)** : toutes les routes en `lazy()` dans `App.tsx` (bundle initial
+  945 Ko → 368 Ko, 111 Ko compressés) ; `useDonneesReduites()` coupe la scène Three.js, la photo de fond
+  de la landing et le chargement automatique des photos (`Carousel`) ; PWA : `public/manifest.webmanifest`,
+  `public/sw.js` (coquille en cache, contenus pédagogiques « réseau d'abord, copie sinon », vidés à la
+  déconnexion, enregistré en production seulement dans `main.tsx`) ; `BandeauHorsLigne.tsx` ;
+  `AuthContext` ne déconnecte plus sur une simple absence de réseau.

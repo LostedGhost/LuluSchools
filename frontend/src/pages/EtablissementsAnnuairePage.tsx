@@ -53,7 +53,7 @@ function EtablissementCard({ etab }: { etab: EtablissementVitrine }) {
   return (
     <div className="vitrine-card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ padding: "var(--space-3)" }}>
-        <Carousel images={imagesCarrousel} />
+        <Carousel images={imagesCarrousel} libelle={`Photo de ${etab.nom}`} />
       </div>
       <div style={{ padding: "0 var(--space-5) var(--space-5)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
@@ -147,7 +147,7 @@ export function EtablissementsAnnuairePage() {
             <ArrowLeft size={16} /> Accueil
           </Link>
           <span style={{ fontFamily: "var(--font-brand)", fontSize: "var(--text-xl)", color: "var(--ink)" }}>
-            Lulu<span style={{ color: "var(--primary)" }}>·</span>Schools
+            Lulu<span style={{ color: "var(--primary-deep)" }}>·</span>Schools
           </span>
           <Link to="/cartes" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--ink-soft)", fontWeight: 600, fontSize: "var(--text-sm)", textDecoration: "none" }}>
             <MapPin size={16} /> Cartes

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { isAxiosError } from "axios";
 import { connexion, monProfil } from "../api/auth";
 import { clearTokens, getAccessToken, storeTokens } from "../api/client";
 import type { MeOut } from "../types/api";
@@ -25,7 +26,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await monProfil();
       setUtilisateur(data);
-    } catch {
+    } catch (erreur) {
+      // Hors ligne (pas de réponse du serveur) : on garde la session, l'application reste
+      // utilisable sur les contenus déjà en cache (Lot 7.5). Seul un refus réel déconnecte.
+      if (isAxiosError(erreur) && !erreur.response) return;
       clearTokens();
       setUtilisateur(null);
     }
@@ -47,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const seDeconnecter = useCallback(() => {
     clearTokens();
     setUtilisateur(null);
+    // Téléphone partagé : les cours et bulletins gardés pour le hors ligne partent aussi.
+    navigator.serviceWorker?.controller?.postMessage({ type: "vider-donnees" });
   }, []);
 
   return (

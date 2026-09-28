@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { FloatingXPBadge, ProgressCard3D, XPBar } from "../components/gamification";
 import { Tilt3D } from "../components/Tilt3D";
 import { DiplomaCard, FloatingMedal } from "../components/FloatingObjects3D";
+import { useDonneesReduites } from "../accessibilite/AccessibiliteContext";
 import { vitrinePublique, type VitrinePublique } from "../api/etablissements";
 import { PHOTO_HERO_CLASSE } from "../utils/photosParDefaut";
 import {
@@ -207,6 +208,9 @@ const DEMO_MEDALS = [
 export function LandingPage() {
   const [vitrine, setVitrine] = useState<VitrinePublique | null>(null);
   const [vitrineErreur, setVitrineErreur] = useState(false);
+  // Lot 7.5 : la scène Three.js (~120 Ko compressés + GPU) n'est jamais chargée en
+  // mode données réduites — le fond en points et les halos suffisent.
+  const donneesReduites = useDonneesReduites();
 
   useEffect(() => {
     vitrinePublique()
@@ -229,17 +233,7 @@ export function LandingPage() {
           borderTop: "none",
         }}
       >
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            padding: "0 24px",
-            height: "68px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
+        <div className="landing-topbar">
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <img
@@ -256,20 +250,12 @@ export function LandingPage() {
                 color: "var(--ink)",
               }}
             >
-              Lulu<span style={{ color: "var(--primary)" }}>·</span>Schools
+              Lulu<span style={{ color: "var(--primary-deep)" }}>·</span>Schools
             </span>
           </div>
 
           {/* Nav pill */}
-          <nav
-            style={{
-              display: "flex",
-              gap: "6px",
-              background: "var(--surface-2)",
-              borderRadius: "var(--radius-pill)",
-              padding: "5px",
-            }}
-          >
+          <nav className="landing-nav" aria-label="Navigation du site">
             {[
               { label: "Notre mission", href: "#features" },
               { label: "Établissements", href: "/etablissements" },
@@ -315,9 +301,11 @@ export function LandingPage() {
 
       {/* ── Hero ── */}
       <section style={{ position: "relative", overflow: "hidden" }}>
-        <Suspense fallback={null}>
-          <StarfieldScene />
-        </Suspense>
+        {!donneesReduites && (
+          <Suspense fallback={null}>
+            <StarfieldScene />
+          </Suspense>
+        )}
         <div className="dot-grid-bg" style={{ position: "absolute", inset: 0, opacity: 0.35, maskImage: "radial-gradient(ellipse 70% 60% at 50% 20%, black 0%, transparent 75%)" }} aria-hidden="true" />
         <div className="hero-glow" style={{ width: "480px", height: "480px", top: "-160px", left: "-120px", background: "color-mix(in srgb, var(--primary) 22%, transparent)" }} aria-hidden="true" />
         <div className="hero-glow" style={{ width: "360px", height: "360px", top: "60px", right: "-100px", background: "color-mix(in srgb, var(--reward) 18%, transparent)" }} aria-hidden="true" />
@@ -704,11 +692,11 @@ export function LandingPage() {
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-xl)",
-            padding: "48px",
             boxShadow: "var(--shadow-xl)",
           }}
+          className="landing-xp-demo"
         >
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px", alignItems: "center" }}>
+          <div className="landing-xp-grille">
             <div>
               <p className="text-eyebrow" style={{ marginBottom: "12px", display: "block" }}>
                 Gamification — pour de vrai
@@ -767,7 +755,10 @@ export function LandingPage() {
           minHeight: "340px",
           display: "flex",
           alignItems: "center",
-          backgroundImage: `linear-gradient(90deg, rgba(11,18,14,0.82) 0%, rgba(11,18,14,0.45) 55%, rgba(11,18,14,0.15) 100%), url(${PHOTO_HERO_CLASSE})`,
+          // Lot 7.5 : photo décorative non téléchargée en mode données réduites.
+          backgroundImage: donneesReduites
+            ? "linear-gradient(90deg, #0B4F30 0%, #0F7A45 100%)"
+            : `linear-gradient(90deg, rgba(11,18,14,0.82) 0%, rgba(11,18,14,0.45) 55%, rgba(11,18,14,0.15) 100%), url(${PHOTO_HERO_CLASSE})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -850,7 +841,7 @@ export function LandingPage() {
           </div>
           <p style={{ textAlign: "center", marginTop: "32px", fontSize: "var(--text-sm)", color: "var(--ink-faint)" }}>
             Déjà un compte ?{" "}
-            <Link to="/connexion" style={{ color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}>
+            <Link to="/connexion" style={{ color: "var(--primary-deep)", fontWeight: 700, textDecoration: "none" }}>
               Se connecter →
             </Link>
           </p>

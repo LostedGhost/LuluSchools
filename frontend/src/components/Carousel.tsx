@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Image as IconeImage, ImageOff } from "lucide-react";
+import { useDonneesReduites } from "../accessibilite/AccessibiliteContext";
 
 interface CarouselProps {
   images: { id: string; url: string }[];
   aspectRatio?: string;
   emptyLabel?: string;
+  /** Décrit les photos pour les lecteurs d'écran (ex. nom de l'établissement). */
+  libelle?: string;
 }
 
 /**
@@ -12,8 +15,44 @@ interface CarouselProps {
  * sur zéro image (icône + libellé plutôt qu'un cadre vide) et sur une seule
  * image (pas de flèches inutiles).
  */
-export function Carousel({ images, aspectRatio = "16 / 10", emptyLabel = "Aucune photo disponible" }: CarouselProps) {
+export function Carousel({
+  images,
+  aspectRatio = "16 / 10",
+  emptyLabel = "Aucune photo disponible",
+  libelle = "Photo",
+}: CarouselProps) {
   const [index, setIndex] = useState(0);
+  // Lot 7.5 : en mode données réduites, une photo ne se télécharge que sur demande.
+  const donneesReduites = useDonneesReduites();
+  const [photosDemandees, setPhotosDemandees] = useState(false);
+
+  if (images.length > 0 && donneesReduites && !photosDemandees) {
+    return (
+      <button
+        type="button"
+        onClick={() => setPhotosDemandees(true)}
+        style={{
+          aspectRatio,
+          width: "100%",
+          borderRadius: "var(--radius-md)",
+          background: "var(--surface-2)",
+          border: "1px dashed var(--border-strong)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          color: "var(--ink-soft)",
+          cursor: "pointer",
+        }}
+      >
+        <IconeImage size={22} aria-hidden="true" />
+        <span style={{ fontSize: "var(--text-sm)", fontWeight: 600 }}>
+          Afficher {images.length > 1 ? `les ${images.length} photos` : "la photo"}
+        </span>
+      </button>
+    );
+  }
 
   if (images.length === 0) {
     return (
@@ -42,7 +81,9 @@ export function Carousel({ images, aspectRatio = "16 / 10", emptyLabel = "Aucune
     <div style={{ position: "relative", borderRadius: "var(--radius-md)", overflow: "hidden", aspectRatio, background: "var(--surface-2)" }}>
       <img
         src={images[index].url}
-        alt=""
+        alt={images.length > 1 ? `${libelle} (${index + 1} sur ${images.length})` : libelle}
+        loading="lazy"
+        decoding="async"
         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
       />
       {images.length > 1 && (

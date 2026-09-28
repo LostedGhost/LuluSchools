@@ -440,3 +440,14 @@ toutes les tables applicatives à volume « grandeur nature » (voir section dé
 ci-dessus). Aucun changement du schéma ni des routers — outil de développement pur.
 
 2026-09-25 — Phase 2/3 : backend complet pour les 9 UC (tickets transport/cantine, contrôle d'accès, billetterie, messagerie, El Professor, cours vidéo, cours en direct, visites 3D/drone, micro-jobs+séquestre), 8 migrations appliquées en réel, **et validation de bout en bout** : `tests/test_e2e_parcours_phase2_3.py` rejoue les 9 UC dans un ordre d'usage réel avec les mêmes établissement/classe/enseignant/élève/tuteur, paiement Kkiapay réellement bouclé (amorcer + webhook) à chaque étape payante — passé du premier coup après deux ajustements mineurs. **120 tests passants** (75 Phase 1 + 45 Phase 2/3), aucune régression. Webhook Kkiapay extrait de `actes/` vers un module `paiements/` partagé.
+
+## Lot 7 — Conformité PAG 2021-2026 et inclusion (challenge EduTech)
+Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
+
+### app/modules/accessibilite/ (7.2)
+- `GET/PUT /me/preferences-accessibilite` : réglages de la barre d'accessibilité (schéma fermé
+  `PreferencesAccessibilite`, `extra="forbid"`), stockés en JSON sur `Utilisateur.preferences_accessibilite`
+  et renvoyés par `GET /me` (`MeOut.preferences_accessibilite`) pour suivre la personne d'un appareil à l'autre.
+- `POST /accessibilite/synthese-vocale` : lecture à voix haute pour TOUS les rôles (repli quand le
+  navigateur n'a pas de voix française), 60 lectures/heure, texte ≤ 4000 caractères.
+- Migration `0021_preferences_accessibilite`.

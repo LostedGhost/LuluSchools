@@ -482,6 +482,7 @@ def _construire_me_out(db: Session, utilisateur: Utilisateur) -> dict:
         "email_verifie": utilisateur.email_verifie,
         "mot_de_passe_temporaire": utilisateur.mot_de_passe_temporaire,
         "telephone": utilisateur.telephone,
+        "preferences_accessibilite": utilisateur.preferences_accessibilite,
         "est_etudiant": eleve is not None and est_etudiant_fn(db, eleve.id),
     }
 
