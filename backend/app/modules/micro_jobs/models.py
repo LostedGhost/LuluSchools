@@ -82,6 +82,9 @@ class MissionMicroJob(Base):
     date_declaration_fin: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     date_limite_validation: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reference_paiement_prestataire: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Remboursement Kkiapay reellement effectue (automatique, voir core/kkiapay.py) ; False
+    # sur une ressource remboursee = remboursement a faire a la main (boite « A traiter »).
+    remboursement_effectue: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -96,4 +99,7 @@ class ContestationMicroJob(Base):
     )
     decision_motif: Mapped[str | None] = mapped_column(Text, nullable=True)
     decision_par_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True)
+    # Avis de l'IA (core/litiges.py) : recommandation affichee a l'arbitre, jamais appliquee seule.
+    ia_decision: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    ia_justification: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

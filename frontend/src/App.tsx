@@ -1,3 +1,5 @@
+import { ATraiterPage } from "./pages/admin/ATraiterPage";
+import { ATraiterEtablissementPage } from "./pages/admin/ATraiterEtablissementPage";
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
@@ -481,6 +483,16 @@ function App() {
 
             {/* Admin etablissement (A+) */}
             <Route
+              path="/admin-etablissement/a-traiter"
+              element={
+                <RequireAuth roles={["admin_etablissement"]}>
+                  <AdminEtabProvider>
+                    <ATraiterEtablissementPage />
+                  </AdminEtabProvider>
+                </RequireAuth>
+              }
+            />
+            <Route
               path="/admin-etablissement"
               element={
                 <RequireAuth roles={["admin_etablissement"]}>
@@ -700,6 +712,14 @@ function App() {
             />
 
             {/* Admin ministeriel (A++) */}
+            <Route
+              path="/admin-ministeriel/a-traiter"
+              element={
+                <RequireAuth roles={["admin_ministeriel"]}>
+                  <ATraiterPage />
+                </RequireAuth>
+              }
+            />
             <Route
               path="/admin-ministeriel"
               element={

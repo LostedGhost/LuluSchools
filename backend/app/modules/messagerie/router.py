@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import get_db
+from app.core.database import get_db, get_session_factory
+from app.core.llm import FreeLLMClient, get_llm_client
+from app.core.moderation import LIBELLES_DECISION, trier_en_arriere_plan
 from app.core.deps import api_error, get_current_active_user, require_roles
 from app.modules.controle_acces.router import verifier_admin_de_l_etablissement
 from app.modules.etablissements.models import AdminEtablissement, AffectationEnseignant, Classe
@@ -19,8 +21,10 @@ from app.modules.messagerie.schemas import (
     ConversationOut,
     MessageCreate,
     MessageOut,
+    ResultatLotSignalements,
     SignalementOut,
     TraiterSignalementRequest,
+    TraiterSignalementsEnLotRequest,
 )
 
 router = APIRouter(tags=["messagerie"])
@@ -340,7 +344,12 @@ def masquer_message(
 
 @router.post("/messages/{message_id}/signaler", response_model=SignalementOut, status_code=status.HTTP_201_CREATED)
 def signaler_message(
-    message_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+    message_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    session_factory: sessionmaker = Depends(get_session_factory),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> SignalementMessage:
     """Rend le message immediatement visible a l'A+ concerne via
     GET /etablissements/{id}/signalements (liste d'ecran, meme logique que les autres
@@ -369,6 +378,10 @@ def signaler_message(
     db.add(signalement)
     db.commit()
     db.refresh(signalement)
+    contexte = "message d'un groupe de classe" if conversation.type == TypeConversation.GROUPE_CLASSE else "message prive"
+    background_tasks.add_task(
+        trier_en_arriere_plan, session_factory, SignalementMessage, signalement.id, llm_client, message.contenu, contexte
+    )
     return signalement
 
 
@@ -401,6 +414,35 @@ def signalements_en_attente(
             resultat.append(signalement)
             if len(resultat) >= 200:
                 break
+    return resultat
+
+
+@router.post("/signalements/traiter-en-lot", response_model=ResultatLotSignalements)
+def traiter_signalements_en_lot(
+    payload: TraiterSignalementsEnLotRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ResultatLotSignalements:
+    resultat = ResultatLotSignalements(traites=[], ignores=[])
+    for signalement_id in payload.signalement_ids:
+        signalement = db.get(SignalementMessage, signalement_id)
+        if signalement is None or signalement.traite:
+            resultat.ignores.append(signalement_id)
+            continue
+        message = db.get(Message, signalement.message_id)
+        etablissements = _etablissements_concernes(db, db.get(Conversation, message.conversation_id))
+        if admin.role != RoleUtilisateur.ADMIN_MINISTERIEL:
+            lien_admin = db.get(AdminEtablissement, admin.id)
+            if lien_admin is None or lien_admin.etablissement_id not in etablissements:
+                resultat.ignores.append(signalement_id)
+                continue
+        decision = payload.decision or LIBELLES_DECISION.get(signalement.ia_decision)
+        if decision is None:
+            resultat.ignores.append(signalement_id)  # a examiner, ou pas encore trie par l'IA
+            continue
+        signalement.traite, signalement.decision, signalement.traite_par_id = True, decision, admin.id
+        resultat.traites.append(signalement_id)
+    db.commit()
     return resultat
 
 

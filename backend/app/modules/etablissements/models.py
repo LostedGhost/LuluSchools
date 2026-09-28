@@ -65,6 +65,9 @@ class Etablissement(Base):
     # caracteristique administrative, pas un etat du cycle de vie). Defaut true : aucun
     # etablissement existant n'est suspendu par cette migration.
     actif: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Admission automatique des inscriptions (classes a l'ordre d'arrivee, dans la limite
+    # des places) : desactivee par defaut, choix de l'A+ (voir inscriptions/router.py).
+    admission_automatique: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     classes: Mapped[list["Classe"]] = relationship(back_populates="etablissement")

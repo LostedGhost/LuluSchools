@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.kkiapay import KkiapayClient, get_kkiapay_client, rembourser
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
 from app.core.reservation import aujourdhui_benin, filtre_place_occupee
@@ -238,6 +239,7 @@ def valider_ticket_transport(
 def rembourser_ticket_transport(
     ticket_id: str,
     db: Session = Depends(get_db),
+    kkiapay: KkiapayClient = Depends(get_kkiapay_client),
     utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR)),
 ) -> TicketTransport:
     ticket = db.get(TicketTransport, ticket_id)
@@ -250,6 +252,7 @@ def rembourser_ticket_transport(
         raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de remboursement est depasse.")
 
     ticket.statut = StatutTicket.REMBOURSE
+    rembourser(kkiapay, ticket)
     db.commit()
     db.refresh(ticket)
     return ticket
@@ -462,6 +465,7 @@ def valider_ticket_cantine(
 def rembourser_ticket_cantine(
     ticket_id: str,
     db: Session = Depends(get_db),
+    kkiapay: KkiapayClient = Depends(get_kkiapay_client),
     utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR)),
 ) -> TicketCantine:
     ticket = db.get(TicketCantine, ticket_id)
@@ -474,6 +478,7 @@ def rembourser_ticket_cantine(
         raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de remboursement est depasse.")
 
     ticket.statut = StatutTicket.REMBOURSE
+    rembourser(kkiapay, ticket)
     db.commit()
     db.refresh(ticket)
     return ticket

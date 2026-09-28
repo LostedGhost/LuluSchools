@@ -21,6 +21,10 @@ from app.modules.cours_direct.router import router as cours_direct_router
 from app.modules.etablissements.router import classes_router as etablissements_classes_router
 from app.modules.etablissements.router import router as etablissements_router
 from app.modules.evaluations.router import router as evaluations_router
+from app.core.files import get_files_client
+from app.core.llm import get_llm_client
+from app.modules.recrutement.automatisation import renoter_tache
+from app.modules.administration.a_traiter import router as a_traiter_router
 from app.modules.pedagogie.el_professor_chat import router as el_professor_chat_router
 from app.modules.pedagogie.router import router as pedagogie_router
 from app.modules.identite.router import admin_router as identite_admin_router
@@ -65,8 +69,13 @@ async def lifespan(_app: FastAPI):
     if settings.environment == "production":
         from apscheduler.schedulers.background import BackgroundScheduler
 
+        from app.core.database import SessionLocal
+
         planificateur = BackgroundScheduler(timezone="UTC")
         planificateur.add_job(_purger_casiers_expires_tache, "interval", hours=6)
+        planificateur.add_job(
+            renoter_tache, "interval", hours=1, args=[SessionLocal, get_llm_client(), get_files_client()]
+        )
         planificateur.start()
         _purger_casiers_expires_tache()
     yield
@@ -158,6 +167,7 @@ app.include_router(inscriptions_mon_espace_router, prefix="/api/v1")
 app.include_router(recrutement_router, prefix="/api/v1")
 app.include_router(pedagogie_router, prefix="/api/v1")
 app.include_router(el_professor_chat_router, prefix="/api/v1")
+app.include_router(a_traiter_router, prefix="/api/v1")
 app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")

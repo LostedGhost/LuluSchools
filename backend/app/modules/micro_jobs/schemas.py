@@ -60,6 +60,8 @@ class ContestationMicroJobOut(BaseModel):
     motif: str
     statut: StatutContestationMicroJob
     decision_motif: str | None
+    ia_decision: str | None = None
+    ia_justification: str | None = None
 
 
 class ContestationMicroJobAEtrancherOut(ContestationMicroJobOut):
@@ -93,6 +95,8 @@ class ContestationMicroJobDetailOut(BaseModel):
     motif: str
     statut: StatutContestationMicroJob
     decision_motif: str | None
+    ia_decision: str | None = None
+    ia_justification: str | None = None
     created_at: datetime
     offre_titre: str
     prix: float
@@ -116,3 +120,18 @@ class MissionAReverserOut(BaseModel):
     prestataire_prenom: str
     prestataire_telephone: str | None
     date_declaration_fin: datetime | None
+
+
+class ReversementEnLotRequest(BaseModel):
+    """Un virement Mobile Money unique pour plusieurs ventes/missions du MEME beneficiaire :
+    une seule reference pour tout le lot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(min_length=1, max_length=200)
+    reference_paiement: str = Field(min_length=3, max_length=100)
+
+
+class ResultatReversementEnLot(BaseModel):
+    reverses: list[str]
+    montant_total: float

@@ -43,6 +43,9 @@ class TypeActeAcademique(Base):
     # (texte libre existant) reste pour compatibilite descriptive, mais n'est plus le
     # mecanisme de collecte pour une nouvelle demande des que ce champ est renseigne.
     schema_formulaire: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Acte standard genere et livre automatiquement des le paiement (actes/generation.py) :
+    # "attestation_scolarite" ou "releve_notes" ; None = traitement manuel par l'A+.
+    modele_document: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -65,6 +68,9 @@ class DemandeActeAcademique(Base):
     paiement_confirme: Mapped[bool] = mapped_column(Boolean, default=False)
     kkiapay_transaction_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     motif_rejet: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Reclamation : avis prepare par l'IA pour l'A+ (copie, bareme, motif de l'eleve) - une
+    # aide a la decision, jamais la decision elle-meme (Art. 401).
+    analyse_ia: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     eleve: Mapped[Eleve] = relationship()

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.kkiapay import KkiapayClient, get_kkiapay_client, rembourser
 from app.core.audit import journaliser_action_ministerielle
 from app.core.database import get_db
 from app.core.deps import api_error, get_current_active_user, require_roles
@@ -126,7 +127,7 @@ def obtenir_evenement(
 
 @router.post("/evenements/{evenement_id}/annuler", response_model=EvenementOut)
 def annuler_evenement(
-    evenement_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+    evenement_id: str, db: Session = Depends(get_db), kkiapay: KkiapayClient = Depends(get_kkiapay_client), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> Evenement:
     evenement = db.get(Evenement, evenement_id)
     if evenement is None:
@@ -146,6 +147,7 @@ def annuler_evenement(
     )
     for billet in billets_a_rembourser:
         billet.statut = StatutBillet.REMBOURSE
+        rembourser(kkiapay, billet)
     # UC-38/54 (lot admin ministeriel) : seule une annulation declenchee par l'A++ entre
     # dans le journal d'audit ministeriel - une annulation par l'A+/parrain proprietaire
     # reste une decision d'etablissement ordinaire, hors perimetre de ce mandat (voir
@@ -286,7 +288,7 @@ def valider_billet(
 
 @router.post("/billets/{billet_id}/rembourser", response_model=BilletEvenementOut)
 def rembourser_billet(
-    billet_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+    billet_id: str, db: Session = Depends(get_db), kkiapay: KkiapayClient = Depends(get_kkiapay_client), utilisateur: Utilisateur = Depends(get_current_active_user)
 ) -> BilletEvenement:
     billet = db.get(BilletEvenement, billet_id)
     if billet is None:
@@ -299,6 +301,7 @@ def rembourser_billet(
         raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de remboursement est depasse.")
 
     billet.statut = StatutBillet.REMBOURSE
+    rembourser(kkiapay, billet)
     db.commit()
     db.refresh(billet)
     return billet

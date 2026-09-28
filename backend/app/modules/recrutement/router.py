@@ -19,6 +19,12 @@ from app.core.deps import (
     verifier_portee_etablissement,
 )
 from app.core.conversion import convertir_en_image
+from app.modules.recrutement.automatisation import (
+    echeance_fin_annee,
+    reconduire_en_lot,
+    renoter_documents,
+    syllabus_propose,
+)
 from app.core.files import (
     MO,
     TYPES_DOCUMENT,
@@ -911,3 +917,53 @@ def proposer_reconduction(
     db.commit()
     db.refresh(proposition)
     return proposition
+
+
+@router.post("/candidatures/{candidature_id}/recruter", response_model=ContratOut, status_code=status.HTTP_201_CREATED)
+def recruter_en_un_clic(
+    candidature_id: str,
+    db: Session = Depends(get_db),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Contrat:
+    """Contrat pre-rempli : syllabus redige par l'IA (repli sur un texte standard),
+    echeance au 30 juin de l'annee scolaire. Memes controles que creer_contrat (casier
+    verifie CONFORME par l'A+, poste encore ouvert, candidature notee)."""
+    candidature = db.get(Candidature, candidature_id)
+    if candidature is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Candidature introuvable.")
+    poste = db.get(Poste, candidature.poste_id)
+    _verifier_admin_de_l_etablissement(db, admin, poste.etablissement_id)
+    payload = ContratCreate(syllabus=syllabus_propose(db, llm_client, poste), date_fin=echeance_fin_annee())
+    return creer_contrat(candidature_id, payload, db, admin)
+
+
+@router.post("/candidatures/{candidature_id}/renoter", response_model=CandidatureOut)
+def relancer_notation_ia(
+    candidature_id: str,
+    db: Session = Depends(get_db),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Candidature:
+    """Relance immediate de la notation IA des documents en echec (la meme se fait toutes
+    les heures automatiquement) - avant d'en venir a la notation manuelle."""
+    candidature = db.get(Candidature, candidature_id)
+    if candidature is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Candidature introuvable.")
+    _verifier_admin_de_l_etablissement(db, admin, db.get(Poste, candidature.poste_id).etablissement_id)
+    renoter_documents(db, llm_client, files_client, candidature_id=candidature_id)
+    db.refresh(candidature)
+    return candidature
+
+
+@router.post("/etablissements/{etablissement_id}/contrats/reconduire-en-lot", response_model=list[PropositionReconductionOut])
+def reconduire_contrats_en_lot(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[PropositionReconduction]:
+    """Propose en une fois la reconduction de tous les contrats qui arrivent a echeance
+    (fenetre de RECONDUCTION_FENETRE_JOURS jours) ; chaque enseignant re-signe ensuite."""
+    _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
+    return reconduire_en_lot(db, etablissement_id, RECONDUCTION_FENETRE_JOURS)

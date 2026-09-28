@@ -54,9 +54,27 @@ class SignalementOut(BaseModel):
     signale_par_id: str
     traite: bool
     decision: str | None
+    ia_gravite: str | None = None
+    ia_resume: str | None = None
+    ia_decision: str | None = None
 
 
 class TraiterSignalementRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: str
+
+
+class TraiterSignalementsEnLotRequest(BaseModel):
+    """`decision` absente : chaque signalement recoit la decision suggeree par l'IA (ceux
+    que l'IA recommande d'examiner, ou non encore tries, sont laisses de cote)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    signalement_ids: list[str] = Field(min_length=1, max_length=200)
+    decision: str | None = Field(default=None, max_length=500)
+
+
+class ResultatLotSignalements(BaseModel):
+    traites: list[str]
+    ignores: list[str]

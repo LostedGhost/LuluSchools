@@ -38,7 +38,7 @@ from app.core.config import settings  # noqa: E402
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
 from app.modules.etablissements.models import TypeEtablissement  # noqa: E402
 
-from seed_donnees import demo, economie, evaluations, pedagogie, recrutement, scolarite, services, supervision, vie_classe  # noqa: E402
+from seed_donnees import automatisations, demo, economie, evaluations, pedagogie, recrutement, scolarite, services, supervision, vie_classe  # noqa: E402
 from seed_donnees.contexte import MOT_DE_PASSE_COMMUN, Config, Contexte  # noqa: E402
 from seed_donnees.etablissements import creer_etablissements  # noqa: E402
 from seed_donnees.fichiers import Fichiers  # noqa: E402
@@ -102,6 +102,7 @@ def executer(ctx: Contexte) -> None:
         economie.micro_jobs(ctx)
         supervision.choisir_comptes_demo(ctx)
         demo.garantir(ctx)
+        automatisations.appliquer(ctx)
         economie.alertes_plafond(ctx)
         supervision.propositions_referentiel(ctx)
         supervision.suspendre(ctx)

@@ -37,6 +37,7 @@ import {
   BookMarked,
   LayoutGrid,
   Sparkles,
+  Inbox,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -137,6 +138,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
   }
   if (role === "admin_etablissement") {
     return [
+      { to: "/admin-etablissement/a-traiter", label: "À traiter", court: "À traiter", icon: <Inbox size={iconSize} /> },
       { to: "/admin-etablissement", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
       { to: "/admin-etablissement/rentree", label: "Rentrée scolaire", icon: <Send size={iconSize} /> },
       { to: "/admin-etablissement/inscriptions", label: "Inscriptions", icon: <UserCheck size={iconSize} /> },
@@ -157,6 +159,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
   }
   if (role === "admin_ministeriel") {
     return [
+      { to: "/admin-ministeriel/a-traiter", label: "À traiter", court: "À traiter", icon: <Inbox size={iconSize} /> },
       { to: "/admin-ministeriel", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
       { to: "/admin-ministeriel/etablissements", label: "Établissements", icon: <Building2 size={iconSize} /> },
       { to: "/admin-ministeriel/referentiels", label: "Référentiels", icon: <Settings size={iconSize} /> },

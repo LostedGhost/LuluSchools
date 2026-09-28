@@ -70,4 +70,8 @@ class SignalementMessage(Base):
     traite: Mapped[bool] = mapped_column(Boolean, default=False)
     decision: Mapped[str | None] = mapped_column(Text, nullable=True)
     traite_par_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True)
+    # Triage IA (core/moderation.py) : aide a la decision, jamais la decision.
+    ia_gravite: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    ia_resume: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ia_decision: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

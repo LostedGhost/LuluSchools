@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import Field, BaseModel, ConfigDict
 
 from app.modules.marketplace.models import (
     CategorieAnnonce,
@@ -60,6 +60,9 @@ class SignalementAnnonceOut(BaseModel):
     signale_par_id: str
     traite: bool
     decision: str | None
+    ia_gravite: str | None = None
+    ia_resume: str | None = None
+    ia_decision: str | None = None
 
 
 class TraiterSignalementAnnonceRequest(BaseModel):
@@ -96,6 +99,8 @@ class ContestationMarketplaceOut(BaseModel):
     motif: str
     statut: StatutContestationMarketplace
     decision_motif: str | None
+    ia_decision: str | None = None
+    ia_justification: str | None = None
 
 
 class ContestationMarketplaceAEtrancherOut(ContestationMarketplaceOut):
@@ -127,7 +132,23 @@ class TransactionAReverserOut(BaseModel):
     id: str
     annonce_titre: str
     prix_paye: float
+    vendeur_id: str = ""
     vendeur_nom: str
     vendeur_prenom: str
     vendeur_telephone: str | None
     date_remise_declaree: datetime | None
+
+
+class ReversementEnLotRequest(BaseModel):
+    """Un virement Mobile Money unique pour plusieurs ventes/missions du MEME beneficiaire :
+    une seule reference pour tout le lot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(min_length=1, max_length=200)
+    reference_paiement: str = Field(min_length=3, max_length=100)
+
+
+class ResultatReversementEnLot(BaseModel):
+    reverses: list[str]
+    montant_total: float

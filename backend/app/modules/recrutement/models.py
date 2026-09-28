@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Date, DateTime, Enum, Float, ForeignKey, LargeBinary, String, Text
+from sqlalchemy import Integer, JSON, Date, DateTime, Enum, Float, ForeignKey, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -139,6 +139,8 @@ class DocumentCandidature(Base):
     lulufiles_file_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     note_ia: Mapped[float | None] = mapped_column(Float, nullable=True)
     statut: Mapped[StatutDocument] = mapped_column(Enum(StatutDocument), default=StatutDocument.EN_ATTENTE)
+    # Renotation automatique (recrutement/automatisation.py) avant la revision manuelle.
+    tentatives_notation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     candidature: Mapped[Candidature] = relationship(back_populates="documents")
 
