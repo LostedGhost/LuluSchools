@@ -611,7 +611,7 @@ export function RecrutementPage() {
                               <strong>{c.enseignant_prenom} {c.enseignant_nom}</strong> — document {libelle(d.type_document)}
                             </span>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
                             <Btn
                               variant="ghost"
                               size="sm"

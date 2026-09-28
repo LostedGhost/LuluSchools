@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { GuideDemarrage } from "../../components/GuideDemarrage";
 import { KPITile, SectionHead } from "../../components/ui";
 import { QuestCard } from "../../components/gamification";
 import {
@@ -108,6 +109,7 @@ const NAV_CARDS = [
 export function EnseignantDashboard() {
   return (
     <div className="page-content">
+      <GuideDemarrage />
       {/* En-tête */}
       <div style={{ marginBottom: "32px" }}>
         <p className="text-eyebrow" style={{ marginBottom: "6px" }}>

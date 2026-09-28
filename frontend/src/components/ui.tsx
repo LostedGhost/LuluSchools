@@ -7,7 +7,7 @@ import type {
   TextareaHTMLAttributes,
   SelectHTMLAttributes,
 } from "react";
-import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Inbox, X } from "lucide-react";
 
@@ -162,7 +162,10 @@ export function Field({
   error,
   helper,
   required,
+  htmlFor,
 }: {
+  /** Id du champ, quand l'enfant n'est pas un champ unique (champ + bouton « afficher »...). */
+  htmlFor?: string;
   label: string;
   children: ReactNode;
   error?: string | null;
@@ -185,10 +188,22 @@ export function Field({
         "aria-required": required || undefined,
       })
     : children;
-  const Etiquette = unique ? "label" : "span";
+  const cible = unique ? idChamp : htmlFor;
+  const Etiquette = cible ? "label" : "span";
+  // Enfant composite (champ + bouton...) : on relie l'étiquette au premier champ trouvé.
+  const conteneur = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (cible || !conteneur.current) return;
+    const champ = conteneur.current.querySelector<HTMLElement>("input:not([type=hidden]), select, textarea");
+    const etiquette = conteneur.current.querySelector<HTMLElement>(".field-label");
+    if (!champ || !etiquette) return;
+    if (!champ.id) champ.id = `${idAuto}-champ`;
+    etiquette.id = `${idAuto}-etiquette`;
+    if (!champ.getAttribute("aria-label")) champ.setAttribute("aria-labelledby", etiquette.id);
+  });
   return (
-    <div className="field">
-      <Etiquette className="field-label" {...(unique ? { htmlFor: idChamp } : {})}>
+    <div className="field" ref={conteneur}>
+      <Etiquette className="field-label" {...(cible ? { htmlFor: cible } : {})}>
         {label}
         {required && (
           <span style={{ color: "var(--action)", marginLeft: "4px" }} aria-hidden="true">*</span>
@@ -206,9 +221,14 @@ export function Field({
   );
 }
 
+/** Hors d'un <Field>, le texte indicatif sert de nom accessible (lecteurs d'écran). */
+const nomParDefaut = (props: { id?: string; placeholder?: string }) =>
+  !props.id && props.placeholder ? props.placeholder : undefined;
+
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
+      aria-label={nomParDefaut(props)}
       {...props}
       className={`field-input ${props.className ?? ""}`}
     />
@@ -218,6 +238,7 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
+      aria-label={nomParDefaut(props)}
       {...props}
       className={`field-input ${props.className ?? ""}`}
       style={{ minHeight: "100px", resize: "vertical", ...props.style }}
@@ -229,8 +250,14 @@ export function Select({
   children,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
+  // Hors d'un <Field> (filtres de liste), l'option vide « Tous statuts » sert de nom
+  // accessible, faute d'étiquette visible.
+  const optionVide = Children.toArray(children).find(
+    (o) => isValidElement<{ value?: unknown; children?: ReactNode }>(o) && o.props.value === "" && typeof o.props.children === "string",
+  ) as ReactElement<{ children: string }> | undefined;
+  const nom = !props.id && optionVide ? `Filtre : ${optionVide.props.children}` : undefined;
   return (
-    <select {...props} className={`field-input ${props.className ?? ""}`}>
+    <select aria-label={nom} {...props} className={`field-input ${props.className ?? ""}`}>
       {children}
     </select>
   );

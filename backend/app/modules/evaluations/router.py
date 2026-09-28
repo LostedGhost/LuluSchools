@@ -1,16 +1,18 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.audit import journaliser_action_ministerielle
 from app.core.conversion import convertir_en_image
 from app.core.database import get_db, get_session_factory
-from app.core.deps import api_error, require_roles
+from app.core.deps import api_error, get_current_user, require_roles
 from app.core.files import TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
+from app.modules.evaluations import periodes as periodes_evaluation
 from app.modules.evaluations.models import (
     Bulletin,
     Devoir,
@@ -883,11 +885,22 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
         return existant  # fige des la deliberation : une correction ulterieure ne le modifie plus
 
     classe = db.get(Classe, classe_id)
+    etablissement = db.get(Etablissement, classe.etablissement_id)
+    periode_evaluee = periodes_evaluation.trouver(etablissement.type, classe.annee_academique, periode)
+    if periode_evaluee is None:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "periode_invalide", "Cette période n'existe pas pour cette classe.")
+    debut, fin = periodes_evaluation.bornes_utc(periode_evaluee)
     # UC-26.1 : une evaluation FORMATIVE ne compte jamais dans la moyenne officielle du
-    # bulletin - seules les SOMMATIVES sont incluses.
+    # bulletin - seules les SOMMATIVES sont incluses, et seulement celles de la periode
+    # (date limite comprise dans ses bornes).
     devoirs = (
         db.query(Devoir)
-        .filter(Devoir.classe_id == classe_id, Devoir.nature == NatureEvaluation.SOMMATIVE)
+        .filter(
+            Devoir.classe_id == classe_id,
+            Devoir.nature == NatureEvaluation.SOMMATIVE,
+            Devoir.date_limite >= debut,
+            Devoir.date_limite < fin,
+        )
         .all()
     )
 
@@ -936,6 +949,33 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
     db.commit()
     db.refresh(bulletin)
     return bulletin
+
+
+class PeriodeOut(BaseModel):
+    code: str
+    libelle: str
+    debut: date
+    fin: date
+    courante: bool
+
+
+@router.get("/classes/{classe_id}/periodes", response_model=list[PeriodeOut])
+def periodes_de_la_classe(
+    classe_id: str,
+    db: Session = Depends(get_db),
+    _: Utilisateur = Depends(get_current_user),
+) -> list[PeriodeOut]:
+    """Trimestres (primaire, secondaire) ou semestres (universite) de l'annee de la classe,
+    avec la periode en cours - pour les onglets du bulletin."""
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    etablissement = db.get(Etablissement, classe.etablissement_id)
+    courante = periodes_evaluation.periode_de(datetime.now(timezone.utc), etablissement.type, classe.annee_academique)
+    return [
+        PeriodeOut(code=p.code, libelle=p.libelle, debut=p.debut, fin=p.fin, courante=p.code == courante.code)
+        for p in periodes_evaluation.periodes(etablissement.type, classe.annee_academique)
+    ]
 
 
 @router.get("/eleves/{eleve_utilisateur_id}/bulletins", response_model=BulletinOut)

@@ -83,6 +83,16 @@ class Section(BaseModel):
     elements: list[Element]
 
 
+ORIGINES_ALERTE = {"eleve": "Conversation d'un élève", "enseignant": "Conversation d'un enseignant",
+                   "tuteur": "Conversation d'un parent", "famille": "Fil familial"}
+DOCUMENTS = {"cv": "CV", "diplome": "Diplôme", "casier_judiciaire": "Casier judiciaire",
+             "lettre_motivation": "Lettre de motivation", "piece_identite": "Pièce d'identité"}
+
+
+def _document(type_document: str) -> str:
+    return DOCUMENTS.get(type_document, type_document.replace("_", " ").capitalize())
+
+
 def _nom(u: Utilisateur | None) -> str:
     return f"{u.prenom} {u.nom}" if u else "—"
 
@@ -142,7 +152,7 @@ def _sections_etablissement(db: Session, etab_id: str) -> list[Section | None]:
     sections.append(_section(
         "notation_manuelle", "Documents à noter à la main",
         f"L'IA a échoué {TENTATIVES_MAX} fois (nouvel essai automatique chaque heure avant cela).",
-        [Element(id=d.id, libelle=_nom(enseignants.get(candidatures[d.candidature_id].enseignant_id)), detail=d.type_document)
+        [Element(id=d.id, libelle=_nom(enseignants.get(candidatures[d.candidature_id].enseignant_id)), detail=_document(d.type_document))
          for d in documents if d.tentatives_notation >= TENTATIVES_MAX or d.lulufiles_file_id is None],
     ))
     contestations = db.query(Contestation).filter(
@@ -268,7 +278,7 @@ def _sections_etablissement(db: Session, etab_id: str) -> list[Section | None]:
     alertes = db.query(AlerteElProfessor).filter(AlerteElProfessor.etablissement_id == etab_id, AlerteElProfessor.traite.is_(False)).all()
     sections.append(_section(
         "alertes", "Alertes de sécurité El Professor", "Signaux de danger détectés dans une conversation : à traiter par une personne, sans délai.",
-        [Element(id=a.id, libelle=a.motif[:160], detail=a.origine.value, ia_niveau="elevee") for a in alertes], urgent=True,
+        [Element(id=a.id, libelle=a.motif[:160], detail=ORIGINES_ALERTE.get(a.origine.value, a.origine.value), ia_niveau="elevee") for a in alertes], urgent=True,
     ))
     return sections
 

@@ -3,7 +3,8 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Avatar, RolePill } from "../components/Avatar";
 import { Footer } from "../components/Footer";
-import { XPBar } from "../components/gamification";
+import { Modale } from "../components/Modale";
+import { mesCompteurs } from "../api/administration";
 import {
   LayoutDashboard,
   BookOpen,
@@ -38,6 +39,7 @@ import {
   LayoutGrid,
   Sparkles,
   Inbox,
+  Menu,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -174,6 +176,43 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   Pastilles : ce qui attend l'utilisateur (GET /me/compteurs), rafraîchies à chaque
+   changement de page et toutes les deux minutes.
+   ═══════════════════════════════════════════════════════════════ */
+
+type Compteurs = Record<string, number>;
+
+function useCompteurs(actif: boolean): Compteurs {
+  const [compteurs, setCompteurs] = useState<Compteurs>({});
+  const location = useLocation();
+  useEffect(() => {
+    if (!actif) return;
+    let annule = false;
+    const charger = () =>
+      mesCompteurs()
+        .then((r) => !annule && setCompteurs(r.data))
+        .catch(() => undefined);
+    const delai = window.setTimeout(charger, 400);
+    const intervalle = window.setInterval(charger, 120_000);
+    return () => {
+      annule = true;
+      window.clearTimeout(delai);
+      window.clearInterval(intervalle);
+    };
+  }, [actif, location.pathname]);
+  return compteurs;
+}
+
+function Pastille({ nombre, point = false }: { nombre?: number; point?: boolean }) {
+  if (!nombre) return null;
+  if (point) return <span className="nav-pastille-point" aria-hidden="true" />;
+  return <span className="nav-pastille" aria-hidden="true">{nombre > 99 ? "99+" : nombre}</span>;
+}
+
+const libelleAccessible = (item: NavItem, nombre?: number) =>
+  nombre ? `${item.label} (${nombre} en attente)` : item.label;
+
+/* ═══════════════════════════════════════════════════════════════
    Wordmark Logo
    ═══════════════════════════════════════════════════════════════ */
 
@@ -204,10 +243,12 @@ function DesktopSidebar({
   items,
   collapsed,
   onToggleCollapse,
+  compteurs,
 }: {
   items: NavItem[];
   collapsed: boolean;
   onToggleCollapse: () => void;
+  compteurs: Compteurs;
 }) {
   const { utilisateur, seDeconnecter } = useAuth();
   const { dark, toggle: toggleTheme } = useTheme();
@@ -247,11 +288,15 @@ function DesktopSidebar({
             className={({ isActive }) =>
               `sidebar-nav-item ${isActive ? "active" : ""}`
             }
-            title={collapsed ? item.label : undefined}
-            aria-label={item.label}
+            title={collapsed ? libelleAccessible(item, compteurs[item.to]) : undefined}
+            aria-label={libelleAccessible(item, compteurs[item.to])}
           >
-            <span className="sidebar-nav-icon">{item.icon}</span>
-            {!collapsed && <span>{item.label}</span>}
+            <span className="sidebar-nav-icon" style={{ position: "relative" }}>
+              {item.icon}
+              {collapsed && <Pastille nombre={compteurs[item.to]} point />}
+            </span>
+            {!collapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+            {!collapsed && <Pastille nombre={compteurs[item.to]} />}
           </NavLink>
         ))}
       </nav>
@@ -285,10 +330,6 @@ function DesktopSidebar({
                     <RolePill role={utilisateur.role} />
                   </div>
                 </div>
-                {/* Mini XP bar pour élève */}
-                {utilisateur.role === "eleve" && (
-                  <XPBar current={680} max={1000} level={4} />
-                )}
               </>
             )}
             {collapsed && (
@@ -331,31 +372,97 @@ function DesktopSidebar({
    Bottom Navigation Mobile
    ═══════════════════════════════════════════════════════════════ */
 
-function BottomNav({ items }: { items: NavItem[] }) {
+/** Barre du bas (téléphone) : 4 entrées + « Plus », qui ouvre le menu complet (toutes les
+ * entrées, profil, thème et déconnexion) — sinon les écrans au-delà du 5e et la
+ * déconnexion seraient inaccessibles sur téléphone. */
+function BottomNav({ items, compteurs }: { items: NavItem[]; compteurs: Compteurs }) {
   const location = useLocation();
-  const visibleItems = items.slice(0, 5);
+  const { utilisateur, seDeconnecter } = useAuth();
+  const { dark, toggle } = useTheme();
+  const [menuOuvert, setMenuOuvert] = useState(false);
+  const estActif = (item: NavItem) =>
+    location.pathname === item.to || (!item.end && location.pathname.startsWith(item.to + "/"));
+  const visibleItems = items.slice(0, 4);
+  const autres = items.slice(4);
+  const plusActif = autres.some(estActif);
+  const enAttenteAutres = autres.reduce((n, item) => n + (compteurs[item.to] ?? 0), 0);
+
+  useEffect(() => {
+    setMenuOuvert(false);
+  }, [location.pathname]);
 
   return (
     <nav className="bottom-nav" aria-label="Navigation principale">
       <div className="bottom-nav-items">
         {visibleItems.map((item) => {
-          const isActive = location.pathname === item.to ||
-            (!item.end && location.pathname.startsWith(item.to));
+          const isActive = estActif(item);
           return (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
               className={`bottom-nav-item ${isActive ? "active" : ""}`}
-              aria-label={item.label}
+              aria-label={libelleAccessible(item, compteurs[item.to])}
               aria-current={isActive ? "page" : undefined}
             >
-              <span style={{ width: "20px", height: "20px" }}>{item.icon}</span>
+              <span style={{ width: "20px", height: "20px", position: "relative" }}>
+                {item.icon}
+                <Pastille nombre={compteurs[item.to]} point />
+              </span>
               <span>{item.court ?? item.label.split(" ")[0]}</span>
             </NavLink>
           );
         })}
+        <button
+          type="button"
+          className={`bottom-nav-item ${plusActif ? "active" : ""}`}
+          onClick={() => setMenuOuvert(true)}
+          aria-label={enAttenteAutres ? `Menu complet (${enAttenteAutres} en attente)` : "Menu complet"}
+          aria-haspopup="dialog"
+          style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+        >
+          <span style={{ width: "20px", height: "20px", position: "relative" }}>
+            <Menu size={18} />
+            <Pastille nombre={enAttenteAutres} point />
+          </span>
+          <span>Plus</span>
+        </button>
       </div>
+      <Modale ouvert={menuOuvert} onFermer={() => setMenuOuvert(false)} titre="Menu">
+        {utilisateur && (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+            <Avatar role={utilisateur.role} prenom={utilisateur.prenom} nom={utilisateur.nom} size={36} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, color: "var(--ink)" }}>{utilisateur.prenom} {utilisateur.nom}</div>
+              <RolePill role={utilisateur.role} />
+            </div>
+          </div>
+        )}
+        <div className="menu-complet">
+          {items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) => `sidebar-nav-item ${isActive ? "active" : ""}`}
+              aria-label={libelleAccessible(item, compteurs[item.to])}
+              onClick={() => setMenuOuvert(false)}
+            >
+              <span className="sidebar-nav-icon">{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              <Pastille nombre={compteurs[item.to]} />
+            </NavLink>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: "8px", marginTop: "14px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
+          <button type="button" onClick={toggle} className="btn btn-ghost btn-sm" style={{ gap: "6px" }}>
+            {dark ? <Sun size={15} /> : <Moon size={15} />} {dark ? "Mode clair" : "Mode sombre"}
+          </button>
+          <button type="button" onClick={seDeconnecter} className="btn btn-ghost btn-sm" style={{ color: "var(--action)", gap: "6px", marginLeft: "auto" }}>
+            <LogOut size={14} /> Déconnexion
+          </button>
+        </div>
+      </Modale>
     </nav>
   );
 }
@@ -433,6 +540,7 @@ function MobileHeader() {
 export function AppLayout({ children }: { children: ReactNode }) {
   const { utilisateur } = useAuth();
   const items = navPourRole(utilisateur?.role, !!utilisateur?.est_etudiant);
+  const compteurs = useCompteurs(!!utilisateur && items.length > 0);
   const [collapsed, setCollapsed] = useState(false);
 
   // Sur petits écrans, auto-collapse
@@ -466,6 +574,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           items={items}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((c) => !c)}
+          compteurs={compteurs}
         />
       )}
 
@@ -485,7 +594,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </main>
 
       {/* Bottom nav mobile */}
-      {items.length > 0 && <BottomNav items={items} />}
+      {items.length > 0 && <BottomNav items={items} compteurs={compteurs} />}
     </div>
   );
 }

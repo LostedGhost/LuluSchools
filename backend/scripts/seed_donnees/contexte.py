@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import unicodedata
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -169,7 +170,8 @@ class Contexte:
 
     def _email(self, prenom: str, nom: str) -> str:
         self._n_personne += 1
-        simple = "".join(c for c in f"{prenom}.{nom}".lower() if c.isalnum() or c == ".")
+        sans_accents = unicodedata.normalize("NFKD", f"{prenom}.{nom}".lower()).encode("ascii", "ignore").decode()
+        simple = "".join(c for c in sans_accents if c.isalnum() or c == ".")
         return f"{simple}.{self._n_personne}@{DOMAINE}"
 
     def utilisateur(

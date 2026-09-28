@@ -354,7 +354,7 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {actions(section)}
-                  {liens[section.cle] && <Link to={liens[section.cle]}><Btn size="sm" variant="ghost">Ouvrir l'écran</Btn></Link>}
+                  {liens[section.cle] && <Link to={liens[section.cle]} className="btn btn-ghost btn-sm">Ouvrir l'écran</Link>}
                 </div>
               </div>
               {section.cle.startsWith("reversements") ? reversements(section) : section.elements.map((e) => ligne(section, e))}

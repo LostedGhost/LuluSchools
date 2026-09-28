@@ -668,3 +668,10 @@ def classe_avec_enseignant_et_eleve(client, fake_email_client, fake_llm_client, 
         "eleve_headers": eleve_headers,
         "tuteur_headers": tuteur_headers_local,
     }
+
+
+def periode_courante(client, classe_id: str, headers: dict) -> str:
+    """Code de la periode d'evaluation en cours pour la classe (trimestre ou semestre) :
+    les tests de bulletin ne dependent ainsi pas de la date a laquelle ils tournent."""
+    periodes = client.get(f"/api/v1/classes/{classe_id}/periodes", headers=headers).json()
+    return next(p["code"] for p in periodes if p["courante"])

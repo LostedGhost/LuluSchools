@@ -796,7 +796,7 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 
 @media (max-width: 768px) {
   .sidebar { display: none; }
-  .app-with-sidebar { padding-left: 0; padding-bottom: 72px; }
+  .app-with-sidebar, .app-with-sidebar.sidebar-collapsed-layout { padding-left: 0; padding-bottom: 72px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .page-content { padding: var(--space-4) var(--space-4) var(--space-20); }
   .tile-value { font-size: var(--text-3xl); }
@@ -1042,3 +1042,42 @@ button, a, [role="button"], select, summary { cursor: pointer; }
   /* au-dessus de la barre de navigation basse */
   .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
+
+/* Pastilles du menu (ce qui attend l'utilisateur) */
+.nav-pastille {
+  flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill);
+  background: var(--action); color: #fff; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center;
+}
+.nav-pastille-point {
+  position: absolute; top: -2px; right: -4px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--action); box-shadow: 0 0 0 2px var(--surface);
+}
+.menu-complet { display: flex; flex-direction: column; gap: 2px; }
+.menu-complet .sidebar-nav-item span { display: inline !important; }
+
+/* Écrans tactiles : cibles d'au moins 40 px (WCAG 2.5.8, doigts sur téléphone) */
+@media (pointer: coarse) {
+  .btn-sm { min-height: 40px; }
+  .btn-icon { min-width: 40px; min-height: 40px; }
+}
+
+/* Une grille ne doit jamais s'élargir au-delà de l'écran à cause d'un contenu long */
+.grid-2 > *, .grid-3 > *, .grid-4 > *, .grid-auto > * { min-width: 0; }
+
+/* Guide de première connexion (components/GuideDemarrage.tsx) */
+.guide-demarrage {
+  margin-bottom: var(--space-6); padding: 18px 20px; border-radius: var(--radius-lg);
+  background: var(--magic-tint); border: 1px solid color-mix(in srgb, var(--magic-deep) 30%, transparent);
+}
+.guide-etapes {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;
+}
+.guide-etapes li { display: flex; gap: 10px; min-width: 0; }
+.guide-numero {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--magic-deep); color: #fff; font-size: 12px; font-weight: 700;
+}
+.guide-lien { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--ink); text-decoration: none; }
+.guide-lien:hover, .guide-lien:focus-visible { text-decoration: underline; }
+@media (max-width: 480px) { .guide-fermer-texte { display: none; } }

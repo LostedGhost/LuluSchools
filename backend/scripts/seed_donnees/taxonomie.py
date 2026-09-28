@@ -117,53 +117,53 @@ NOMS_ETABLISSEMENTS_UP_PRIVE = [
 ]
 
 NOMS_FAMILLE = [
-    "Dossou", "Adjovi", "Houngbo", "Kone", "Traore", "Agbo", "Zinsou", "Aissi", "Sossou", "Akakpo",
-    "Gbaguidi", "Toko", "Amoussou", "Codjo", "Kpogbe", "Adande", "Hounkpe", "Dahoue", "Sagbo", "Koudjo",
-    "Aholou", "Djossou", "Glele", "Assogba", "Tossou", "Hounsou", "Ahoyo", "Sonon", "Bokossa", "Idrissou",
+    "Dossou", "Adjovi", "Houngbo", "Koné", "Traoré", "Agbo", "Zinsou", "Aïssi", "Sossou", "Akakpo",
+    "Gbaguidi", "Toko", "Amoussou", "Codjo", "Kpogbé", "Adandé", "Hounkpè", "Dahoué", "Sagbo", "Koudjo",
+    "Aholou", "Djossou", "Glèlè", "Assogba", "Tossou", "Hounsou", "Ahoyo", "Sonon", "Bokossa", "Idrissou",
     "Yacoubou", "Alassane", "Hounkonnou", "Chabi", "Gomina", "Sacca", "Baba", "Salifou", "Orou", "Tamou",
 ]
 PRENOMS_MASCULINS = [
-    "Kossi", "Moussa", "Kofi", "Eric", "Blaise", "Josue", "Firmin", "Wilfried", "Armel", "Bio",
-    "Sena", "Comlan", "Judicael", "Romuald", "Cyrille", "Parfait", "Ulrich", "Landry", "Fabrice", "Ignace",
-    "Herve", "Aristide", "Modeste", "Elisee", "Fortune", "Gildas", "Marcellin", "Severin", "Donatien", "Cedric",
+    "Kossi", "Moussa", "Kofi", "Éric", "Blaise", "Josué", "Firmin", "Wilfried", "Armel", "Bio",
+    "Sena", "Comlan", "Judicaël", "Romuald", "Cyrille", "Parfait", "Ulrich", "Landry", "Fabrice", "Ignace",
+    "Hervé", "Aristide", "Modeste", "Élisée", "Fortuné", "Gildas", "Marcellin", "Séverin", "Donatien", "Cédric",
 ]
 PRENOMS_FEMININS = [
-    "Awa", "Fatou", "Aisha", "Chantal", "Grace", "Clarisse", "Odette", "Prisca", "Nadege", "Bernice",
+    "Awa", "Fatou", "Aïsha", "Chantal", "Grâce", "Clarisse", "Odette", "Prisca", "Nadège", "Bernice",
     "Solange", "Edwige", "Rosine", "Carole", "Huguette", "Estelle", "Divine", "Rafiatou", "Bintou", "Judith",
-    "Reine", "Sidonie", "Colette", "Perpetue", "Viviane", "Berthine", "Sandrine", "Beatrice", "Aicha", "Latifa",
+    "Reine", "Sidonie", "Colette", "Perpétue", "Viviane", "Berthine", "Sandrine", "Béatrice", "Aïcha", "Latifa",
 ]
 
 MOTIFS_CONTESTATION_RECRUTEMENT = [
-    "Le document diplome a ete mal note par l'IA, la copie transmise etait pourtant lisible.",
-    "Je conteste le score attribue a mon CV, mon experience n'a pas ete prise en compte.",
-    "Erreur manifeste dans la notation automatique de mes pieces justificatives.",
+    "Mon diplôme a été mal noté par l'IA, alors que la copie transmise était lisible.",
+    "Je conteste le score attribué à mon CV : mon expérience n'a pas été prise en compte.",
+    "Erreur manifeste dans la notation automatique de mes pièces justificatives.",
 ]
 MOTIFS_CONTESTATION_MICRO_JOB = [
-    "Le travail livre ne correspond pas a ce qui avait ete convenu.",
-    "La mission n'a pas ete terminee dans les delais annonces.",
-    "Qualite du service tres en dessous de la description de l'offre.",
+    "Le travail livré ne correspond pas à ce qui avait été convenu.",
+    "La mission n'a pas été terminée dans les délais annoncés.",
+    "Qualité du service très en dessous de la description de l'offre.",
 ]
 
 TITRES_OFFRES_MICRO_JOB = [
-    "Cours particulier de mathematiques niveau college",
-    "Soutien scolaire en francais pour eleve de CM2",
-    "Preparation au baccalaureat serie D",
+    "Cours particulier de mathématiques niveau collège",
+    "Soutien scolaire en français pour élève de CM2",
+    "Préparation au baccalauréat série D",
     "Cours d'anglais conversationnel",
     "Aide aux devoirs niveau primaire",
-    "Initiation a l'informatique pour debutants",
-    "Cours de comptabilite pour etudiants en gestion",
-    "Repetition en physique-chimie niveau lycee",
-    "Accompagnement redaction de memoire",
-    "Cours de code et algorithmique pour lyceens",
+    "Initiation à l'informatique pour débutants",
+    "Cours de comptabilité pour étudiants en gestion",
+    "Répétition en physique-chimie niveau lycée",
+    "Accompagnement à la rédaction de mémoire",
+    "Cours de code et algorithmique pour lycéens",
     "Soutien en philosophie pour terminale",
-    "Preparation aux concours d'entree en universite",
+    "Préparation aux concours d'entrée à l'université",
 ]
 
 TITRES_EVENEMENTS = [
-    "Kermesse de fin d'annee", "Journee culturelle de l'etablissement",
-    "Remise des diplomes", "Spectacle de fin de trimestre",
-    "Tournoi sportif inter-classes", "Soiree de gala des anciens eleves",
-    "Journee portes ouvertes", "Concert de la chorale scolaire",
+    "Kermesse de fin d'année", "Journée culturelle de l'établissement",
+    "Remise des diplômes", "Spectacle de fin de trimestre",
+    "Tournoi sportif inter-classes", "Soirée de gala des anciens élèves",
+    "Journée portes ouvertes", "Concert de la chorale scolaire",
 ]
 
 

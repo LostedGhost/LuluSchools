@@ -102,6 +102,8 @@ export function DataTable<T>({
                 value={searchValue ?? ""}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                type="search"
                 className="field-input"
                 style={{ width: "100%", paddingLeft: "36px" }}
               />

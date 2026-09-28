@@ -1,3 +1,4 @@
+from conftest import periode_courante
 """Test de bout en bout (etape 5 de la methode lucio-dev) : rejoue l'enchainement REEL
 des cas d'utilisation de la Phase 1, dans l'ordre d'usage, avec les memes objets qui
 circulent d'un module a l'autre. Contrairement aux tests unitaires par module (qui
@@ -338,7 +339,7 @@ def test_parcours_complet_de_la_phase_1(client, fake_email_client, fake_files_cl
     eleve_id = client.get("/api/v1/me", headers=eleve_headers).json()["id"]
     bulletin = client.get(
         f"/api/v1/eleves/{eleve_id}/bulletins",
-        params={"classe_id": classe["id"], "periode": "trimestre1"},
+        params={"classe_id": classe["id"], "periode": periode_courante(client, classe["id"], admin_headers)},
         headers=admin_headers,
     )
     assert bulletin.status_code == 200

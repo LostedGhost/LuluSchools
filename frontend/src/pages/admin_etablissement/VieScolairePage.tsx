@@ -133,7 +133,7 @@ export function VieScolairePage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
                     <div>
                       <strong style={{ color: "var(--ink)" }}>{b.etablissement_nom}</strong>
-                      <span className="text-sm" style={{ color: "var(--ink-soft)", marginLeft: "8px" }}>{b.periode}</span>
+                      <span className="text-sm" style={{ color: "var(--ink-soft)", marginLeft: "8px" }}>{libelle(b.periode)}</span>
                     </div>
                     <span className="monospace" style={{ fontWeight: 700, color: "var(--primary-deep)" }}>
                       {b.moyenne_generale.toFixed(2)}/20 {b.decision_passage ? `— ${b.decision_passage}` : ""}

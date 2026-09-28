@@ -121,6 +121,13 @@ const LIBELLES: Record<string, string> = {
   ES: "Enseignement secondaire",
   UP: "Université",
 
+  // Périodes d'évaluation
+  trimestre1: "1er trimestre",
+  trimestre2: "2e trimestre",
+  trimestre3: "3e trimestre",
+  semestre1: "1er semestre",
+  semestre2: "2e semestre",
+
   // Coffre-fort
   pretee: "Prêtée",
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GuideDemarrage } from "../../components/GuideDemarrage";
 import { Link } from "react-router-dom";
 import {
   Badge,
@@ -177,6 +178,7 @@ export function AdminMinisterielDashboard() {
 
   return (
     <div className="page-content">
+      <GuideDemarrage />
       {/* ── Hero Entête Ministérielle ── */}
       <div
         className="card anim-float-in"
