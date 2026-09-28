@@ -23,7 +23,7 @@ class VisiteVirtuelleCreate(BaseModel):
     def _exiger_attestation(cls, value: bool) -> bool:
         if not value:
             raise ValueError(
-                "attestation_autorisation doit etre confirmee (autorisation de vol/droit a l'image)."
+                "Cochez l'attestation d'autorisation de vol et de droit à l'image."
             )
         return value
 

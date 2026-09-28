@@ -82,7 +82,7 @@ def _verifier_enseignant_rattache(db: Session, enseignant: Utilisateur, classe_i
     seulement un contrat signe avec l'etablissement - voir AffectationEnseignant pour
     le contexte du changement)."""
     if enseignant.role != RoleUtilisateur.ENSEIGNANT:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Rôle insuffisant pour cette action.")
     affectation = (
         db.query(AffectationEnseignant)
         .filter(
@@ -93,14 +93,14 @@ def _verifier_enseignant_rattache(db: Session, enseignant: Utilisateur, classe_i
     )
     if affectation is None:
         raise api_error(
-            status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectee."
+            status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectée."
         )
 
 
 def _verifier_eleve_inscrit(db: Session, eleve_utilisateur_id: str, classe_id: str) -> Eleve:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Compte eleve introuvable.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Compte élève introuvable.")
     inscription = (
         db.query(Inscription)
         .filter(
@@ -111,7 +111,7 @@ def _verifier_eleve_inscrit(db: Session, eleve_utilisateur_id: str, classe_id: s
         .first()
     )
     if inscription is None:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas inscrit dans cette classe.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas inscrit dans cette classe.")
     return eleve
 
 
@@ -214,7 +214,7 @@ def publier_cours(
             )
         except FileStorageError as exc:
             raise api_error(
-                status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez reessayer."
+                status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez réessayer."
             ) from exc
 
     cours = Cours(
@@ -257,13 +257,13 @@ def obtenir_lien_fichier_cours(
     d'etre effectivement lu par un eleve. Meme controle d'acces que lister_cours."""
     cours = _cours_lisible(db, utilisateur, cours_id)
     if not cours.lulufiles_file_id:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce cours n'a pas de fichier associe.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce cours n'a pas de fichier associé.")
 
     try:
         url = files_client.get_signed_link(cours.lulufiles_file_id, disposition="inline")
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez réessayer."
         ) from exc
     return LienFichierOut(url=url)
 
@@ -297,14 +297,14 @@ def creer_quiz(
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "contenu_texte_requis",
-            "Le cours doit avoir un contenu texte (saisi ou dans un PDF lisible) pour generer un quiz.",
+            "Le cours doit avoir un contenu texte (saisi ou dans un PDF lisible) pour générer un quiz.",
         )
 
     try:
         questions_generees = llm_client.generer_quiz(contenu, payload.nombre_questions)
     except QuizGenerationError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "generation_echouee", "Impossible de generer le quiz, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "generation_echouee", "Impossible de générer le quiz, veuillez réessayer."
         ) from exc
 
     quiz = Quiz(cours_id=cours_id, seuil_reussite=payload.seuil_reussite)
@@ -355,7 +355,7 @@ def tenter_quiz(
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "reponses_incompletes",
-            f"Attendu {len(questions)} reponses, recu {len(payload.reponses)}.",
+            f"Répondez aux {len(questions)} questions du quiz ({len(payload.reponses)} réponse(s) reçue(s)).",
         )
 
     bonnes_reponses = sum(
@@ -472,7 +472,7 @@ def poser_question_el_professor(
         )
     except ElProfessorError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une reponse, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une réponse, veuillez réessayer."
         ) from exc
 
     db.add(MessageElProfessor(session_id=session_id, role=RoleMessageElProfessor.ELEVE, contenu=payload.question))
@@ -567,7 +567,7 @@ def masquer_cours(
     if cours is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
     if cours.masque_par_id is not None:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_masque", "Ce cours est deja masque.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_masque", "Ce cours est déjà masqué.")
 
     cours.masque_par_id = admin.id
     cours.masque_le = datetime.now(timezone.utc)
@@ -587,7 +587,7 @@ def demasquer_cours(
     if cours is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cours introuvable.")
     if cours.masque_par_id is None:
-        raise api_error(status.HTTP_409_CONFLICT, "pas_masque", "Ce cours n'est pas masque.")
+        raise api_error(status.HTTP_409_CONFLICT, "pas_masque", "Ce cours n'est pas masqué.")
 
     cours.masque_par_id = None
     cours.masque_le = None
@@ -695,7 +695,7 @@ def ouvrir_session_el_professor_enseignant(
         eleve = db.query(Eleve).filter(Eleve.utilisateur_id == payload.eleve_utilisateur_id).first()
         if eleve is None or not _classes_communes(db, enseignant.id, eleve):
             raise api_error(
-                status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est dans aucune de vos classes."
+                status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est dans aucune de vos classes."
             )
 
     session = SessionElProfessorEnseignant(
@@ -757,14 +757,14 @@ def poser_question_el_professor_enseignant(
         reponse = llm_client.conseiller_enseignant(contexte_eleve, historique, payload.question)
     except ElProfessorError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une reponse, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une réponse, veuillez réessayer."
         ) from exc
 
     if _detecter_signal_alerte(payload.question) or _detecter_signal_alerte(reponse):
         reponse = (
-            f"{reponse}\n\n⚠️ Cette situation semble sensible : parlez-en sans delai a "
-            "l'administration de votre etablissement (ou aux autorites competentes si "
-            "l'urgence l'exige). Une alerte a ete preparee pour l'administration."
+            f"{reponse}\n\n⚠️ Cette situation semble sensible : parlez-en sans délai à "
+            "l'administration de votre établissement (ou aux autorités compétentes si "
+            "l'urgence l'exige). Une alerte a été préparée pour l'administration."
         )
         db.add(
             AlerteElProfessor(
@@ -816,7 +816,7 @@ def traiter_alerte_el_professor(
     if alerte is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Alerte introuvable.")
     if alerte.etablissement_id is None:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette alerte n'est rattachee a aucun etablissement.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette alerte n'est rattachée à aucun établissement.")
     verifier_portee_etablissement(db, admin, alerte.etablissement_id)
 
     alerte.traite = True
@@ -832,7 +832,7 @@ def traiter_alerte_el_professor(
 def _verifier_tuteur_de_l_eleve(db: Session, tuteur_id: str, eleve_utilisateur_id: str) -> Eleve:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != tuteur_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
     return eleve
 
 
@@ -921,14 +921,14 @@ def poser_question_el_professor_tuteur(
         reponse = llm_client.conseiller_tuteur(contexte_eleve, historique, payload.question)
     except ElProfessorError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une reponse, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une réponse, veuillez réessayer."
         ) from exc
 
     if _detecter_signal_alerte(payload.question) or _detecter_signal_alerte(reponse):
         reponse = (
-            f"{reponse}\n\n⚠️ Cette situation semble sensible : parlez-en sans delai a "
-            "l'administration de l'etablissement de votre enfant (ou aux autorites "
-            "competentes si l'urgence l'exige). Une alerte a ete preparee pour l'administration."
+            f"{reponse}\n\n⚠️ Cette situation semble sensible : parlez-en sans délai à "
+            "l'administration de l'établissement de votre enfant (ou aux autorités "
+            "compétentes si l'urgence l'exige). Une alerte a été préparée pour l'administration."
         )
         db.add(
             AlerteElProfessor(
@@ -1071,7 +1071,7 @@ def poser_question_el_professor_famille(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "session_non_rejointe",
-            "Cette session n'a pas encore ete rejointe par l'enfant.",
+            "Cette session n'a pas encore été rejointe par l'enfant.",
         )
 
     qui_parle = "tuteur" if utilisateur.role == RoleUtilisateur.TUTEUR else "eleve"
@@ -1086,14 +1086,14 @@ def poser_question_el_professor_famille(
         reponse = llm_client.conseiller_famille(contexte_eleve, historique, payload.question, qui_parle)
     except ElProfessorError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une reponse, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible d'obtenir une réponse, veuillez réessayer."
         ) from exc
 
     if _detecter_signal_alerte(payload.question) or _detecter_signal_alerte(reponse):
         reponse = (
-            f"{reponse}\n\n⚠️ Cette situation semble sensible : parlez-en sans delai a "
-            "l'administration de l'etablissement (ou aux autorites competentes si "
-            "l'urgence l'exige). Une alerte a ete preparee pour l'administration."
+            f"{reponse}\n\n⚠️ Cette situation semble sensible : parlez-en sans délai à "
+            "l'administration de l'établissement (ou aux autorités compétentes si "
+            "l'urgence l'exige). Une alerte a été préparée pour l'administration."
         )
         db.add(
             AlerteElProfessor(

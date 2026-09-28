@@ -31,11 +31,11 @@ def valider_reponses_formulaire(schema_formulaire: list[dict] | None, reponses_j
             reponses = json.loads(reponses_json)
         except (ValueError, TypeError) as exc:
             raise api_error(
-                status.HTTP_422_UNPROCESSABLE_ENTITY, "reponses_formulaire_invalides", "reponses_formulaire doit etre un JSON valide."
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "reponses_formulaire_invalides", "Le formulaire envoyé est illisible, veuillez réessayer."
             ) from exc
     if not isinstance(reponses, dict):
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "reponses_formulaire_invalides", "reponses_formulaire doit etre un objet JSON."
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "reponses_formulaire_invalides", "Le formulaire envoyé est illisible, veuillez réessayer."
         )
 
     champs_par_id = {c["id"]: c for c in schema_formulaire}

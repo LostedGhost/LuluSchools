@@ -194,7 +194,7 @@ export function TableauCollaboratif({
         couleur: "#f8fafc",
       });
     } catch (err) {
-      setErreur(messageErreur(err, "Le trait n'a pas pu etre enregistre."));
+      setErreur(messageErreur(err, "Le trait n'a pas pu être enregistré."));
       chargerEtat();
     }
   };
@@ -214,7 +214,7 @@ export function TableauCollaboratif({
       });
       chargerEtat();
     } catch (err) {
-      setErreur(messageErreur(err, "Le texte n'a pas pu etre ajoute."));
+      setErreur(messageErreur(err, "Le texte n'a pas pu être ajouté."));
     } finally {
       setTexteEnCours(null);
     }

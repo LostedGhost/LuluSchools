@@ -91,7 +91,7 @@ export function KkiapayButton({ montant, typeRessource, reference, onSucces, onE
 
   const ouvrirWidget = async () => {
     if (!KKIAPAY_PUBLIC_KEY) {
-      window.alert("Paiement indisponible : cle publique Kkiapay non configuree.");
+      window.alert("Paiement indisponible : clé publique Kkiapay non configurée.");
       return;
     }
     await chargerScriptKkiapay().catch(() => {

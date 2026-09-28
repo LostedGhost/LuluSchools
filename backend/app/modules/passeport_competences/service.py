@@ -28,7 +28,7 @@ def _quiz_reussis(db: Session, eleve: Eleve) -> list[dict]:
         resultats.append(
             {
                 "quiz_id": tentative.quiz_id,
-                "cours_titre": cours.titre if cours is not None else "Cours supprime",
+                "cours_titre": cours.titre if cours is not None else "Cours supprimé",
                 "cours_chapitre": cours.chapitre if cours is not None else "",
                 "score": tentative.score,
                 "date": tentative.created_at,
@@ -91,7 +91,7 @@ def _badges(quiz_reussis: list[dict], moyennes: list[dict]) -> list[dict]:
     badges = []
     nb_quiz = len(quiz_reussis)
     if nb_quiz >= 1:
-        badges.append({"id": "premier-quiz", "label": "Premier quiz reussi"})
+        badges.append({"id": "premier-quiz", "label": "Premier quiz réussi"})
     if nb_quiz >= 5:
         badges.append({"id": "cinq-quiz", "label": "5 quiz reussis"})
     if nb_quiz >= 20:

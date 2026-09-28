@@ -144,7 +144,7 @@ class MiseAJourProfilRequest(BaseModel):
     def _valider_telephone(cls, value: str) -> str:
         valeur = value.strip()
         if not re.fullmatch(r"\+?[0-9][0-9 .-]{6,28}", valeur) or sum(c.isdigit() for c in valeur) < 8:
-            raise ValueError("Numero de telephone invalide (ex. +229 01 97 00 00 00).")
+            raise ValueError("Numéro de téléphone invalide (ex. +229 01 97 00 00 00).")
         return valeur
 
 

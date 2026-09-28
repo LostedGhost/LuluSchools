@@ -24,7 +24,7 @@ router = APIRouter(tags=["coffre-fort"])
 def _verifier_tuteur_de_l_eleve(db: Session, tuteur: Utilisateur, eleve_utilisateur_id: str) -> None:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != tuteur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte tuteur.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte tuteur.")
 
 
 @router.put("/mes-enfants/{eleve_utilisateur_id}/coffre-fort/plafond", response_model=PlafondFamilialOut)
@@ -103,7 +103,7 @@ def _trancher_validation(
     if validation.tuteur_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette validation ne vous appartient pas.")
     if validation.statut != StatutValidationParentale.EN_ATTENTE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette validation a deja ete tranchee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette validation a déjà été tranchée.")
 
     validation.statut = statut
     validation.motif_refus = motif_refus

@@ -69,11 +69,11 @@ OTP_MAX_ATTEMPTS = 5
 _QUART_HEURE = 15 * 60
 _HEURE = 60 * 60
 _MESSAGE_GENERIQUE_RENVOI = (
-    "Si un compte en attente de verification correspond a cette adresse, un nouveau code vient d'etre envoye."
+    "Si un compte en attente de vérification correspond à cette adresse, un nouveau code vient d'être envoyé."
 )
 _MESSAGE_GENERIQUE_OUBLI = (
-    "Si un compte correspond a cet identifiant, un code de reinitialisation vient d'etre envoye "
-    "(a l'adresse du tuteur pour un compte eleve)."
+    "Si un compte correspond à cet identifiant, un code de réinitialisation vient d'être envoyé "
+    "(à l'adresse du tuteur pour un compte élève)."
 )
 
 
@@ -122,7 +122,7 @@ def _verifier_code(db: Session, utilisateur: Utilisateur, objet: ObjetOtp, code:
 
     expires_at = otp.expires_at if otp.expires_at.tzinfo else otp.expires_at.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) > expires_at:
-        raise _api_error(status.HTTP_400_BAD_REQUEST, "otp_expire", "Ce code a expire, demandez-en un nouveau.")
+        raise _api_error(status.HTTP_400_BAD_REQUEST, "otp_expire", "Ce code a expiré, demandez-en un nouveau.")
 
     if otp.tentatives >= OTP_MAX_ATTEMPTS:
         raise _api_error(
@@ -154,8 +154,8 @@ def _reponse_inscription_adresse_deja_prise(
                 to_name=existant.prenom,
                 subject="Tentative d'inscription avec votre adresse",
                 message=(
-                    "Quelqu'un a tente de creer un compte LuluSchools avec votre adresse e-mail, "
-                    "qui possede deja un compte. Si c'etait vous, connectez-vous ou utilisez "
+                    "Quelqu'un a tenté de créer un compte LuluSchools avec votre adresse e-mail, "
+                    "qui possède déjà un compte. Si c'était vous, connectez-vous ou utilisez "
                     "« Mot de passe oublie ». Sinon, vous pouvez ignorer ce message."
                 ),
             )
@@ -211,7 +211,7 @@ def _creer_compte_avec_otp(
         raise _api_error(
             status.HTTP_502_BAD_GATEWAY,
             "envoi_email_echoue",
-            "Impossible d'envoyer l'e-mail de verification, veuillez reessayer.",
+            "Impossible d'envoyer l'e-mail de vérification, veuillez réessayer.",
         ) from exc
 
     db.commit()
@@ -354,7 +354,7 @@ def reinitialiser_mot_de_passe(
     utilisateur = _trouver_par_identifiant(db, payload.identifiant)
     if utilisateur is None:
         enregistrer_echec(db, f"otp:ip:{ip}")
-        raise _api_error(status.HTTP_400_BAD_REQUEST, "code_invalide", "Code invalide ou expire.")
+        raise _api_error(status.HTTP_400_BAD_REQUEST, "code_invalide", "Code invalide ou expiré.")
 
     otp = _verifier_code(db, utilisateur, ObjetOtp.REINITIALISATION_MOT_DE_PASSE, payload.code, ip)
     otp.utilisee = True
@@ -365,7 +365,7 @@ def reinitialiser_mot_de_passe(
         utilisateur.email_verifie = True
     db.commit()
     reinitialiser(db, f"login:id:{utilisateur.login_id}")
-    return DemandeEnregistreeOut(message="Mot de passe reinitialise. Vous pouvez vous connecter.")
+    return DemandeEnregistreeOut(message="Mot de passe réinitialisé. Vous pouvez vous connecter.")
 
 
 @auth_router.post("/login", response_model=TokenPair)
@@ -388,7 +388,7 @@ def se_connecter(payload: LoginRequest, request: Request, db: Session = Depends(
 
     if not utilisateur.email_verifie:
         raise _api_error(
-            status.HTTP_403_FORBIDDEN, "compte_non_verifie", "Ce compte n'est pas encore verifie."
+            status.HTTP_403_FORBIDDEN, "compte_non_verifie", "Ce compte n'est pas encore vérifié."
         )
     exiger_compte_actif(utilisateur)
     reinitialiser(db, cle_identifiant)
@@ -406,12 +406,12 @@ def rafraichir_token(payload: RefreshRequest, db: Session = Depends(get_db)) -> 
         decoded = decode_token(payload.refresh_token)
     except JWTError as exc:
         raise _api_error(
-            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Refresh token invalide ou expire."
+            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Votre session a expiré : reconnectez-vous."
         ) from exc
 
     if decoded.get("type") != "refresh":
         raise _api_error(
-            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Ce token n'est pas un refresh token."
+            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Session invalide : reconnectez-vous."
         )
 
     utilisateur = db.get(Utilisateur, decoded.get("sub"))
@@ -423,7 +423,7 @@ def rafraichir_token(payload: RefreshRequest, db: Session = Depends(get_db)) -> 
         raise _api_error(
             status.HTTP_401_UNAUTHORIZED,
             "session_expiree",
-            "Le mot de passe a change depuis l'ouverture de cette session : reconnectez-vous.",
+            "Le mot de passe a changé depuis l'ouverture de cette session : reconnectez-vous.",
         )
     exiger_compte_actif(utilisateur)
 
@@ -451,7 +451,7 @@ def changer_mot_de_passe(
         raise _api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "mot_de_passe_identique",
-            "Le nouveau mot de passe doit etre different de l'ancien.",
+            "Le nouveau mot de passe doit être différent de l'ancien.",
         )
 
     utilisateur.mot_de_passe_hash = hash_password(payload.nouveau_mot_de_passe)
@@ -556,7 +556,7 @@ def suspendre_compte(
     if cible.id == admin.id:
         raise _api_error(status.HTTP_409_CONFLICT, "action_impossible", "Vous ne pouvez pas suspendre votre propre compte.")
     if not cible.actif:
-        raise _api_error(status.HTTP_409_CONFLICT, "deja_suspendu", "Ce compte est deja suspendu.")
+        raise _api_error(status.HTTP_409_CONFLICT, "deja_suspendu", "Ce compte est déjà suspendu.")
 
     cible.actif = False
     journaliser_action_ministerielle(db, admin, "utilisateur.suspendre", "utilisateur", cible.id, payload.motif)

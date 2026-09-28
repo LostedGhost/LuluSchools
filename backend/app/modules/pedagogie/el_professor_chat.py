@@ -99,10 +99,10 @@ _ALERTE_ELEVE = (
 )
 
 _CONSIGNE_DETRESSE_ELEVE = (
-    "\n\nIMPORTANT : le dernier message de l'eleve exprime peut-etre une detresse ou un danger. "
-    "Reponds en 4 a 6 phrases courtes, avec douceur, sans tableau ni liste : dis-lui que ce "
-    "n'est pas sa faute, qu'il ou elle merite d'etre en securite, et encourage-le ou la a en "
-    "parler aujourd'hui meme a un adulte de confiance ou a l'administration de son etablissement."
+    "\n\nIMPORTANT : le dernier message de l'élève exprime peut-être une détresse ou un danger. "
+    "Réponds en 4 à 6 phrases courtes, avec douceur, sans tableau ni liste : dis-lui que ce "
+    "n'est pas sa faute, qu'il ou elle mérite d'être en sécurité, et encourage-le ou la à en "
+    "parler aujourd'hui même à un adulte de confiance ou à l'administration de son établissement."
 )
 
 
@@ -142,7 +142,7 @@ def _session_accessible(db: Session, persona: str, session_id: str, utilisateur:
     if definition is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Conversation introuvable.")
     if utilisateur.role not in definition.roles:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Acces non autorise.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Accès non autorisé.")
     session = db.get(definition.modele_session, session_id)
     if persona == "famille":
         session = _verifier_acces_session_famille(session, utilisateur)
@@ -212,7 +212,7 @@ def _preparer_fil(
 
     if session.rejointe_le is None:
         raise api_error(
-            status.HTTP_409_CONFLICT, "session_non_rejointe", "Cette session n'a pas encore ete rejointe par l'enfant."
+            status.HTTP_409_CONFLICT, "session_non_rejointe", "Cette session n'a pas encore été rejointe par l'enfant."
         )
     est_tuteur = utilisateur.role == RoleUtilisateur.TUTEUR
     contexte = _construire_contexte_eleve_pour_tuteur(db, session.eleve_utilisateur_id)
@@ -245,7 +245,7 @@ def _preparer_piece_jointe(fichier: UploadFile | None) -> tuple[dict, list[str]]
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "document_illisible",
-            "Ce PDF est illisible ou protege par un mot de passe.",
+            "Ce PDF est illisible ou protégé par un mot de passe.",
         ) from exc
     return colonnes, images
 
@@ -333,11 +333,11 @@ def poser_question_en_flux(
                 morceaux.append(morceau)
                 yield _evenement("delta", {"texte": morceau})
         except ElProfessorError:
-            yield _evenement("erreur", {"message": "El Professor n'a pas pu repondre, veuillez reessayer."})
+            yield _evenement("erreur", {"message": "El Professor n'a pas pu répondre, veuillez réessayer."})
             return
         reponse = "".join(morceaux).strip()
         if not reponse:
-            yield _evenement("erreur", {"message": "El Professor n'a pas pu repondre, veuillez reessayer."})
+            yield _evenement("erreur", {"message": "El Professor n'a pas pu répondre, veuillez réessayer."})
             return
 
         alerte = signal_question or (fil.analyser_reponse and _detecter_signal_alerte(reponse))
@@ -459,6 +459,6 @@ def lire_a_voix_haute(
         audio = llm_client.synthese_vocale(payload.texte)
     except SyntheseVocaleError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "synthese_echouee", "La lecture a voix haute est indisponible pour le moment."
+            status.HTTP_502_BAD_GATEWAY, "synthese_echouee", "La lecture à voix haute est indisponible pour le moment."
         ) from exc
     return Response(content=audio, media_type="audio/wav", headers={"Cache-Control": "private, max-age=3600"})

@@ -25,20 +25,20 @@ def generer_pdf_passeport(passeport: dict) -> bytes:
     document = fitz.open()
     page, y = _nouvelle_page(document)
 
-    y = _ecrire_ligne(page, y, "Passeport de competences", taille=18, gras=True)
+    y = _ecrire_ligne(page, y, "Passeport de compétences", taille=18, gras=True)
     y = _ecrire_ligne(page, y, f"{passeport['eleve_prenom']} {passeport['eleve_nom']}", taille=13)
     y += 10
 
-    y = _ecrire_ligne(page, y, "Moyennes par matiere", taille=14, gras=True)
+    y = _ecrire_ligne(page, y, "Moyennes par matière", taille=14, gras=True)
     if not passeport["moyennes_par_matiere"]:
         y = _ecrire_ligne(page, y, "Aucune moyenne disponible pour le moment.")
     for moyenne in passeport["moyennes_par_matiere"]:
         y = _ecrire_ligne(page, y, f"- {moyenne['matiere']} : {moyenne['moyenne']:.1f}/100")
     y += 10
 
-    y = _ecrire_ligne(page, y, "Quiz reussis", taille=14, gras=True)
+    y = _ecrire_ligne(page, y, "Quiz réussis", taille=14, gras=True)
     if not passeport["quiz_reussis"]:
-        y = _ecrire_ligne(page, y, "Aucun quiz reussi pour le moment.")
+        y = _ecrire_ligne(page, y, "Aucun quiz réussi pour le moment.")
     for quiz in passeport["quiz_reussis"]:
         date_str = quiz["date"].date().isoformat() if hasattr(quiz["date"], "date") else str(quiz["date"])
         y = _ecrire_ligne(page, y, f"- {quiz['cours_titre']} ({quiz['cours_chapitre']}) : {quiz['score']:.0f}% le {date_str}")
@@ -48,7 +48,7 @@ def generer_pdf_passeport(passeport: dict) -> bytes:
 
     y = _ecrire_ligne(page, y, "Cours suivis", taille=14, gras=True)
     if not passeport["cours_suivis"]:
-        y = _ecrire_ligne(page, y, "Aucun cours enregistre pour le moment.")
+        y = _ecrire_ligne(page, y, "Aucun cours enregistré pour le moment.")
     for cours in passeport["cours_suivis"]:
         y = _ecrire_ligne(page, y, f"- {cours['titre']} ({cours['chapitre']})")
         if y > HAUTEUR_PAGE - MARGE:
@@ -57,7 +57,7 @@ def generer_pdf_passeport(passeport: dict) -> bytes:
 
     y = _ecrire_ligne(page, y, "Badges", taille=14, gras=True)
     if not passeport["badges"]:
-        y = _ecrire_ligne(page, y, "Aucun badge debloque pour le moment.")
+        y = _ecrire_ligne(page, y, "Aucun badge débloqué pour le moment.")
     for badge in passeport["badges"]:
         y = _ecrire_ligne(page, y, f"- {badge['label']}")
 

@@ -45,11 +45,11 @@ class DemandeActeCreate(BaseModel):
     @model_validator(mode="after")
     def _valider_exclusivite(self) -> "DemandeActeCreate":
         if self.est_reclamation and self.type_acte_id:
-            raise ValueError("Une demande est soit une reclamation, soit un acte du catalogue, pas les deux.")
+            raise ValueError("Une demande est soit une réclamation, soit un acte du catalogue, pas les deux.")
         if not self.est_reclamation and not self.type_acte_id:
-            raise ValueError("Preciser type_acte_id ou est_reclamation.")
+            raise ValueError("Choisissez un acte du catalogue ou une réclamation de note.")
         if self.est_reclamation and not self.reference_evaluation:
-            raise ValueError("reference_evaluation est requise pour une reclamation.")
+            raise ValueError("Indiquez le devoir concerné par la réclamation.")
         return self
 
 

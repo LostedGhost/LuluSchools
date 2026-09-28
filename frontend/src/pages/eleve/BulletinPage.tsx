@@ -26,7 +26,7 @@ export function BulletinPage() {
       .then((res) => setBulletin(res.data))
       .catch((err) => {
         // Aucun devoir encore evalue : situation normale en debut de periode, pas une erreur.
-        if (codeErreur(err) !== "aucun_devoir_evalue") setErreur(messageErreur(err, "Aucune moyenne disponible pour cette periode."));
+        if (codeErreur(err) !== "aucun_devoir_evalue") setErreur(messageErreur(err, "Aucune moyenne disponible pour cette période."));
       })
       .finally(() => setChargement(false));
   }, [profil.classe_id, profil.id, periode]);

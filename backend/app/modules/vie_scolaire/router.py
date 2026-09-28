@@ -23,7 +23,7 @@ def _affectation_de(db: Session, enseignant_id: str, classe_id: str) -> Affectat
 def _verifier_eleve_de_la_classe(db: Session, eleve_id: str, classe_id: str) -> Eleve:
     eleve = db.get(Eleve, eleve_id)
     if eleve is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Eleve introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Élève introuvable.")
     inscrit = (
         db.query(Inscription)
         .filter(
@@ -34,7 +34,7 @@ def _verifier_eleve_de_la_classe(db: Session, eleve_id: str, classe_id: str) -> 
         .first()
     )
     if inscrit is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cet eleve n'est pas inscrit dans cette classe.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cet élève n'est pas inscrit dans cette classe.")
     return eleve
 
 
@@ -61,7 +61,7 @@ def creer_entree_vie_scolaire(
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         affectation = _affectation_de(db, utilisateur.id, classe_id)
         if affectation is None:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectee.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectée.")
         est_professeur_principal = affectation.est_professeur_principal
     else:
         verifier_portee_etablissement(db, utilisateur, classe.etablissement_id)
@@ -70,8 +70,8 @@ def creer_entree_vie_scolaire(
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "matiere_requise",
-            "Un enseignant de matiere doit preciser la matiere - seul le professeur principal ou "
-            "l'administration peut consigner une entree globale.",
+            "Un enseignant de matière doit préciser la matière - seul le professeur principal ou "
+            "l'administration peut consigner une entrée globale.",
         )
 
     entree = EntreeVieScolaire(
@@ -102,7 +102,7 @@ def _verifier_lecture_vie_scolaire(
         return True
     if utilisateur.role == RoleUtilisateur.TUTEUR:
         if eleve.tuteur_id != utilisateur.id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
         return True
     if utilisateur.role == RoleUtilisateur.ELEVE:
         if eleve.utilisateur_id != utilisateur.id:
@@ -111,9 +111,9 @@ def _verifier_lecture_vie_scolaire(
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         affectation = _affectation_de(db, utilisateur.id, classe.id)
         if affectation is None:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectee.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectée.")
         return affectation.est_professeur_principal
-    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
+    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Rôle insuffisant pour cette action.")
 
 
 @router.get(

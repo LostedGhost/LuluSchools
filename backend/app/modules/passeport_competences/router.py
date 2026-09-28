@@ -16,13 +16,13 @@ router = APIRouter(tags=["passeport-competences"])
 def _verifier_tuteur_de_l_eleve(db: Session, tuteur: Utilisateur, eleve_utilisateur_id: str) -> None:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != tuteur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte tuteur.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte tuteur.")
 
 
 def _obtenir_ou_404(db: Session, eleve_utilisateur_id: str) -> dict:
     passeport = construire_passeport(db, eleve_utilisateur_id)
     if passeport is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Compte eleve introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Compte élève introuvable.")
     return passeport
 
 
@@ -34,7 +34,7 @@ def _exporter_pdf(db: Session, files_client: LuluFilesClient, eleve_utilisateur_
         lien = files_client.get_signed_link(file_id)
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_indisponible", "Impossible de generer le PDF, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_indisponible", "Impossible de générer le PDF, veuillez réessayer."
         ) from exc
     return PasseportExportOut(lulufiles_file_id=file_id, lien=lien)
 

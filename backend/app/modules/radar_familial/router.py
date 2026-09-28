@@ -17,7 +17,7 @@ router = APIRouter(tags=["radar-familial"])
 def _verifier_tuteur_de_l_eleve(db: Session, tuteur: Utilisateur, eleve_utilisateur_id: str) -> Eleve:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != tuteur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte tuteur.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte tuteur.")
     return eleve
 
 
@@ -39,13 +39,13 @@ def obtenir_radar_familial(
 
     sources = construire_sources_radar_familial(db, eleve_utilisateur_id, debut=debut, fin=fin)
     if not sources:
-        resume = "Aucun element notable n'a ete enregistre sur cette periode."
+        resume = "Aucun élément notable n'a été enregistré sur cette période."
     else:
         try:
             resume = llm_client.generer_digest_famille(f"{eleve.prenom} {eleve.nom}", sources)
         except DigestFamilleError as exc:
             raise api_error(
-                status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible de generer le digest, veuillez reessayer."
+                status.HTTP_502_BAD_GATEWAY, "reponse_echouee", "Impossible de générer le digest, veuillez réessayer."
             ) from exc
 
     return {

@@ -96,7 +96,7 @@ def creer_etablissement(
     email_admin = payload.admin.email.lower()
     if db.query(Utilisateur).filter(Utilisateur.login_id == email_admin).first() is not None:
         raise api_error(
-            status.HTTP_409_CONFLICT, "email_deja_utilise", "Un compte existe deja avec cet e-mail."
+            status.HTTP_409_CONFLICT, "email_deja_utilise", "Un compte existe déjà avec cet e-mail."
         )
 
     etablissement = Etablissement(
@@ -137,7 +137,7 @@ def creer_etablissement(
         raise api_error(
             status.HTTP_502_BAD_GATEWAY,
             "envoi_email_echoue",
-            "Impossible d'envoyer les identifiants a l'administrateur, veuillez reessayer.",
+            "Impossible d'envoyer les identifiants à l'administrateur, veuillez réessayer.",
         ) from exc
 
     db.commit()
@@ -160,10 +160,10 @@ def mon_etablissement(
     de savoir quel etablissement il administre (pas expose sur MeOut)."""
     lien = db.get(AdminEtablissement, admin.id)
     if lien is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucun etablissement rattache a ce compte.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucun établissement rattaché à ce compte.")
     etablissement = db.get(Etablissement, lien.etablissement_id)
     if etablissement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     return etablissement
 
 
@@ -299,7 +299,7 @@ def obtenir_etablissement(
 ) -> Etablissement:
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     return etablissement
 
 
@@ -318,7 +318,7 @@ def mettre_a_jour_localisation(
     geolocalisation du navigateur cote frontend - saisie manuelle en secours)."""
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
@@ -347,7 +347,7 @@ def modifier_description_etablissement(
     seulement l'A+ proprietaire - modération nationale deleguee, cahier des charges)."""
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     etablissement.description = payload.description
@@ -367,7 +367,7 @@ def modifier_parametres_etablissement(
     inscriptions) - jamais par l'A++, qui ne gere pas le quotidien d'un etablissement."""
     etablissement = db.get(Etablissement, etablissement_id)
     if etablissement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
     etablissement.admission_automatique = payload.admission_automatique
     db.commit()
@@ -391,7 +391,7 @@ def appliquer_action_groupee_etablissements(
     manquants = set(payload.ids) - trouves
     if manquants:
         raise api_error(
-            status.HTTP_404_NOT_FOUND, "introuvable", f"Etablissement(s) introuvable(s) : {', '.join(sorted(manquants))}."
+            status.HTTP_404_NOT_FOUND, "introuvable", f"Établissement(s) introuvable(s) : {', '.join(sorted(manquants))}."
         )
 
     nouvel_actif = payload.action == "reactiver"
@@ -432,7 +432,7 @@ def creer_classe(
     utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> Classe:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     classe = Classe(
@@ -467,7 +467,7 @@ def ajouter_photo_etablissement(
     files_client: LuluFilesClient = Depends(get_files_client),
 ) -> EtablissementPhoto:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     nb_photos = (
@@ -477,7 +477,7 @@ def ajouter_photo_etablissement(
         or 0
     )
     if nb_photos >= 8:
-        raise api_error(status.HTTP_400_BAD_REQUEST, "limite_atteinte", "Maximum 8 photos par etablissement.")
+        raise api_error(status.HTTP_400_BAD_REQUEST, "limite_atteinte", "Maximum 8 photos par établissement.")
 
     contenu = lire_upload_borne(fichier, 5 * MO, TYPES_IMAGE)
     try:
@@ -564,7 +564,7 @@ def reconduire_classes(
     depassement) vers une nouvelle annee academique - jamais les eleves, une reconduction
     demarre toujours vide (l'inscription reste un acte annuel explicite, UC-39/40)."""
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     classes = (
@@ -616,7 +616,7 @@ def declarer_rentree(
     utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> RentreeScolaire:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     # UC-39/55 : une seule rentree OUVERTE a la fois par etablissement - toute rentree
@@ -662,7 +662,7 @@ def inviter_tuteurs(
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
     rentree = db.get(RentreeScolaire, rentree_id)
     if rentree is None or rentree.etablissement_id != etablissement_id:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Rentree introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Rentrée introuvable.")
 
     classe_ids = db.query(Classe.id).filter(Classe.etablissement_id == etablissement_id)
     eleve_ids = [
@@ -685,10 +685,10 @@ def inviter_tuteurs(
             email_client.send_notification_email(
                 to_email=tuteur.email,
                 to_name=tuteur.prenom,
-                subject=f"Rentree {rentree.annee_academique} ouverte a {etablissement.nom}",
+                subject=f"Rentrée {rentree.annee_academique} ouverte à {etablissement.nom}",
                 message=(
-                    f"{etablissement.nom} a ouvert les inscriptions pour l'annee academique "
-                    f"{rentree.annee_academique}. Connectez-vous a votre espace LuluSchools pour "
+                    f"{etablissement.nom} a ouvert les inscriptions pour l'année académique "
+                    f"{rentree.annee_academique}. Connectez-vous à votre espace LuluSchools pour "
                     "(re)inscrire votre enfant."
                 ),
             )
@@ -720,7 +720,7 @@ def consulter_vie_scolaire(
     Eleve.id qui reste un identifiant interne."""
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Eleve introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Élève introuvable.")
 
     toutes_inscriptions = (
         db.query(Inscription).filter(Inscription.eleve_id == eleve.id).order_by(Inscription.created_at.desc()).all()
@@ -739,7 +739,7 @@ def consulter_vie_scolaire(
             raise api_error(
                 status.HTTP_403_FORBIDDEN,
                 "acces_refuse",
-                "Votre etablissement n'a jamais recu de demande d'inscription de cet eleve.",
+                "Votre établissement n'a jamais reçu de demande d'inscription de cet élève.",
             )
 
     est_etudiant = est_etudiant_fn(db, eleve.id)
@@ -1062,7 +1062,7 @@ def affecter_enseignant(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "contrat_requis",
-            "Cet enseignant n'a pas de contrat signe avec cet etablissement.",
+            "Cet enseignant n'a pas de contrat signé avec cet établissement.",
         )
     existante = (
         db.query(AffectationEnseignant)
@@ -1070,7 +1070,7 @@ def affecter_enseignant(
         .first()
     )
     if existante is not None:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_affecte", "Cet enseignant est deja affecte a cette classe.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_affecte", "Cet enseignant est déjà affecté à cette classe.")
 
     affectation = AffectationEnseignant(enseignant_id=enseignant.id, classe_id=classe_id)
     db.add(affectation)
@@ -1182,7 +1182,7 @@ def _verifier_enseignant_ou_admin_de_la_classe(db: Session, utilisateur: Utilisa
             .first()
         )
         if affectation is None:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectee.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette classe ne vous est pas affectée.")
         return
     verifier_portee_etablissement(db, utilisateur, classe.etablissement_id)
 
@@ -1242,7 +1242,7 @@ def designer_professeur_principal(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "affectation_requise",
-            "Cet enseignant doit deja etre affecte a cette classe avant de pouvoir en etre professeur principal.",
+            "Cet enseignant doit déjà être affecté à cette classe avant de pouvoir en être professeur principal.",
         )
 
     autres = (

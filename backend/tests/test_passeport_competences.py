@@ -27,7 +27,7 @@ def test_eleve_voit_son_propre_passeport(client, classe_avec_enseignant_et_eleve
     assert len(corps["quiz_reussis"]) == 1
     assert corps["quiz_reussis"][0]["quiz_id"] == quiz["id"]
     assert corps["quiz_reussis"][0]["score"] == 100.0
-    assert {"id": "premier-quiz", "label": "Premier quiz reussi"} in corps["badges"]
+    assert {"id": "premier-quiz", "label": "Premier quiz réussi"} in corps["badges"]
 
 
 def test_tuteur_voit_le_passeport_de_son_enfant(client, classe_avec_enseignant_et_eleve):

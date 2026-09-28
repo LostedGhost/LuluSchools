@@ -40,7 +40,7 @@ def _etablissement_actuel_de_l_eleve(db: Session, eleve: Eleve) -> str:
     )
     if inscription is None:
         raise api_error(
-            status.HTTP_409_CONFLICT, "aucune_inscription_validee", "Aucune inscription validee pour cet eleve."
+            status.HTTP_409_CONFLICT, "aucune_inscription_validee", "Aucune inscription validée pour cet élève."
         )
     from app.modules.etablissements.models import Classe
 
@@ -58,7 +58,7 @@ def creer_type_acte(
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> TypeActeAcademique:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, admin, etablissement_id)
 
     type_acte = TypeActeAcademique(
@@ -148,13 +148,13 @@ def soumettre_demande_acte(
     else:
         if not payload.eleve_utilisateur_id:
             raise api_error(
-                status.HTTP_422_UNPROCESSABLE_ENTITY, "eleve_requis", "eleve_utilisateur_id est requis pour un tuteur."
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "eleve_requis", "Choisissez l'enfant concerné."
             )
         eleve = db.query(Eleve).filter(Eleve.utilisateur_id == payload.eleve_utilisateur_id).first()
         if eleve is not None and eleve.tuteur_id != utilisateur.id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
     if eleve is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Compte eleve introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Compte élève introuvable.")
 
     statut_initial = StatutDemandeActe.EN_TRAITEMENT
     paiement_confirme = True
@@ -167,7 +167,7 @@ def soumettre_demande_acte(
         # d'un autre etablissement et contourner les frais fixes par le sien.
         if type_acte.etablissement_id != _etablissement_actuel_de_l_eleve(db, eleve):
             raise api_error(
-                status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce type d'acte n'appartient pas a l'etablissement de l'eleve."
+                status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce type d'acte n'appartient pas à l'établissement de l'élève."
             )
         if type_acte.prix > 0:
             statut_initial = StatutDemandeActe.SOUMISE
@@ -234,7 +234,7 @@ def amorcer_paiement(
             raise api_error(
                 status.HTTP_409_CONFLICT,
                 "en_attente_validation_parentale",
-                "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+                "Cette dépense dépasse le seuil défini par votre tuteur et attend sa validation.",
             )
 
     demande.kkiapay_transaction_id = payload.transaction_id
@@ -281,10 +281,10 @@ def traiter_demande_acte(
 
     if demande.statut != StatutDemandeActe.EN_TRAITEMENT:
         raise api_error(
-            status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande n'est pas prete a etre traitee (paiement manquant ?)."
+            status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande n'est pas prête à être traitée (paiement manquant ?)."
         )
     if payload.decision not in (StatutDemandeActe.ACCEPTEE, StatutDemandeActe.REJETEE):
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Decision invalide.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Décision invalide.")
     if payload.decision == StatutDemandeActe.REJETEE and not payload.motif_rejet:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet.")
 
@@ -321,7 +321,7 @@ def televerser_piece_jointe(
     _verifier_proprietaire_ou_tuteur(db, utilisateur, eleve)
 
     if demande.statut in (StatutDemandeActe.ACCEPTEE, StatutDemandeActe.REJETEE):
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande a deja ete traitee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette demande a déjà été traitée.")
     type_acte = db.get(TypeActeAcademique, demande.type_acte_id) if demande.type_acte_id else None
     champs_fichier = (
         {c["id"] for c in (type_acte.schema_formulaire or []) if c.get("type") == "fichier"} if type_acte else set()
@@ -335,7 +335,7 @@ def televerser_piece_jointe(
             contenu, fichier.filename or champ_id, fichier.content_type or "application/octet-stream"
         )
     except FileStorageError as exc:
-        raise api_error(status.HTTP_502_BAD_GATEWAY, "upload_echoue", "Impossible d'envoyer la piece jointe.") from exc
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "upload_echoue", "Impossible d'envoyer la pièce jointe.") from exc
 
     demande.reponses_formulaire = {**(demande.reponses_formulaire or {}), champ_id: lulufiles_file_id}
     db.commit()
@@ -362,7 +362,7 @@ def livrer_document_acte(
 
     if demande.statut != StatutDemandeActe.ACCEPTEE:
         raise api_error(
-            status.HTTP_409_CONFLICT, "statut_invalide", "Seule une demande acceptee peut recevoir son document final."
+            status.HTTP_409_CONFLICT, "statut_invalide", "Seule une demande acceptée peut recevoir son document final."
         )
 
     contenu = lire_upload_borne(fichier, 20 * MO, TYPES_DOCUMENT)
@@ -419,7 +419,7 @@ def generer_document_acte(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "generation_impossible",
-            "Ce document ne peut pas etre genere automatiquement (type d'acte sans modele, demande non payee ou stockage indisponible).",
+            "Ce document ne peut pas être généré automatiquement (type d'acte sans modèle, demande non payée ou stockage indisponible).",
         )
     db.refresh(demande)
     return demande

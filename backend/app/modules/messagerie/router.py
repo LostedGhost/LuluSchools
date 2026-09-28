@@ -189,14 +189,14 @@ def creer_conversation_dm(
     if autre is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur introuvable.")
     if autre.id == utilisateur.id:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "cible_invalide", "Impossible de se contacter soi-meme.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "cible_invalide", "Impossible de se contacter soi-même.")
 
     roles = {utilisateur.role, autre.role}
     if RoleUtilisateur.ELEVE in roles and roles & _ROLES_ADULTES_STAFF:
         raise api_error(
             status.HTTP_403_FORBIDDEN,
             "dm_adulte_eleve_interdit",
-            "Les echanges entre un adulte et un eleve passent uniquement par le groupe de classe.",
+            "Les échanges entre un adulte et un élève passent uniquement par le groupe de classe.",
         )
     if utilisateur.role == RoleUtilisateur.ELEVE and autre.role == RoleUtilisateur.ELEVE:
         # Arbitrage du 2026-09-27 : entre eleves (souvent mineurs), la messagerie privee
@@ -206,14 +206,14 @@ def creer_conversation_dm(
             raise api_error(
                 status.HTTP_403_FORBIDDEN,
                 "hors_etablissement",
-                "Vous ne pouvez ecrire qu'aux eleves de votre etablissement.",
+                "Vous ne pouvez écrire qu'aux élèves de votre établissement.",
             )
     if {utilisateur.role, autre.role} == {RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR}:
         eleve_id = autre.id if autre.role == RoleUtilisateur.ELEVE else utilisateur.id
         tuteur_id = utilisateur.id if utilisateur.role == RoleUtilisateur.TUTEUR else autre.id
         eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_id).first()
         if eleve is None or eleve.tuteur_id != tuteur_id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a ce tuteur.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à ce tuteur.")
 
     mes_conv_ids = {
         p.conversation_id
@@ -256,7 +256,7 @@ def obtenir_conversation_classe(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
     conversation = db.query(Conversation).filter(Conversation.classe_id == classe_id).first()
     if conversation is None or not _est_participant(db, utilisateur, conversation):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas membre de ce groupe de classe.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas membre de ce groupe de classe.")
     return _enrichir_conversation(db, conversation, utilisateur)
 
 
@@ -274,13 +274,13 @@ def lister_messages(
     if conversation is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Conversation introuvable.")
     if not _est_participant(db, utilisateur, conversation):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas membre de cette conversation.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas membre de cette conversation.")
 
     requete = db.query(Message).filter(Message.conversation_id == conversation_id)
     if avant:
         repere = db.get(Message, avant)
         if repere is None or repere.conversation_id != conversation_id:
-            raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Message de reference introuvable.")
+            raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Message de référence introuvable.")
         requete = requete.filter(Message.created_at < repere.created_at)
     messages = requete.order_by(Message.created_at.desc()).limit(limite).all()
     visibles = [m for m in messages if utilisateur.id not in (m.masque_par or [])]
@@ -309,7 +309,7 @@ def envoyer_message(
     if conversation is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Conversation introuvable.")
     if not _est_participant(db, utilisateur, conversation):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas membre de cette conversation.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas membre de cette conversation.")
 
     message = Message(conversation_id=conversation_id, auteur_id=utilisateur.id, contenu=payload.contenu)
     db.add(message)
@@ -333,7 +333,7 @@ def masquer_message(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Message introuvable.")
     conversation = db.get(Conversation, message.conversation_id)
     if not _est_participant(db, utilisateur, conversation):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas membre de cette conversation.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas membre de cette conversation.")
 
     masque = list(message.masque_par or [])
     if utilisateur.id not in masque:
@@ -360,7 +360,7 @@ def signaler_message(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Message introuvable.")
     conversation = db.get(Conversation, message.conversation_id)
     if not _est_participant(db, utilisateur, conversation):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas membre de cette conversation.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas membre de cette conversation.")
 
     existant = (
         db.query(SignalementMessage)
@@ -464,7 +464,7 @@ def traiter_signalement(
         lien_admin = db.get(AdminEtablissement, admin.id)
         if lien_admin is None or lien_admin.etablissement_id not in etablissements:
             raise api_error(
-                status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce signalement ne concerne pas votre etablissement."
+                status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce signalement ne concerne pas votre établissement."
             )
 
     signalement.traite = True

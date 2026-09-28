@@ -28,7 +28,7 @@ def extraire_texte_pdf(contenu: bytes) -> str:
         raise DocumentIllisibleError("PDF illisible.") from exc
     try:
         if document.needs_pass:
-            raise DocumentIllisibleError("PDF protege par mot de passe.")
+            raise DocumentIllisibleError("PDF protégé par mot de passe.")
         morceaux = [page.get_text().strip() for page in document]
         return "\n\n".join(m for m in morceaux if m)
     finally:

@@ -12,6 +12,7 @@ from sqlalchemy.exc import DataError, IntegrityError
 logger = logging.getLogger(__name__)
 
 from app.core.config import settings
+from app.core.messages_validation import message_validation
 from app.modules.actes.router import router as actes_router
 from app.modules.audit.router import router as audit_router
 from app.modules.billetterie.router import router as billetterie_router
@@ -111,7 +112,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={
             "error": {
                 "code": "validation_error",
-                "message": "Donnees invalides.",
+                "message": message_validation(exc.errors()),
                 "details": {"fields": jsonable_encoder(exc.errors())},
             }
         },
@@ -125,7 +126,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     logger.warning("Contrainte d'integrite violee sur %s %s : %s", request.method, request.url.path, exc.orig)
     return JSONResponse(
         status_code=409,
-        content={"error": {"code": "conflit", "message": "Cette operation entre en conflit avec des donnees existantes.", "details": {}}},
+        content={"error": {"code": "conflit", "message": "Cette opération entre en conflit avec des données existantes.", "details": {}}},
     )
 
 

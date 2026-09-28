@@ -31,7 +31,7 @@ def _depasse(db: Session, cle: str, maximum: int, fenetre_secondes: float) -> bo
     return (nombre or 0) >= maximum
 
 
-_MESSAGE_PAR_DEFAUT = "Trop de tentatives. Veuillez patienter quelques minutes avant de reessayer."
+_MESSAGE_PAR_DEFAUT = "Trop de tentatives. Veuillez patienter quelques minutes avant de réessayer."
 
 
 def verifier_limite(

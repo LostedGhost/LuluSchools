@@ -11,7 +11,7 @@ export function DashboardRedirect() {
   if (utilisateur.role === "admin_ministeriel") return <Navigate to="/admin-ministeriel" replace />;
   return (
     <div className="p-8 text-center text-slate-600">
-      Aucun tableau de bord n'est encore disponible pour votre role ({utilisateur.role}).
+      Aucun tableau de bord n'est encore disponible pour votre rôle ({utilisateur.role}).
     </div>
   );
 }

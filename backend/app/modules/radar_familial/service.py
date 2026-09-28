@@ -63,9 +63,9 @@ def construire_sources_radar_familial(
         if not (debut <= jour <= fin):
             continue
         devoir = db.get(Devoir, soumission.devoir_id)
-        matiere = devoir.matiere if devoir is not None else "matiere inconnue"
+        matiere = devoir.matiere if devoir is not None else "matière inconnue"
         titre = devoir.titre if devoir is not None else ""
-        note = f"{soumission.note:g}" if soumission.note is not None else "non notee"
+        note = f"{soumission.note:g}" if soumission.note is not None else "non notée"
         sources.append(f"Devoir de {matiere} \"{titre}\" corrige le {jour.isoformat()} : note {note}")
 
     participations = (
@@ -84,7 +84,7 @@ def construire_sources_radar_familial(
         releve = construire_releve_financier(db, eleve_utilisateur_id, debut=debut, fin=fin)
         if releve["solde_net"] != 0:
             sources.append(
-                f"Activite financiere du {debut.isoformat()} au {fin.isoformat()} : solde net {releve['solde_net']:g} FCFA"
+                f"Activité financière du {debut.isoformat()} au {fin.isoformat()} : solde net {releve['solde_net']:g} FCFA"
             )
 
     return sources
