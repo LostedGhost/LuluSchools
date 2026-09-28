@@ -37,6 +37,14 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/evaluations/` — enrichi (UC-26) : nature formative/sommative, sujet/barème en document, soumission par copie image
 - `app/modules/pedagogie/` — enrichi (UC-27) : El Professor côté enseignant (conseil éducatif/moral/professionnel) + garde-fou d'alerte
 - `app/modules/pedagogie/el_professor_chat.py` (2026-09-27) — interface de conversation commune aux 4 personas : `POST /el-professor/{persona}/sessions/{id}/flux` (SSE, pièce jointe image/PDF), `PATCH`/`DELETE` d'une conversation, `GET/POST /el-professor/eleve/sessions` (aide générale sans cours), `POST /el-professor/synthese-vocale`. Réutilise les contrôles d'accès et `_detecter_signal_alerte` de `router.py` ; persistance après le flux via `get_session_factory`. Côté élève, seule la question déclenche l'alerte (origine `ELEVE`, exclue de la vue tuteur) et une consigne « détresse » est ajoutée avant l'appel.
+- **Audit d'ergonomie (2026-09-28, `docs/audit-ergonomie-2026-09-28.md`)** :
+  `app/core/messages_validation.py` (erreurs 422 en phrases françaises, branché dans
+  `main.py`) ; `app/modules/administration/compteurs.py` (`GET /me/compteurs` : pastilles du
+  menu par rôle) ; `app/modules/evaluations/periodes.py` (trimestres EP/ES, semestres UP ;
+  `GET /classes/{id}/periodes`, bulletin limité aux devoirs de la période, erreur
+  `periode_invalide`) ; tous les messages utilisateur accentués. Tests : `tests/test_periodes.py`,
+  `test_compteurs_du_menu` ; helper `conftest.periode_courante` (les tests de bulletin ne
+  dépendent plus de la date).
 - **Simplification de l'administration (2026-09-28, `docs/simplification-administration.md`)** :
   `app/modules/administration/a_traiter.py` (`GET /administration/a-traiter` : toutes les files
   de l'A+ ou de l'A++, `POST /administration/remboursements/effectues`) ;

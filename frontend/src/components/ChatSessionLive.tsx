@@ -90,7 +90,7 @@ export function ChatSessionLive({
         <TextInput
           value={contenu}
           onChange={(e) => setContenu(e.target.value)}
-          placeholder="Ecrire un message..."
+          placeholder="Écrire un message…"
           style={{ flex: 1 }}
         />
         <Btn type="submit" size="sm" variant="primary" loading={enCours} leftIcon={<Send size={14} />}>

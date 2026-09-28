@@ -43,11 +43,11 @@ def _resoudre_beneficiaire(db: Session, utilisateur: Utilisateur, eleve_utilisat
         return utilisateur
     if not eleve_utilisateur_id:
         raise api_error(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "eleve_requis", "eleve_utilisateur_id est requis pour un tuteur."
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "eleve_requis", "Choisissez l'enfant concerné."
         )
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != utilisateur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
     return db.get(Utilisateur, eleve_utilisateur_id)
 
 
@@ -68,7 +68,7 @@ def _verifier_eleve_de_l_etablissement(db: Session, beneficiaire: Utilisateur, e
     )
     if not inscrit:
         raise api_error(
-            status.HTTP_403_FORBIDDEN, "hors_etablissement", "Ce service est reserve aux eleves de l'etablissement."
+            status.HTTP_403_FORBIDDEN, "hors_etablissement", "Ce service est réservé aux élèves de l'établissement."
         )
 
 
@@ -111,7 +111,7 @@ def creer_ligne_transport(
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> LigneTransport:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     verifier_admin_de_l_etablissement(db, admin, etablissement_id)
 
     ligne = LigneTransport(
@@ -150,7 +150,7 @@ def acheter_ticket_transport(
     beneficiaire = _resoudre_beneficiaire(db, utilisateur, payload.eleve_utilisateur_id)
     _verifier_eleve_de_l_etablissement(db, beneficiaire, ligne.etablissement_id)
     if payload.date_trajet < aujourdhui_benin():
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "date_passee", "Impossible d'acheter un ticket pour une date passee.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "date_passee", "Impossible d'acheter un ticket pour une date passée.")
     if (
         db.query(TicketTransport)
         .filter(
@@ -163,7 +163,7 @@ def acheter_ticket_transport(
         .first()
         is not None
     ):
-        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un ticket existe deja pour ce trajet et cette date.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un ticket existe déjà pour ce trajet et cette date.")
 
     deja_pris = (
         db.query(TicketTransport)
@@ -176,7 +176,7 @@ def acheter_ticket_transport(
         .count()
     )
     if deja_pris >= ligne.capacite_par_trajet:
-        raise api_error(status.HTTP_409_CONFLICT, "capacite_atteinte", "Cette ligne est complete pour cette date.")
+        raise api_error(status.HTTP_409_CONFLICT, "capacite_atteinte", "Cette ligne est complète pour cette date.")
 
     ticket = TicketTransport(
         ligne_id=ligne_id,
@@ -221,11 +221,11 @@ def valider_ticket_transport(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ticket introuvable.")
     ligne = db.get(LigneTransport, ticket.ligne_id)
     if not est_controleur_designe(db, controleur.id, ligne.etablissement_id, ServiceControle.TRANSPORT):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas controleur designe sur cette ligne.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas contrôleur désigné sur cette ligne.")
     if ticket.statut != StatutTicket.ACHETE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut pas etre valide.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut pas être validé.")
     if not ticket.paiement_confirme:
-        raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce ticket n'est pas confirme.")
+        raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce ticket n'est pas confirmé.")
     if ticket.date_trajet != aujourdhui_benin():
         raise api_error(status.HTTP_409_CONFLICT, "mauvaise_date", "Ce ticket n'est pas valable aujourd'hui.")
 
@@ -247,9 +247,9 @@ def rembourser_ticket_transport(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ticket introuvable.")
     _verifier_proprietaire_ou_tuteur(db, utilisateur, ticket.utilisateur_id)
     if ticket.statut != StatutTicket.ACHETE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut plus etre rembourse.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut plus être remboursé.")
     if datetime.now(timezone.utc) > _limite_remboursement_veille_18h(ticket.date_trajet):
-        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de remboursement est depasse.")
+        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le délai de remboursement est dépassé.")
 
     ticket.statut = StatutTicket.REMBOURSE
     rembourser(kkiapay, ticket)
@@ -333,7 +333,7 @@ def creer_type_repas_cantine(
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> TypeRepasCantine:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     verifier_admin_de_l_etablissement(db, admin, etablissement_id)
 
     type_repas = TypeRepasCantine(
@@ -376,7 +376,7 @@ def acheter_ticket_cantine(
     beneficiaire = _resoudre_beneficiaire(db, utilisateur, payload.eleve_utilisateur_id)
     _verifier_eleve_de_l_etablissement(db, beneficiaire, type_repas.etablissement_id)
     if payload.date_service < aujourdhui_benin():
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "date_passee", "Impossible d'acheter un ticket pour une date passee.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "date_passee", "Impossible d'acheter un ticket pour une date passée.")
     if (
         db.query(TicketCantine)
         .filter(
@@ -389,7 +389,7 @@ def acheter_ticket_cantine(
         .first()
         is not None
     ):
-        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un ticket existe deja pour ce repas et cette date.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un ticket existe déjà pour ce repas et cette date.")
 
     deja_pris = (
         db.query(TicketCantine)
@@ -447,11 +447,11 @@ def valider_ticket_cantine(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ticket introuvable.")
     type_repas = db.get(TypeRepasCantine, ticket.type_repas_id)
     if not est_controleur_designe(db, controleur.id, type_repas.etablissement_id, ServiceControle.CANTINE):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas controleur designe sur ce service.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas contrôleur désigné sur ce service.")
     if ticket.statut != StatutTicket.ACHETE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut pas etre valide.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut pas être validé.")
     if not ticket.paiement_confirme:
-        raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce ticket n'est pas confirme.")
+        raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce ticket n'est pas confirmé.")
     if ticket.date_service != aujourdhui_benin():
         raise api_error(status.HTTP_409_CONFLICT, "mauvaise_date", "Ce ticket n'est pas valable aujourd'hui.")
 
@@ -473,9 +473,9 @@ def rembourser_ticket_cantine(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ticket introuvable.")
     _verifier_proprietaire_ou_tuteur(db, utilisateur, ticket.utilisateur_id)
     if ticket.statut != StatutTicket.ACHETE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut plus etre rembourse.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce ticket ne peut plus être remboursé.")
     if datetime.now(timezone.utc) > _limite_remboursement_veille_18h(ticket.date_service):
-        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de remboursement est depasse.")
+        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le délai de remboursement est dépassé.")
 
     ticket.statut = StatutTicket.REMBOURSE
     rembourser(kkiapay, ticket)

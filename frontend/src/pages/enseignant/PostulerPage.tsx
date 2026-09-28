@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { libelle } from "../../utils/libelles";
 import { useNavigate, useParams } from "react-router-dom";
 import { obtenirPoste, postuler } from "../../api/recrutement";
 import { listerEtablissements } from "../../api/etablissements";
@@ -231,7 +232,7 @@ export function PostulerPage() {
                 className="chip chip-neutral"
                 style={{ fontSize: "11px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "5px" }}
               >
-                <FileText size={12} aria-hidden="true" /> {crit.type_document} (Coeff. {crit.coefficient}, Min.{" "}
+                <FileText size={12} aria-hidden="true" /> {libelle(crit.type_document)} (Coeff. {crit.coefficient}, Min.{" "}
                 {crit.seuil_minimal}/20)
               </span>
             ))}
@@ -383,7 +384,7 @@ export function PostulerPage() {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-bold text-sm" style={{ color: "var(--ink)" }}>
-                      {critere.type_document}
+                      {libelle(critere.type_document)}
                     </span>
                     <span
                       className="text-xs"
@@ -396,7 +397,7 @@ export function PostulerPage() {
                     </span>
                   </div>
 
-                  <Field label={`Fichier pour ${critere.type_document}`} required>
+                  <Field label={`Fichier pour ${libelle(critere.type_document)}`} required>
                     <div className="flex items-center gap-3">
                       <input
                         type="file"

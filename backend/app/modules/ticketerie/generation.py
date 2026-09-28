@@ -62,7 +62,7 @@ def generer_pdf_ticket(titre: str, sous_titre: str, type_ticket: TypeTicket, tic
 
     pdf.drawImage(ImageReader(buffer_qr), largeur - 45 * mm, 8 * mm, width=32 * mm, height=32 * mm)
     pdf.setFont("Helvetica", 6)
-    pdf.drawString(10 * mm, 10 * mm, f"Reference : {ticket_id}")
+    pdf.drawString(10 * mm, 10 * mm, f"Référence : {ticket_id}")
 
     pdf.showPage()
     pdf.save()

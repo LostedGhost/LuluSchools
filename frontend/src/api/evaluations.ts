@@ -30,6 +30,19 @@ export function obtenirSoumissionDeMonEnfant(devoirId: string, eleveUtilisateurI
   return api.get<SoumissionOut>(`/devoirs/${devoirId}/soumission-de/${eleveUtilisateurId}`);
 }
 
+export interface PeriodeOut {
+  code: string;
+  libelle: string;
+  debut: string;
+  fin: string;
+  courante: boolean;
+}
+
+/** Trimestres (primaire, secondaire) ou semestres (université) de l'année de la classe. */
+export function periodesDeLaClasse(classeId: string) {
+  return api.get<PeriodeOut[]>(`/classes/${classeId}/periodes`);
+}
+
 export function obtenirBulletin(eleveUtilisateurId: string, classeId: string, periode: string) {
   return api.get<BulletinOut>(`/eleves/${eleveUtilisateurId}/bulletins`, {
     params: { classe_id: classeId, periode },

@@ -132,7 +132,7 @@ def creer_poste(
     utilisateur: Utilisateur = Depends(get_current_active_user),
 ) -> Poste:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     poste = Poste(
@@ -310,7 +310,7 @@ def postuler(
         .first()
         is not None
     ):
-        raise api_error(status.HTTP_409_CONFLICT, "deja_candidat", "Vous avez deja postule a ce poste.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_candidat", "Vous avez déjà postulé à ce poste.")
     if len(fichiers) > MAX_DOCUMENTS_CANDIDATURE:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "trop_de_documents", "Trop de documents joints.")
 
@@ -319,7 +319,7 @@ def postuler(
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "documents_incomplets",
-            "Les documents fournis ne correspondent pas exactement aux criteres du poste.",
+            "Les documents fournis ne correspondent pas exactement aux critères du poste.",
         )
     # UC-48/63 : reponses au schema_formulaire du poste, distinct des documents notes par
     # l'IA ci-dessus (deux mecanismes complementaires, voir cahier des charges).
@@ -348,7 +348,7 @@ def postuler(
         except FileStorageError as exc:
             db.rollback()
             raise api_error(
-                status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker un document, veuillez reessayer."
+                status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker un document, veuillez réessayer."
             ) from exc
 
         document = DocumentCandidature(
@@ -411,7 +411,7 @@ def _noter_candidature_en_arriere_plan(
             try:
                 note = llm_client.noter_document(
                     item["image_bytes"], item["image_content_type"],
-                    critere=f"conformite du document '{item['type_document']}'",
+                    critere=f"conformité du document '{item['type_document']}'",
                 )
                 document.note_ia = note
                 document.statut = StatutDocument.NOTE
@@ -493,7 +493,7 @@ def noter_document_manuellement(
     _verifier_admin_de_l_etablissement(db, admin, poste.etablissement_id)
 
     if document.statut != StatutDocument.ECHEC_NOTATION:
-        raise api_error(status.HTTP_409_CONFLICT, "revision_non_requise", "Ce document n'attend pas de revision manuelle.")
+        raise api_error(status.HTTP_409_CONFLICT, "revision_non_requise", "Ce document n'attend pas de révision manuelle.")
 
     document.note_ia = payload.note
     document.statut = StatutDocument.NOTE
@@ -528,7 +528,7 @@ def obtenir_candidature(
         RoleUtilisateur.ADMIN_ETABLISSEMENT,
         RoleUtilisateur.ADMIN_MINISTERIEL,
     ):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas habilite a consulter cette candidature.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas habilité à consulter cette candidature.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT and candidature.enseignant_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette candidature ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
@@ -561,20 +561,20 @@ def obtenir_lien_document_candidature(
         RoleUtilisateur.ADMIN_ETABLISSEMENT,
         RoleUtilisateur.ADMIN_MINISTERIEL,
     ):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas habilite a consulter ce document.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas habilité à consulter ce document.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT and candidature.enseignant_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce document ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         poste = db.get(Poste, candidature.poste_id)
         _verifier_admin_de_l_etablissement(db, utilisateur, poste.etablissement_id)
     if not document.lulufiles_file_id:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce document n'a pas de fichier associe.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce document n'a pas de fichier associé.")
 
     try:
         url = files_client.get_signed_link(document.lulufiles_file_id, disposition="inline")
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez réessayer."
         ) from exc
     return LienFichierOut(url=url)
 
@@ -591,10 +591,10 @@ def _verification_casier_du_recruteur(
     poste = db.get(Poste, candidature.poste_id)
     lien = db.get(AdminEtablissement, admin.id)
     if lien is None or lien.etablissement_id != poste.etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas l'etablissement recruteur.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas l'établissement recruteur.")
     verification = candidature.verification_casier
     if verification is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucun casier judiciaire depose.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucun casier judiciaire déposé.")
     return candidature, verification
 
 
@@ -621,7 +621,7 @@ def telecharger_casier(
         raise api_error(
             status.HTTP_410_GONE,
             "casier_purge",
-            "Le document a ete supprime (verdict rendu ou delai de conservation depasse) ; seul le statut est conserve.",
+            "Le document a été supprimé (verdict rendu ou délai de conservation dépassé) ; seul le statut est conservé.",
         )
     try:
         contenu = dechiffrer_bytes(verification.contenu_chiffre)
@@ -659,7 +659,7 @@ def rendre_verdict_casier(
     candidature."""
     candidature, verification = _verification_casier_du_recruteur(db, admin, candidature_id)
     if verification.statut != StatutVerificationCasier.EN_ATTENTE:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_verifie", "Le verdict a deja ete rendu.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_verifie", "Le verdict a déjà été rendu.")
 
     verification.statut = StatutVerificationCasier.CONFORME if payload.conforme else StatutVerificationCasier.NON_CONFORME
     verification.verifie_par_utilisateur_id = admin.id
@@ -691,15 +691,15 @@ def contester_candidature(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette candidature ne vous appartient pas.")
     if candidature.statut != StatutCandidature.REJETEE:
         raise api_error(
-            status.HTTP_409_CONFLICT, "candidature_non_rejetee", "Seule une candidature rejetee peut etre contestee."
+            status.HTTP_409_CONFLICT, "candidature_non_rejetee", "Seule une candidature rejetée peut être contestée."
         )
     if db.query(Contestation).filter(Contestation.candidature_id == candidature_id).first() is not None:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_contestee", "Cette candidature a deja fait l'objet d'une contestation.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_contestee", "Cette candidature a déjà fait l'objet d'une contestation.")
     depart = candidature.rejetee_le or candidature.created_at
     depart = depart if depart.tzinfo else depart.replace(tzinfo=timezone.utc)
     limite = _ajouter_jours_ouvres(depart, CONTESTATION_DELAI_JOURS)
     if datetime.now(timezone.utc) > limite:
-        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de contestation est depasse.")
+        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le délai de contestation est dépassé.")
 
     contestation = Contestation(candidature_id=candidature_id, motif=payload.motif)
     candidature.statut = StatutCandidature.EN_EVALUATION
@@ -725,9 +725,9 @@ def decider_contestation(
     _verifier_admin_de_l_etablissement(db, admin, poste.etablissement_id)
 
     if contestation.statut != StatutContestation.EN_ATTENTE:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_tranchee", "Cette contestation a deja ete tranchee.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_tranchee", "Cette contestation a déjà été tranchée.")
     if payload.decision not in (StatutContestation.ACCEPTEE, StatutContestation.REJETEE):
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Decision invalide.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Décision invalide.")
     if payload.decision == StatutContestation.REJETEE and not payload.motif_decision:
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet."
@@ -764,16 +764,16 @@ def creer_contrat(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "candidature_non_eligible",
-            "Cette candidature n'est pas eligible a un contrat (score manquant ou statut invalide).",
+            "Cette candidature n'est pas éligible à un contrat (score manquant ou statut invalide).",
         )
     if poste.statut != StatutPoste.OUVERT:
-        raise api_error(status.HTTP_409_CONFLICT, "poste_pourvu", "Ce poste est deja pourvu.")
+        raise api_error(status.HTTP_409_CONFLICT, "poste_pourvu", "Ce poste est déjà pourvu.")
     verification = candidature.verification_casier
     if verification is None or verification.statut != StatutVerificationCasier.CONFORME:
         raise api_error(
             status.HTTP_409_CONFLICT,
             "casier_non_verifie",
-            "Le casier judiciaire du candidat doit etre verifie conforme avant tout contrat.",
+            "Le casier judiciaire du candidat doit être vérifié conforme avant tout contrat.",
         )
 
     contrat = Contrat(
@@ -812,7 +812,7 @@ def signer_contrat(
     if contrat.enseignant_id != enseignant.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce contrat ne vous appartient pas.")
     if contrat.statut != StatutContrat.EN_ATTENTE_SIGNATURE:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_signe", "Ce contrat est deja signe.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_signe", "Ce contrat est déjà signé.")
 
     contenu_image = lire_upload_borne(signature_image, MAX_SIGNATURE_OCTETS, TYPES_IMAGE)
     try:
@@ -821,7 +821,7 @@ def signer_contrat(
         )
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker la signature, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker la signature, veuillez réessayer."
         ) from exc
 
     contrat.signature_horodatage = datetime.now(timezone.utc)
@@ -851,19 +851,19 @@ def obtenir_lien_signature_contrat(
         RoleUtilisateur.ADMIN_ETABLISSEMENT,
         RoleUtilisateur.ADMIN_MINISTERIEL,
     ):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas habilite a consulter ce contrat.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas habilité à consulter ce contrat.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT and contrat.enseignant_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce contrat ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         _verifier_admin_de_l_etablissement(db, utilisateur, contrat.etablissement_id)
     if not contrat.signature_image_lulufiles_id:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce contrat n'est pas encore signe.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce contrat n'est pas encore signé.")
 
     try:
         url = files_client.get_signed_link(contrat.signature_image_lulufiles_id, disposition="inline")
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez réessayer."
         ) from exc
     return LienFichierOut(url=url)
 
@@ -888,13 +888,13 @@ def proposer_reconduction(
 
     if contrat.statut != StatutContrat.SIGNE:
         raise api_error(
-            status.HTTP_409_CONFLICT, "contrat_non_signe", "Seul un contrat signe peut etre reconduit."
+            status.HTTP_409_CONFLICT, "contrat_non_signe", "Seul un contrat signé peut être reconduit."
         )
     if (contrat.date_fin - date.today()).days > RECONDUCTION_FENETRE_JOURS:
         raise api_error(
             status.HTTP_409_CONFLICT,
             "hors_fenetre",
-            f"La reconduction n'est possible que dans les {RECONDUCTION_FENETRE_JOURS} jours avant l'echeance.",
+            f"La reconduction n'est possible que dans les {RECONDUCTION_FENETRE_JOURS} jours avant l'échéance.",
         )
 
     nouveau_contrat = Contrat(

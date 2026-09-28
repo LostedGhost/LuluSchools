@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listerReferentiels, proposerReferentiel, type ReferentielOut } from "../../api/evaluations_gouvernance";
+import { listerClasses } from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
-import { Badge, Btn, Card, EmptyState, ErrorBanner, Field, PageTitle, SkeletonCard, TextInput } from "../../components/ui";
-import { Scale, Send } from "lucide-react";
+import { useAdminEtab } from "../../admin/AdminEtabContext";
+import { Badge, Btn, Card, EmptyState, ErrorBanner, Field, PageTitle, SkeletonCard, SuccessBanner, TextInput } from "../../components/ui";
+import { Scale, Search, Send } from "lucide-react";
 
 const TONE_STATUT: Record<ReferentielOut["statut"], "success" | "pending" | "neutral"> = {
   valide: "success",
@@ -17,7 +19,13 @@ const LABEL_STATUT: Record<ReferentielOut["statut"], string> = {
 };
 
 export function ReferentielsEtabPage() {
+  const etablissement = useAdminEtab();
   const [referentiels, setReferentiels] = useState<ReferentielOut[]>([]);
+  // Par défaut, seuls les niveaux enseignés dans l'établissement (sinon des centaines de
+  // lignes : tous les niveaux du pays, du CI au doctorat).
+  const [niveauxEtab, setNiveauxEtab] = useState<Set<string>>(new Set());
+  const [tousNiveaux, setTousNiveaux] = useState(false);
+  const [recherche, setRecherche] = useState("");
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
@@ -34,6 +42,11 @@ export function ReferentielsEtabPage() {
   };
 
   useEffect(charger, []);
+  useEffect(() => {
+    listerClasses(etablissement.id)
+      .then((res) => setNiveauxEtab(new Set(res.data.map((c) => c.niveau))))
+      .catch(() => setTousNiveaux(true));
+  }, [etablissement.id]);
 
   const ouvrirProposition = (r: ReferentielOut) => {
     setPropositionOuverte(r.id);
@@ -59,6 +72,17 @@ export function ReferentielsEtabPage() {
   // Un referentiel "remplace" n'a plus d'interet operationnel une fois qu'un autre
   // (valide ou en attente) couvre deja le meme niveau/matiere.
   const referentielsActifs = referentiels.filter((r) => r.statut !== "remplace");
+  const filtre = recherche.trim().toLowerCase();
+  const groupes = useMemo(() => {
+    const visibles = referentielsActifs.filter(
+      (r) =>
+        (tousNiveaux || niveauxEtab.size === 0 || niveauxEtab.has(r.niveau)) &&
+        (!filtre || `${r.niveau} ${r.matiere}`.toLowerCase().includes(filtre)),
+    );
+    const parNiveau = new Map<string, ReferentielOut[]>();
+    visibles.forEach((r) => parNiveau.set(r.niveau, [...(parNiveau.get(r.niveau) ?? []), r]));
+    return [...parNiveau.entries()];
+  }, [referentielsActifs, tousNiveaux, niveauxEtab, filtre]);
 
   return (
     <div className="page-content">
@@ -68,9 +92,20 @@ export function ReferentielsEtabPage() {
         elle n'est effective qu'après validation ministérielle (UC-09).
       </p>
       <ErrorBanner>{erreur}</ErrorBanner>
-      {succes && (
-        <div className="mb-4">
-          <Badge tone="success">{succes}</Badge>
+      <SuccessBanner>{succes}</SuccessBanner>
+
+      {!chargement && referentielsActifs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div style={{ position: "relative", flex: "1 1 240px" }}>
+            <Search size={16} aria-hidden="true" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--ink-faint)" }} />
+            <TextInput value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un niveau ou une matière" style={{ width: "100%", paddingLeft: "36px" }} />
+          </div>
+          {niveauxEtab.size > 0 && (
+            <label className="flex items-center gap-2 text-sm" style={{ color: "var(--ink-soft)", cursor: "pointer" }}>
+              <input type="checkbox" checked={tousNiveaux} onChange={(e) => setTousNiveaux(e.target.checked)} />
+              Afficher aussi les niveaux que l'établissement n'enseigne pas
+            </label>
+          )}
         </div>
       )}
 
@@ -85,20 +120,26 @@ export function ReferentielsEtabPage() {
           title="Aucun référentiel publié"
           desc="Le ministère n'a pas encore fixé de coefficient — revenez plus tard."
         />
+      ) : groupes.length === 0 ? (
+        <EmptyState icon={<Search size={24} />} title="Aucun coefficient ne correspond" desc="Modifiez la recherche ou affichez tous les niveaux." />
       ) : (
-        <div className="space-y-3">
-          {referentielsActifs.map((r) => (
+        <div className="space-y-6">
+          {groupes.map(([niveau, lignes]) => (
+          <section key={niveau} aria-label={niveau}>
+          <h2 className="text-title" style={{ margin: "0 0 8px", color: "var(--ink)" }}>{niveau}</h2>
+          <div className="space-y-3">
+          {lignes.map((r) => (
             <Card key={r.id}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
                 <div>
                   <p style={{ fontWeight: 600, color: "var(--ink)" }}>
-                    {r.niveau} — {r.matiere}
+                    {r.matiere}
                   </p>
                   <p className="monospace text-sm" style={{ color: "var(--ink-soft)" }}>
                     Coefficient actuel : {r.coefficient}
                   </p>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
                   <Badge tone={TONE_STATUT[r.statut]}>{LABEL_STATUT[r.statut]}</Badge>
                   {r.statut === "valide" && propositionOuverte !== r.id && (
                     <Btn variant="outline" size="sm" onClick={() => ouvrirProposition(r)}>
@@ -129,6 +170,9 @@ export function ReferentielsEtabPage() {
                 </div>
               )}
             </Card>
+          ))}
+          </div>
+          </section>
           ))}
         </div>
       )}

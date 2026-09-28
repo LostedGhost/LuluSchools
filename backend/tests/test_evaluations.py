@@ -1,3 +1,4 @@
+from conftest import periode_courante
 import io
 from datetime import datetime, timedelta, timezone
 
@@ -123,7 +124,7 @@ def test_bulletin_compte_zero_pour_devoir_sans_soumission(client, classe_avec_en
 
     bulletin = client.get(
         f"/api/v1/eleves/{_extraire_sub(ctx)}/bulletins",
-        params={"classe_id": ctx["classe"]["id"], "periode": "trimestre1"},
+        params={"classe_id": ctx["classe"]["id"], "periode": periode_courante(client, ctx["classe"]["id"], ctx["admin_headers"])},
         headers=ctx["admin_headers"],
     )
     assert bulletin.status_code == 200
@@ -163,7 +164,7 @@ def test_bulletin_pondere_par_les_coefficients(client, admin_ministeriel_headers
 
     bulletin = client.get(
         f"/api/v1/eleves/{_extraire_sub(ctx)}/bulletins",
-        params={"classe_id": ctx["classe"]["id"], "periode": "trimestre1"},
+        params={"classe_id": ctx["classe"]["id"], "periode": periode_courante(client, ctx["classe"]["id"], ctx["admin_headers"])},
         headers=ctx["admin_headers"],
     )
     assert bulletin.status_code == 200
@@ -180,7 +181,7 @@ def test_valider_passage_sur_le_bulletin(client, classe_avec_enseignant_et_eleve
 
     bulletin = client.get(
         f"/api/v1/eleves/{eleve_utilisateur_id}/bulletins",
-        params={"classe_id": ctx["classe"]["id"], "periode": "trimestre1"},
+        params={"classe_id": ctx["classe"]["id"], "periode": periode_courante(client, ctx["classe"]["id"], ctx["admin_headers"])},
         headers=ctx["admin_headers"],
     ).json()
 
@@ -249,7 +250,7 @@ def test_devoir_formatif_exclu_du_calcul_du_bulletin(client, classe_avec_enseign
     eleve_utilisateur_id = _extraire_sub(ctx)
     sans_devoir_sommatif = client.get(
         f"/api/v1/eleves/{eleve_utilisateur_id}/bulletins",
-        params={"classe_id": ctx["classe"]["id"], "periode": "T1"},
+        params={"classe_id": ctx["classe"]["id"], "periode": periode_courante(client, ctx["classe"]["id"], ctx["enseignant_headers"])},
         headers=ctx["enseignant_headers"],
     )
     # Aucun devoir SOMMATIF clos : le seul devoir existant (formatif) ne doit pas compter.

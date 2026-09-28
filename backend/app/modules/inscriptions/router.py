@@ -122,13 +122,13 @@ def creer_inscription(
     etablissement = db.get(Etablissement, classe.etablissement_id)
     if etablissement is None or not etablissement.actif:
         raise api_error(
-            status.HTTP_409_CONFLICT, "etablissement_suspendu", "Cet etablissement n'accepte pas d'inscription."
+            status.HTTP_409_CONFLICT, "etablissement_suspendu", "Cet établissement n'accepte pas d'inscription."
         )
 
     if utilisateur.role == RoleUtilisateur.ELEVE:
         eleve = db.query(Eleve).filter(Eleve.utilisateur_id == utilisateur.id).first()
         if eleve is None:
-            raise api_error(status.HTTP_404_NOT_FOUND, "compte_eleve_introuvable", "Compte eleve introuvable.")
+            raise api_error(status.HTTP_404_NOT_FOUND, "compte_eleve_introuvable", "Compte élève introuvable.")
     else:
         eleve = _enfant_existant(db, utilisateur.id, payload)
         if eleve is None:
@@ -153,7 +153,7 @@ def creer_inscription(
     )
     if en_cours is not None:
         raise api_error(
-            status.HTTP_409_CONFLICT, "inscription_existante", "Une inscription est deja en cours ou validee pour cette classe."
+            status.HTTP_409_CONFLICT, "inscription_existante", "Une inscription est déjà en cours ou validée pour cette classe."
         )
 
     mineur = _age_a(eleve.date_naissance) < AGE_MAJORITE_NUMERIQUE
@@ -195,7 +195,7 @@ def donner_consentement_parental(
 
     eleve = db.get(Eleve, inscription.eleve_id)
     if eleve.tuteur_id != tuteur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
 
     if inscription.statut != StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL:
         raise api_error(
@@ -233,7 +233,7 @@ def valider_inscription_interne(db: Session, inscription: Inscription, email_cli
     automatique. Valide et commite, ou leve ValidationImpossible sans rien modifier."""
     classe = db.get(Classe, inscription.classe_id)
     if inscription.statut == StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL:
-        raise ValidationImpossible("consentement_manquant", "Le consentement parental n'a pas encore ete donne.")
+        raise ValidationImpossible("consentement_manquant", "Le consentement parental n'a pas encore été donné.")
     if inscription.statut != StatutInscription.SOUMISE:
         raise ValidationImpossible("statut_invalide", "Cette inscription n'est pas en attente de validation.")
     if _places_restantes(db, classe) <= 0:
@@ -278,7 +278,7 @@ def valider_inscription_interne(db: Session, inscription: Inscription, email_cli
         except EmailDeliveryError as exc:
             db.rollback()
             raise ValidationImpossible(
-                "envoi_email_echoue", "Impossible d'envoyer les identifiants au tuteur, veuillez reessayer."
+                "envoi_email_echoue", "Impossible d'envoyer les identifiants au tuteur, veuillez réessayer."
             ) from exc
 
     inscription.statut = StatutInscription.VALIDEE
@@ -366,7 +366,7 @@ def rejeter_inscriptions_en_lot(
     for inscription in inscriptions:
         verifier_portee_etablissement(db, admin, db.get(Classe, inscription.classe_id).etablissement_id)
         if inscription.statut not in (StatutInscription.SOUMISE, StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL):
-            resultat.refusees.append(EchecLot(id=inscription.id, code="statut_invalide", message="Inscription deja traitee."))
+            resultat.refusees.append(EchecLot(id=inscription.id, code="statut_invalide", message="Inscription déjà traitée."))
             continue
         inscription.statut = StatutInscription.REJETEE
         inscription.motif_rejet = payload.motif
@@ -390,7 +390,7 @@ def rejeter_inscription(
     verifier_portee_etablissement(db, admin, classe.etablissement_id)
     if inscription.statut not in (StatutInscription.SOUMISE, StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL):
         raise api_error(
-            status.HTTP_409_CONFLICT, "statut_invalide", "Seule une inscription en attente peut etre rejetee."
+            status.HTTP_409_CONFLICT, "statut_invalide", "Seule une inscription en attente peut être rejetée."
         )
 
     inscription.statut = StatutInscription.REJETEE
@@ -527,7 +527,7 @@ def mon_profil_eleve(
     quelle classe naviguer (cours/devoirs/quiz/bulletin)."""
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur.id).first()
     if eleve is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Compte eleve introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Compte élève introuvable.")
 
     inscription_validee = (
         db.query(Inscription)

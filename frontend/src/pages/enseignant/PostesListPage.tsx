@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { libelle } from "../../utils/libelles";
 import { Link } from "react-router-dom";
 import { listerEtablissements } from "../../api/etablissements";
 import { listerPostes } from "../../api/recrutement";
@@ -105,11 +106,11 @@ export function PostesListPage() {
                   <div>
                     <h3 className="text-title text-ink mb-1">{poste.titre}</h3>
                     <p className="text-sm text-ink-soft">
-                      Documents requis : {poste.criteres.map((c) => c.type_document).join(", ")}
+                      Documents requis : {poste.criteres.map((c) => libelle(c.type_document)).join(", ")}
                     </p>
                   </div>
                   <Badge tone={poste.statut === "ouvert" ? "success" : "neutral"}>
-                    {poste.statut}
+                    {libelle(poste.statut)}
                   </Badge>
                 </div>
               </div>

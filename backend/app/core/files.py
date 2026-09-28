@@ -23,7 +23,7 @@ def lire_upload_borne(fichier: UploadFile, max_octets: int, types_autorises: fro
         raise api_error(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             "type_fichier_refuse",
-            f"Type de fichier non accepte ({type_contenu or 'inconnu'}). Types acceptes : {', '.join(sorted(types_autorises))}.",
+            f"Type de fichier non accepté ({type_contenu or 'inconnu'}). Types acceptés : {', '.join(sorted(types_autorises))}.",
         )
     morceaux: list[bytes] = []
     total = 0
@@ -36,11 +36,11 @@ def lire_upload_borne(fichier: UploadFile, max_octets: int, types_autorises: fro
             raise api_error(
                 status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 "fichier_trop_volumineux",
-                f"Fichier limite a {max_octets // MO} Mo.",
+                f"Fichier limité à {max_octets // MO} Mo.",
             )
         morceaux.append(bloc)
     if total == 0:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "fichier_vide", "Le fichier recu est vide.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "fichier_vide", "Le fichier reçu est vide.")
     return b"".join(morceaux)
 
 
@@ -64,12 +64,12 @@ class LuluFilesClient:
             raise FileStorageError("Impossible de contacter LuluFiles.") from exc
 
         if response.status_code not in (201, 202):
-            raise FileStorageError(f"LuluFiles a refuse l'upload (statut {response.status_code}).")
+            raise FileStorageError(f"LuluFiles a refusé l'upload (statut {response.status_code}).")
 
         try:
             return response.json()["id"]
         except (ValueError, KeyError, TypeError) as exc:
-            raise FileStorageError("Reponse LuluFiles inattendue a l'upload.") from exc
+            raise FileStorageError("Réponse LuluFiles inattendue à l'upload.") from exc
 
     def get_signed_link(self, file_id: str, disposition: str = "attachment") -> str:
         try:
@@ -83,12 +83,12 @@ class LuluFilesClient:
             raise FileStorageError("Impossible de contacter LuluFiles.") from exc
 
         if response.status_code != 200:
-            raise FileStorageError(f"LuluFiles a refuse la demande de lien (statut {response.status_code}).")
+            raise FileStorageError(f"LuluFiles a refusé la demande de lien (statut {response.status_code}).")
 
         try:
             return self._base_url + response.json()["url"]
         except (ValueError, KeyError, TypeError) as exc:
-            raise FileStorageError("Reponse LuluFiles inattendue a la demande de lien.") from exc
+            raise FileStorageError("Réponse LuluFiles inattendue à la demande de lien.") from exc
 
 
 def get_files_client() -> LuluFilesClient:

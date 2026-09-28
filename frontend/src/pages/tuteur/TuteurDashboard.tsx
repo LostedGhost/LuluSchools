@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GuideDemarrage } from "../../components/GuideDemarrage";
 import { Link, useNavigate } from "react-router-dom";
 import { donnerConsentementParental, mesInscriptions } from "../../api/inscriptions";
 import { creerConversationDm } from "../../api/messagerie";
@@ -103,6 +104,7 @@ export function TuteurDashboard() {
 
   return (
     <div className="page-content">
+      <GuideDemarrage />
       {/* En-tête */}
       <div
         style={{

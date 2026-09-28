@@ -7,6 +7,7 @@ import type { BilletEvenementOut, EtablissementOut, EvenementOut } from "../../t
 import { Badge, Btn, Card, EmptyState, ErrorBanner, Field, Select, SectionHead, SkeletonCard, SuccessBanner } from "../../components/ui";
 import { KkiapayButton } from "../../components/KkiapayButton";
 import { CalendarDays, Download, Ticket } from "lucide-react";
+import { useConfirmation } from "../../components/Modale";
 
 const STATUT_TONE: Record<BilletEvenementOut["statut"], "pending" | "success" | "neutral"> = {
   achete: "pending",
@@ -85,7 +86,9 @@ export function BilletteriePage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const rembourser = async (billetId: string) => {
+    if (!(await demanderConfirmation({ titre: "Demander le remboursement de ce billet ?", message: "Le billet sera annulé et ne pourra plus être utilisé ; le montant est reversé sur le compte Mobile Money du paiement.", action: "Rembourser", danger: true }))) return;
     setActionEnCoursId(billetId);
     setErreur(null);
     try {

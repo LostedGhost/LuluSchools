@@ -42,6 +42,7 @@ import { KkiapayButton } from "../../components/KkiapayButton";
 import { Flag, ImagePlus, ShoppingBag, Store, Trash2 } from "lucide-react";
 import { estRempli } from "../../utils/validation";
 import { NumeroMobileMoney } from "../../components/NumeroMobileMoney";
+import { useConfirmation } from "../../components/Modale";
 
 const LABEL_CATEGORIE: Record<CategorieAnnonce, string> = {
   fournitures_scolaires: "Fournitures scolaires",
@@ -229,7 +230,9 @@ export function MarketplacePage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const annulerReservation = async (transactionId: string) => {
+    if (!(await demanderConfirmation({ titre: "Annuler cette réservation ?", message: "L'article redevient disponible pour les autres étudiants.", action: "Annuler la réservation" }))) return;
     setActionEnCoursId(transactionId);
     setErreur(null);
     try {
@@ -257,6 +260,7 @@ export function MarketplacePage() {
   };
 
   const retirer = async (annonceId: string) => {
+    if (!(await demanderConfirmation({ titre: "Retirer votre annonce ?", message: "Elle ne sera plus visible. Pour la remettre en vente, il faudra la republier.", action: "Retirer", danger: true }))) return;
     setActionEnCoursId(annonceId);
     setErreur(null);
     try {

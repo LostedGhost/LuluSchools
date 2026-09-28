@@ -1,3 +1,4 @@
+import { libelle } from "../../utils/libelles";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAdminEtab } from "../../admin/AdminEtabContext";
@@ -114,7 +115,7 @@ export function ConsoleEtablissementPage() {
   const colonnesNotes: DataTableColumn<ConsoleNoteOut>[] = [
     { key: "eleve", header: "Élève", render: (r) => `${r.eleve_prenom} ${r.eleve_nom}` },
     { key: "classe", header: "Classe", render: (r) => r.classe_niveau },
-    { key: "periode", header: "Période", render: (r) => r.periode },
+    { key: "periode", header: "Période", render: (r) => libelle(r.periode) },
     { key: "moyenne", header: "Moyenne", render: (r) => r.moyenne_generale.toFixed(2) },
     { key: "decision", header: "Décision", render: (r) => r.decision_passage ?? "—" },
   ];
@@ -130,12 +131,13 @@ export function ConsoleEtablissementPage() {
       <ErrorBanner>{erreur}</ErrorBanner>
 
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
-        <Select value={objet} onChange={(e) => { setPage(0); setObjet(e.target.value as Objet); }} style={{ width: "200px" }}>
+        <Select aria-label="Données affichées" value={objet} onChange={(e) => { setPage(0); setObjet(e.target.value as Objet); }} style={{ width: "200px" }}>
           {Object.entries(LABEL_OBJET).map(([valeur, label]) => (
             <option key={valeur} value={valeur}>{label}</option>
           ))}
         </Select>
         <Select
+          aria-label="Classe"
           value={classeId}
           onChange={(e) => { setPage(0); setSearchParams(e.target.value ? { classe_id: e.target.value } : {}); }}
           style={{ width: "240px" }}

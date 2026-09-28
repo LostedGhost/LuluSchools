@@ -67,7 +67,7 @@ def rechercher_utilisateurs_designables(
     ici les enseignants sous contrat SIGNE avec cet etablissement et les admins de cet
     etablissement (les profils plausibles pour ce role de confiance)."""
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     verifier_portee_etablissement(db, admin, etablissement_id)
 
     filtre_nom = (
@@ -107,11 +107,11 @@ def designer_controleur(
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> DesignationControleur:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     verifier_admin_de_l_etablissement(db, admin, etablissement_id)
 
     if db.get(Utilisateur, payload.utilisateur_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur a designer introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur à désigner introuvable.")
     # Arbitrage du 2026-09-27 : meme perimetre que la recherche ci-dessus (enseignant sous
     # contrat signe ou admin de CET etablissement) - un controleur valide des titres payes,
     # role de confiance qui ne se confie pas a n'importe quel compte de la plateforme.
@@ -119,7 +119,7 @@ def designer_controleur(
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "non_designable",
-            "Seuls un enseignant sous contrat ou un administrateur de l'etablissement peuvent etre designes.",
+            "Seuls un enseignant sous contrat ou un administrateur de l'établissement peuvent être désignés.",
         )
 
     designation = DesignationControleur(
@@ -158,7 +158,7 @@ def revoquer_controleur(
 ) -> None:
     designation = db.get(DesignationControleur, designation_id)
     if designation is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Designation introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Désignation introuvable.")
     verifier_admin_de_l_etablissement(db, admin, designation.etablissement_id)
     db.delete(designation)
     db.commit()

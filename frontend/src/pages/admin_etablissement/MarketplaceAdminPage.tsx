@@ -33,6 +33,7 @@ import {
 } from "../../components/ui";
 import { CheckCircle2, Flag, Landmark, MessageSquareWarning, ShoppingBag, Trash2, XCircle } from "lucide-react";
 import { estRempli } from "../../utils/validation";
+import { useConfirmation } from "../../components/Modale";
 
 const STATUT_ANNONCE_LABEL: Record<AnnonceMarketplaceOut["statut"], string> = {
   disponible: "Disponible",
@@ -103,7 +104,9 @@ export function MarketplaceAdminPage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const retirer = async (annonceId: string) => {
+    if (!(await demanderConfirmation({ titre: "Retirer cette annonce ?", message: "Elle ne sera plus visible des étudiants et le vendeur sera prévenu du motif.", action: "Retirer l'annonce", danger: true }))) return;
     if (!motifRetraitParId[annonceId]?.trim()) {
       setErreur("Un motif est requis pour retirer une annonce.");
       return;
@@ -356,7 +359,7 @@ export function MarketplaceAdminPage() {
             </Field>
             <ErrorBanner>{erreurLitige}</ErrorBanner>
             <SuccessBanner>{succesLitige}</SuccessBanner>
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <Btn variant="primary" loading={enCoursDecision === "acceptee"} onClick={() => trancherLitige("acceptee")} leftIcon={<CheckCircle2 size={16} />}>
                 Accepter (rembourser l'acheteur)
               </Btn>

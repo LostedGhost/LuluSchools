@@ -27,12 +27,12 @@ def get_current_user(
         payload = decode_token(credentials.credentials)
     except JWTError as exc:
         raise api_error(
-            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Token invalide ou expire."
+            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Votre session a expiré : reconnectez-vous."
         ) from exc
 
     if payload.get("type") != "access":
         raise api_error(
-            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Ce token n'est pas un access token."
+            status.HTTP_401_UNAUTHORIZED, "token_invalide", "Session invalide : reconnectez-vous."
         )
 
     utilisateur = db.get(Utilisateur, payload.get("sub"))
@@ -51,7 +51,7 @@ def exiger_compte_actif(utilisateur: Utilisateur) -> None:
         raise api_error(
             status.HTTP_403_FORBIDDEN,
             "compte_suspendu",
-            "Ce compte a ete suspendu par le Ministere de l'Education.",
+            "Ce compte a été suspendu par le Ministère de l'Éducation.",
         )
 
 
@@ -64,7 +64,7 @@ def get_current_active_user(utilisateur: Utilisateur = Depends(get_current_user)
         raise api_error(
             status.HTTP_403_FORBIDDEN,
             "changement_mot_de_passe_requis",
-            "Vous devez changer votre mot de passe temporaire avant de continuer (POST /auth/change-password).",
+            "Choisissez un nouveau mot de passe pour remplacer votre mot de passe temporaire.",
         )
     return utilisateur
 
@@ -73,7 +73,7 @@ def require_roles(*roles: RoleUtilisateur):
     def _dependency(utilisateur: Utilisateur = Depends(get_current_active_user)) -> Utilisateur:
         if utilisateur.role not in roles:
             raise api_error(
-                status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action."
+                status.HTTP_403_FORBIDDEN, "acces_refuse", "Rôle insuffisant pour cette action."
             )
         return utilisateur
 
@@ -93,7 +93,7 @@ def verifier_portee_etablissement(db: Session, utilisateur: Utilisateur, etablis
     if utilisateur.role == RoleUtilisateur.ADMIN_MINISTERIEL:
         return
     if utilisateur.role != RoleUtilisateur.ADMIN_ETABLISSEMENT:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Role insuffisant pour cette action.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Rôle insuffisant pour cette action.")
     lien = db.get(AdminEtablissement, utilisateur.id)
     if lien is None or lien.etablissement_id != etablissement_id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet établissement.")

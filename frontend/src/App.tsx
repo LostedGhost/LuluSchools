@@ -2,6 +2,7 @@ import { ATraiterPage } from "./pages/admin/ATraiterPage";
 import { ATraiterEtablissementPage } from "./pages/admin/ATraiterEtablissementPage";
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { ConfirmationProvider } from "./components/Modale";
 import { AuthProvider } from "./auth/AuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
 import { RedirectIfAuthenticated } from "./auth/RedirectIfAuthenticated";
@@ -98,6 +99,7 @@ function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
+      <ConfirmationProvider>
       <AuthProvider>
         <AppLayout>
           <Routes>
@@ -781,6 +783,7 @@ function App() {
           </Routes>
         </AppLayout>
       </AuthProvider>
+      </ConfirmationProvider>
       </ThemeProvider>
     </BrowserRouter>
   );

@@ -56,7 +56,10 @@ vérifiée contre le vrai FreeLLM), plafonds de tokens retirés (1000 messages/j
 39 règles métier, `seed_render.bat` pour la base en ligne), migration 0017 rendue idempotente
 (échec du déploiement Render), puis **simplification de l'administration** (boîte « À traiter »,
 automatisations, actions groupées, IA qui prépare, remboursements Kkiapay automatiques, migration
-`0019`, voir `docs/simplification-administration.md`). 323 tests au vert
+`0019`, voir `docs/simplification-administration.md`), puis **audit d'ergonomie** des 79 pages
+(menu mobile complet, confirmations, notifications, libellés, pastilles `GET /me/compteurs`,
+guide de première connexion, bulletins par trimestre/semestre, messages accentués ; voir
+`docs/audit-ergonomie-2026-09-28.md`). 327 tests au vert
 sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.

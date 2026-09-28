@@ -1,30 +1,63 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { GuideDemarrage } from "../../components/GuideDemarrage";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
-import { Card, KPITile, SectionHead, EmptyState, Btn } from "../../components/ui";
-import {
-  XPBar,
-  StreakPill,
-  MedalRow,
-  QuestCard,
-  LevelBadge,
-  type MedalDef,
-} from "../../components/gamification";
+import { listerDevoirs, maSoumission, obtenirBulletin, periodesDeLaClasse, type PeriodeOut } from "../../api/evaluations";
+import { obtenirMonPasseport } from "../../api/passeport";
+import type { BadgeOut, DevoirOut } from "../../types/api";
+import { Badge, Card, EmptyState, SectionHead, Skeleton } from "../../components/ui";
 import { ValidationsEnAttenteBanner } from "../../components/coffre_fort/ValidationsEnAttenteBanner";
-import { BookOpen, ClipboardList, Trophy, FileText, ClipboardCheck, Target, PenLine, Flag, Radio, Bus, Ticket, MessageCircle, Handshake, Bot, Award } from "lucide-react";
+import {
+  Award, BookOpen, Bot, Bus, CircleCheck, ClipboardCheck, ClipboardList, FileText, Handshake, MessageCircle, Radio,
+  ShoppingBag, Ticket, Trophy,
+} from "lucide-react";
 
-/* Données de gamification simulées (à remplacer par des vraies API quand disponibles) */
-const DEMO_STREAK = 12;
-const DEMO_XP = { current: 680, max: 1000, level: 4 };
-const DEMO_MEDALS: MedalDef[] = [
-  { id: "m1", label: "Premier quiz réussi", variant: "green" },
-  { id: "m2", label: "Champion de la semaine", variant: "gold" },
-  { id: "m3", label: "Maître des maths", variant: "magic" },
-  { id: "m4", label: "À débloquer", variant: "locked" },
-  { id: "m5", label: "À débloquer", variant: "locked" },
-];
+/* Tableau de bord élève : uniquement des données réelles — devoirs à rendre, moyenne de la
+   période en cours, badges du passeport de compétences — et les raccourcis utiles. */
+
+function echeance(dateLimite: string): { texte: string; urgent: boolean } {
+  const ms = new Date(dateLimite).getTime() - Date.now();
+  const heures = Math.round(ms / 3_600_000);
+  if (heures < 24) return { texte: heures <= 1 ? "dans moins d'une heure" : `dans ${heures} h`, urgent: true };
+  const jours = Math.round(heures / 24);
+  return { texte: jours === 1 ? "demain" : `dans ${jours} jours`, urgent: jours <= 2 };
+}
 
 export function EleveDashboard() {
   const profil = useEleveProfil();
+  const [aRendre, setARendre] = useState<DevoirOut[] | null>(null);
+  const [periode, setPeriode] = useState<PeriodeOut | null>(null);
+  const [moyenne, setMoyenne] = useState<number | null | undefined>(undefined);
+  const [badges, setBadges] = useState<BadgeOut[]>([]);
+
+  useEffect(() => {
+    if (!profil.classe_id) return;
+    const classeId = profil.classe_id;
+    listerDevoirs(classeId)
+      .then(async (res) => {
+        const ouverts = res.data
+          .filter((d) => new Date(d.date_limite).getTime() > Date.now())
+          .sort((a, b) => a.date_limite.localeCompare(b.date_limite));
+        const rendus = await Promise.all(ouverts.map((d) => maSoumission(d.id).then(() => true).catch(() => false)));
+        setARendre(ouverts.filter((_, i) => !rendus[i]));
+      })
+      .catch(() => setARendre([]));
+    periodesDeLaClasse(classeId)
+      .then(async (res) => {
+        const courante = res.data.find((p) => p.courante) ?? res.data[0] ?? null;
+        setPeriode(courante);
+        if (!courante) return setMoyenne(null);
+        try {
+          setMoyenne((await obtenirBulletin(profil.id, classeId, courante.code)).data.moyenne_generale);
+        } catch {
+          setMoyenne(null);
+        }
+      })
+      .catch(() => setMoyenne(null));
+    obtenirMonPasseport()
+      .then((res) => setBadges(res.data.badges))
+      .catch(() => setBadges([]));
+  }, [profil.classe_id, profil.id]);
 
   /* ── État : pas encore inscrit ── */
   if (!profil.classe_id) {
@@ -46,283 +79,122 @@ export function EleveDashboard() {
     );
   }
 
-  /* ── Dashboard complet ── */
+  const raccourcis = [
+    { to: "/eleve/cours", icon: <BookOpen size={22} />, tone: "info", title: "Cours", desc: "Lire les cours et faire des quiz" },
+    { to: "/eleve/el-professor", icon: <Bot size={22} />, tone: "magic", title: "El Professor", desc: "Comprendre un cours, réviser" },
+    { to: "/eleve/actes", icon: <FileText size={22} />, tone: "magic", title: "Actes académiques", desc: "Attestations, relevés, réclamations" },
+    { to: "/eleve/cours-direct", icon: <Radio size={22} />, tone: "primary", title: "Cours en direct", desc: "Rejoindre une séance de ma classe" },
+    { to: "/eleve/services", icon: <Bus size={22} />, tone: "action", title: "Transport & cantine", desc: "Réserver mes tickets" },
+    { to: "/billetterie", icon: <Ticket size={22} />, tone: "reward", title: "Billetterie", desc: "Événements de mon établissement" },
+    ...(profil.est_etudiant
+      ? [
+          { to: "/micro-jobs", icon: <Handshake size={22} />, tone: "action", title: "Micro-jobs", desc: "Proposer ou demander un service" },
+          { to: "/eleve/marketplace", icon: <ShoppingBag size={22} />, tone: "reward", title: "Marketplace", desc: "Acheter et vendre entre étudiants" },
+        ]
+      : []),
+    { to: "/messagerie", icon: <MessageCircle size={22} />, tone: "info", title: "Messagerie", desc: "Groupe de classe et messages" },
+    { to: "/eleve/passeport", icon: <Award size={22} />, tone: "reward", title: "Passeport de compétences", desc: "Moyennes par matière, badges, export" },
+  ];
+
   return (
     <div className="page-content">
-      {/* ── En-tête personnalisé ── */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "16px",
-          marginBottom: "32px",
-        }}
-      >
-        <div>
-          <p className="text-eyebrow" style={{ marginBottom: "6px" }}>
-            Tableau de bord élève
-          </p>
-          <h1
-            className="text-headline"
-            style={{ color: "var(--ink)", margin: "0 0 8px" }}
-          >
-            Salut, {profil.prenom}
-          </h1>
-          <p style={{ color: "var(--ink-soft)", fontSize: "var(--text-sm)", margin: 0, fontFamily: "var(--font-mono)" }}>
-            {profil.matricule} · {profil.niveau}
-          </p>
-        </div>
-        <StreakPill days={DEMO_STREAK} />
+      <GuideDemarrage />
+      <div style={{ marginBottom: "24px" }}>
+        <p className="text-eyebrow" style={{ marginBottom: "6px" }}>Tableau de bord élève</p>
+        <h1 className="text-headline" style={{ color: "var(--ink)", margin: "0 0 8px" }}>Bonjour, {profil.prenom}</h1>
+        <p style={{ color: "var(--ink-soft)", fontSize: "var(--text-sm)", margin: 0 }}>
+          {profil.niveau}
+          {profil.matricule && <span className="monospace"> · matricule {profil.matricule}</span>}
+        </p>
       </div>
 
       <ValidationsEnAttenteBanner />
 
-      {/* ── Profil XP ── */}
-      <div
-        className="card"
-        style={{ marginBottom: "24px", background: "var(--surface-2)", borderColor: "var(--border-strong)" }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-            flexWrap: "wrap",
-            marginBottom: "20px",
-          }}
-        >
-          <LevelBadge level={DEMO_XP.level} variant="green" size={72} />
-          <div style={{ flex: 1, minWidth: "200px" }}>
-            <XPBar
-              current={DEMO_XP.current}
-              max={DEMO_XP.max}
-              level={DEMO_XP.level}
-            />
+      <div className="grid-2" style={{ marginBottom: "32px" }}>
+        {/* ── À rendre ── */}
+        <Card>
+          <div className="flex items-center justify-between gap-2" style={{ marginBottom: "10px" }}>
+            <h2 className="text-title" style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+              <ClipboardList size={20} aria-hidden="true" /> À rendre
+            </h2>
+            <Link to="/eleve/devoirs" className="text-sm" style={{ color: "var(--primary-deep)", fontWeight: 600 }}>Tous les devoirs</Link>
           </div>
-        </div>
-        <MedalRow medals={DEMO_MEDALS} />
+          {aRendre === null ? (
+            <Skeleton height="60px" />
+          ) : aRendre.length === 0 ? (
+            <p className="text-sm" style={{ display: "flex", alignItems: "center", gap: "8px", margin: 0, color: "var(--ink-soft)" }}>
+              <CircleCheck size={18} aria-hidden="true" style={{ color: "var(--primary)" }} /> Rien à rendre pour le moment.
+            </p>
+          ) : (
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {aRendre.slice(0, 4).map((d) => {
+                const e = echeance(d.date_limite);
+                return (
+                  <li key={d.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <Link to={`/eleve/devoirs/${d.id}`} className="flex items-center justify-between gap-3" style={{ padding: "10px 0", textDecoration: "none", color: "var(--ink)" }}>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: "block", fontWeight: 600 }}>{d.titre}</span>
+                        <span className="text-sm" style={{ color: "var(--ink-soft)" }}>{d.matiere}</span>
+                      </span>
+                      <Badge tone={e.urgent ? "error" : "pending"}>{e.texte}</Badge>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+
+        {/* ── Moyenne de la période ── */}
+        <Card>
+          <div className="flex items-center justify-between gap-2" style={{ marginBottom: "10px" }}>
+            <h2 className="text-title" style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+              <Trophy size={20} aria-hidden="true" /> {periode ? periode.libelle.charAt(0).toUpperCase() + periode.libelle.slice(1) : "Bulletin"}
+            </h2>
+            <Link to="/eleve/bulletin" className="text-sm" style={{ color: "var(--primary-deep)", fontWeight: 600 }}>Voir le bulletin</Link>
+          </div>
+          {moyenne === undefined ? (
+            <Skeleton height="60px" />
+          ) : moyenne === null ? (
+            <p className="text-sm" style={{ margin: 0, color: "var(--ink-soft)" }}>
+              Pas encore de moyenne : elle apparaîtra dès la première copie corrigée de la période.
+            </p>
+          ) : (
+            <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "var(--text-4xl)", color: moyenne >= 50 ? "var(--primary-deep)" : "var(--action-deep)", lineHeight: 1.1 }}>
+              {Math.round(moyenne * 10) / 10}
+              <span style={{ fontSize: "var(--text-lg)", color: "var(--ink-faint)", fontWeight: 600 }}> / 100</span>
+            </p>
+          )}
+          {badges.length > 0 && (
+            <div className="flex flex-wrap gap-2" style={{ marginTop: "12px" }}>
+              {badges.map((b) => <Badge key={b.id} tone="success">{b.label}</Badge>)}
+            </div>
+          )}
+        </Card>
       </div>
 
-      {/* ── KPI Tiles ── */}
-      <div className="grid-3" style={{ marginBottom: "32px" }}>
-        <KPITile
-          label="Niveau actuel"
-          value={DEMO_XP.level}
-          accent="primary"
-          icon={<Target size={24} />}
-        />
-        <KPITile
-          label="Classe"
-          value={profil.niveau ?? "—"}
-          sub="EP01 · En cours"
-        />
-        <KPITile
-          label="Série active"
-          value={`${DEMO_STREAK}j`}
-          accent="reward"
-          icon={<Flag size={24} />}
-        />
-      </div>
-
-      {/* ── Raccourcis de navigation ── */}
-      <div style={{ marginBottom: "32px" }}>
-        <SectionHead
-          eyebrow="Navigation rapide"
-          title="Accéder à vos activités"
-        />
-        <div className="grid-2">
-          {[
-            {
-              to: "/eleve/cours",
-              icon: <BookOpen size={24} />,
-              tone: "info" as const,
-              title: "Cours",
-              desc: "Consulter les cours et lancer des quiz",
-            },
-            {
-              to: "/eleve/devoirs",
-              icon: <ClipboardList size={24} />,
-              tone: "primary" as const,
-              title: "Devoirs",
-              desc: "Soumettre et suivre mes devoirs",
-            },
-            {
-              to: "/eleve/bulletin",
-              icon: <Trophy size={24} />,
-              tone: "reward" as const,
-              title: "Bulletin",
-              desc: "Voir ma moyenne par matière",
-            },
-            {
-              to: "/eleve/actes",
-              icon: <FileText size={24} />,
-              tone: "magic" as const,
-              title: "Actes académiques",
-              desc: "Demandes d'actes et réclamations",
-            },
-            {
-              to: "/eleve/cours-direct",
-              icon: <Radio size={24} />,
-              tone: "primary" as const,
-              title: "Cours en direct",
-              desc: "Rejoindre une session live de ma classe",
-            },
-            {
-              to: "/eleve/services",
-              icon: <Bus size={24} />,
-              tone: "action" as const,
-              title: "Transport & cantine",
-              desc: "Réserver mes tickets",
-            },
-            {
-              to: "/billetterie",
-              icon: <Ticket size={24} />,
-              tone: "reward" as const,
-              title: "Billetterie",
-              desc: "Événements de mon établissement",
-            },
-            {
-              to: "/micro-jobs",
-              icon: <Handshake size={24} />,
-              tone: "action" as const,
-              title: "Micro-jobs",
-              desc: "Publier une demande de service et la payer",
-            },
-            {
-              to: "/messagerie",
-              icon: <MessageCircle size={24} />,
-              tone: "info" as const,
-              title: "Messagerie",
-              desc: "Groupe de classe et messages privés",
-            },
-            {
-              to: "/eleve/el-professor",
-              icon: <Bot size={24} />,
-              tone: "magic" as const,
-              title: "El Professor",
-              desc: "Ton assistant pour comprendre tes cours et réviser",
-            },
-            {
-              to: "/eleve/passeport",
-              icon: <Award size={24} />,
-              tone: "reward" as const,
-              title: "Passeport de compétences",
-              desc: "Consulter et exporter mon passeport",
-            },
-          ].map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              style={{ textDecoration: "none" }}
-            >
+      {/* ── Raccourcis ── */}
+      <SectionHead eyebrow="Navigation rapide" title="Accéder à vos activités" />
+      <div className="grid-2">
+        {raccourcis.map((item) => (
+          <Link key={item.to} to={item.to} style={{ textDecoration: "none" }}>
+            <div className="card card-hover" style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               <div
-                className="card card-hover"
-                style={{ display: "flex", alignItems: "center", gap: "16px" }}
-              >
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    borderRadius: "var(--radius-md)",
-                    background: `var(--${item.tone}-tint)`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: `var(--${item.tone}-deep, var(--${item.tone}))`,
-                    flexShrink: 0,
-                  }}
-                >
-                  {item.icon}
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontWeight: 600,
-                      fontSize: "var(--text-lg)",
-                      color: "var(--ink)",
-                    }}
-                  >
-                    {item.title}
-                  </div>
-                  <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>
-                    {item.desc}
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Quêtes du jour ── */}
-      <div>
-        <SectionHead
-          eyebrow="Aujourd'hui"
-          title="Quêtes du jour"
-          desc="Complétez ces activités pour gagner des XP et faire avancer votre progression."
-        />
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <QuestCard
-            icon={<BookOpen size={20} />}
-            tone="info"
-            title="Consulter un cours"
-            desc="Lisez au moins un cours aujourd'hui"
-            xp={10}
-            href="/eleve/cours"
-          />
-          <QuestCard
-            icon={<Target size={20} />}
-            tone="reward"
-            title="Tenter un quiz"
-            desc="Obtenez au moins 60% à un quiz"
-            xp={25}
-            href="/eleve/cours"
-          />
-          <QuestCard
-            icon={<PenLine size={20} />}
-            tone="primary"
-            title="Rendre un devoir"
-            desc="Soumettez un devoir en attente"
-            xp={40}
-            href="/eleve/devoirs"
-          />
-        </div>
-      </div>
-
-      {/* ── Bulletin rapide ── */}
-      <div style={{ marginTop: "32px" }}>
-        <Card variant="flat">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <p className="text-eyebrow" style={{ marginBottom: "4px" }}>Bulletin · Trimestre en cours</p>
-              <div
+                aria-hidden="true"
                 style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "var(--text-5xl)",
-                  fontWeight: 700,
-                  color: "var(--primary-deep)",
-                  lineHeight: 1,
+                  width: "44px", height: "44px", borderRadius: "var(--radius-md)", background: `var(--${item.tone}-tint)`,
+                  display: "flex", alignItems: "center", justifyContent: "center", color: `var(--${item.tone}-deep, var(--${item.tone}))`, flexShrink: 0,
                 }}
               >
-                —
-                <span style={{ fontSize: "var(--text-xl)", color: "var(--ink-faint)", fontWeight: 600 }}>
-                  /20
-                </span>
+                {item.icon}
               </div>
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-faint)", marginTop: "6px" }}>
-                Les résultats s'afficheront dès que des devoirs seront corrigés.
-              </p>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--ink)" }}>{item.title}</div>
+                <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>{item.desc}</div>
+              </div>
             </div>
-            <Link to="/eleve/bulletin">
-              <Btn variant="outline" size="sm">
-                Voir le bulletin
-              </Btn>
-            </Link>
-          </div>
-        </Card>
+          </Link>
+        ))}
       </div>
     </div>
   );

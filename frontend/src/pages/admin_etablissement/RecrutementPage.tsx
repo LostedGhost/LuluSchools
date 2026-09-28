@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { libelle } from "../../utils/libelles";
+import { useConfirmation } from "../../components/Modale";
 import { useAdminEtab } from "../../admin/AdminEtabContext";
 import {
   candidaturesDuPoste,
@@ -240,11 +242,12 @@ export function RecrutementPage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const trancherCasier = async (candidatureId: string, conforme: boolean) => {
-    const confirmation = conforme
-      ? "Confirmer que le casier est CONFORME ? Le document sera définitivement supprimé, seul le statut sera conservé."
-      : "Confirmer que le casier est NON CONFORME ? La candidature sera rejetée et le document définitivement supprimé.";
-    if (!window.confirm(confirmation)) return;
+    const ok = await demanderConfirmation(conforme
+      ? { titre: "Casier conforme ?", message: "Le document sera définitivement supprimé ; seul le verdict « conforme » est conservé. Le recrutement pourra se poursuivre.", action: "Casier conforme" }
+      : { titre: "Casier non conforme ?", message: "La candidature sera rejetée et le document définitivement supprimé. Le candidat pourra contester cette décision.", action: "Casier non conforme", danger: true });
+    if (!ok) return;
     setCasierEnCoursId(`verdict-${candidatureId}`);
     setErreur(null);
     try {
@@ -437,7 +440,7 @@ export function RecrutementPage() {
                                     onClick={() => voirDocument(d.id)}
                                     rightIcon={<ExternalLink size={12} />}
                                   >
-                                    {d.type_document} {d.note_ia !== null ? `(${d.note_ia}/100)` : "(en attente)"}
+                                    {libelle(d.type_document)} {d.note_ia !== null ? `(${d.note_ia}/100)` : "(en attente)"}
                                   </Btn>
                                 ))}
                               </div>
@@ -605,10 +608,10 @@ export function RecrutementPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                             <FileWarning size={18} style={{ color: "var(--action-deep)" }} aria-hidden="true" />
                             <span style={{ color: "var(--ink)" }}>
-                              <strong>{c.enseignant_prenom} {c.enseignant_nom}</strong> — document {d.type_document}
+                              <strong>{c.enseignant_prenom} {c.enseignant_nom}</strong> — document {libelle(d.type_document)}
                             </span>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
                             <Btn
                               variant="ghost"
                               size="sm"

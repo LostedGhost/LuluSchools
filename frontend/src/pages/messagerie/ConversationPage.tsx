@@ -6,6 +6,7 @@ import { useAuth } from "../../auth/AuthContext";
 import type { ConversationOut, MessageOut } from "../../types/api";
 import { Btn, EmptyState, ErrorBanner, Skeleton, TextArea } from "../../components/ui";
 import { ArrowLeft, Flag, MessageCircle, Send, Trash2, Users } from "lucide-react";
+import { useConfirmation } from "../../components/Modale";
 
 export function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -70,7 +71,9 @@ export function ConversationPage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const masquer = async (messageId: string) => {
+    if (!(await demanderConfirmation({ titre: "Masquer ce message ?", message: "Il ne sera plus visible des membres de la conversation.", action: "Masquer", danger: true }))) return;
     try {
       await masquerMessage(messageId);
       setMessages((prev) => prev.filter((m) => m.id !== messageId));

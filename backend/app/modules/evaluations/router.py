@@ -1,16 +1,18 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.audit import journaliser_action_ministerielle
 from app.core.conversion import convertir_en_image
 from app.core.database import get_db, get_session_factory
-from app.core.deps import api_error, require_roles
+from app.core.deps import api_error, get_current_user, require_roles
 from app.core.files import TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import CorrectionError, FreeLLMClient, get_llm_client
 from app.modules.etablissements.models import AdminEtablissement, Classe, Etablissement
+from app.modules.evaluations import periodes as periodes_evaluation
 from app.modules.evaluations.models import (
     Bulletin,
     Devoir,
@@ -125,7 +127,7 @@ def televerser_sujet_document(
         )
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez réessayer."
         ) from exc
     db.commit()
     db.refresh(devoir)
@@ -154,7 +156,7 @@ def obtenir_lien_sujet_document(
         url = files_client.get_signed_link(devoir.sujet_lulufiles_file_id, disposition="inline")
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien, veuillez réessayer."
         ) from exc
     return LienFichierOut(url=url)
 
@@ -181,7 +183,7 @@ def televerser_bareme_document(
         )
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez réessayer."
         ) from exc
     db.commit()
     db.refresh(devoir)
@@ -200,13 +202,13 @@ def obtenir_lien_bareme_document(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     _verifier_proprietaire_du_devoir(db, enseignant, devoir)
     if not devoir.bareme_document_lulufiles_file_id:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce devoir n'a pas de document de bareme.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce devoir n'a pas de document de barème.")
 
     try:
         url = files_client.get_signed_link(devoir.bareme_document_lulufiles_file_id, disposition="inline")
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien, veuillez réessayer."
         ) from exc
     return LienFichierOut(url=url)
 
@@ -264,7 +266,7 @@ def obtenir_devoir(
     else:
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet établissement.")
     return devoir
 
 
@@ -300,7 +302,7 @@ def lister_devoirs(
     elif utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet établissement.")
     return requete.all()
 
 
@@ -347,17 +349,17 @@ def soumettre_devoir(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "delai_depasse",
-            "La date limite est depassee : la note zero s'applique automatiquement, sans derogation.",
+            "La date limite est dépassée : la note zéro s'applique automatiquement, sans dérogation.",
         )
     if db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first():
-        raise api_error(status.HTTP_409_CONFLICT, "deja_soumis", "Vous avez deja soumis ce devoir.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_soumis", "Vous avez déjà soumis ce devoir.")
 
     questions_par_id = {q.id: q for q in devoir.questions}
     if {r.question_id for r in payload.reponses} != set(questions_par_id.keys()):
         raise api_error(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "reponses_incompletes",
-            "Une reponse est attendue pour chaque question du devoir, exactement.",
+            "Une réponse est attendue pour chaque question du devoir, exactement.",
         )
 
     soumission = Soumission(devoir_id=devoir_id, eleve_id=eleve.id, statut=StatutSoumission.EN_CORRECTION)
@@ -416,10 +418,10 @@ def soumettre_devoir_par_copie_image(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "delai_depasse",
-            "La date limite est depassee : la note zero s'applique automatiquement, sans derogation.",
+            "La date limite est dépassée : la note zéro s'applique automatiquement, sans dérogation.",
         )
     if db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first():
-        raise api_error(status.HTTP_409_CONFLICT, "deja_soumis", "Vous avez deja soumis ce devoir.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_soumis", "Vous avez déjà soumis ce devoir.")
 
     contenu = lire_upload_borne(fichier, MAX_TAILLE_DOCUMENT_EVALUATION_OCTETS, TYPES_DOCUMENT)
     try:
@@ -428,7 +430,7 @@ def soumettre_devoir_par_copie_image(
         )
     except FileStorageError as exc:
         raise api_error(
-            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez reessayer."
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible de stocker le fichier, veuillez réessayer."
         ) from exc
 
     # Conversion locale (PyMuPDF, pas de reseau) : reste synchrone - seul l'appel FreeLLM
@@ -565,7 +567,7 @@ def obtenir_soumission(
         classe = db.get(Classe, devoir.classe_id)
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet établissement.")
 
     return soumission
 
@@ -585,7 +587,7 @@ def obtenir_soumission_de_mon_enfant(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != tuteur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
 
     soumission = db.query(Soumission).filter(Soumission.devoir_id == devoir_id, Soumission.eleve_id == eleve.id).first()
     if soumission is None:
@@ -617,7 +619,7 @@ def corriger_soumission(
             raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "question_inconnue", "Question hors de ce devoir.")
         if correction.points_obtenus > points_max_par_question[correction.question_id]:
             raise api_error(
-                status.HTTP_422_UNPROCESSABLE_ENTITY, "points_hors_bareme", "points_obtenus depasse points_max."
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "points_hors_bareme", "Les points attribués dépassent le maximum de la question."
             )
         reponses_par_id[correction.question_id].points_obtenus = correction.points_obtenus
 
@@ -647,11 +649,11 @@ def corriger_note_globale(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "soumission_non_imagee",
-            "Cette soumission n'est pas une copie image : utilisez POST /soumissions/{id}/corriger.",
+            "Cette copie a été saisie en ligne : corrigez-la question par question.",
         )
     points_max_total = sum(q.points_max for q in devoir.questions) or 1.0
     if payload.note > points_max_total:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "note_hors_bareme", "note depasse le total du bareme.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "note_hors_bareme", "La note dépasse le total du barème.")
 
     soumission.note = payload.note
     soumission.statut = StatutSoumission.CORRIGEE
@@ -750,7 +752,7 @@ def proposer_mise_a_jour_referentiel(
 ) -> ReferentielCoefficient:
     existant = db.get(ReferentielCoefficient, referentiel_id)
     if existant is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Referentiel introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Référentiel introuvable.")
     lien = db.get(AdminEtablissement, admin.id)
 
     proposition = ReferentielCoefficient(
@@ -775,9 +777,9 @@ def valider_referentiel(
 ) -> ReferentielCoefficient:
     proposition = db.get(ReferentielCoefficient, referentiel_id)
     if proposition is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Referentiel introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Référentiel introuvable.")
     if proposition.statut != StatutReferentiel.PROPOSITION_EN_ATTENTE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce referentiel n'est pas une proposition en attente.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce référentiel n'est pas une proposition en attente.")
 
     proposition.statut = StatutReferentiel.VALIDE
     if proposition.propose_pour_id:
@@ -802,10 +804,10 @@ def modifier_referentiel(
     l'A++ est deja l'autorite finale, un aller-retour avec lui-meme n'aurait aucun sens."""
     referentiel = db.get(ReferentielCoefficient, referentiel_id)
     if referentiel is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Referentiel introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Référentiel introuvable.")
     if referentiel.statut != StatutReferentiel.VALIDE:
         raise api_error(
-            status.HTTP_409_CONFLICT, "statut_invalide", "Seul un referentiel en vigueur peut etre modifie directement."
+            status.HTTP_409_CONFLICT, "statut_invalide", "Seul un référentiel en vigueur peut être modifié directement."
         )
 
     referentiel.coefficient = payload.coefficient
@@ -830,14 +832,14 @@ def valider_referentiels_en_lot(
     manquants = set(payload.ids) - trouves
     if manquants:
         raise api_error(
-            status.HTTP_404_NOT_FOUND, "introuvable", f"Referentiel(s) introuvable(s) : {', '.join(sorted(manquants))}."
+            status.HTTP_404_NOT_FOUND, "introuvable", f"Référentiel(s) introuvable(s) : {', '.join(sorted(manquants))}."
         )
     non_en_attente = [p.id for p in propositions if p.statut != StatutReferentiel.PROPOSITION_EN_ATTENTE]
     if non_en_attente:
         raise api_error(
             status.HTTP_409_CONFLICT,
             "statut_invalide",
-            f"Referentiel(s) pas en attente de validation : {', '.join(sorted(non_en_attente))}.",
+            f"Référentiel(s) pas en attente de validation : {', '.join(sorted(non_en_attente))}.",
         )
 
     for proposition in propositions:
@@ -883,11 +885,22 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
         return existant  # fige des la deliberation : une correction ulterieure ne le modifie plus
 
     classe = db.get(Classe, classe_id)
+    etablissement = db.get(Etablissement, classe.etablissement_id)
+    periode_evaluee = periodes_evaluation.trouver(etablissement.type, classe.annee_academique, periode)
+    if periode_evaluee is None:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "periode_invalide", "Cette période n'existe pas pour cette classe.")
+    debut, fin = periodes_evaluation.bornes_utc(periode_evaluee)
     # UC-26.1 : une evaluation FORMATIVE ne compte jamais dans la moyenne officielle du
-    # bulletin - seules les SOMMATIVES sont incluses.
+    # bulletin - seules les SOMMATIVES sont incluses, et seulement celles de la periode
+    # (date limite comprise dans ses bornes).
     devoirs = (
         db.query(Devoir)
-        .filter(Devoir.classe_id == classe_id, Devoir.nature == NatureEvaluation.SOMMATIVE)
+        .filter(
+            Devoir.classe_id == classe_id,
+            Devoir.nature == NatureEvaluation.SOMMATIVE,
+            Devoir.date_limite >= debut,
+            Devoir.date_limite < fin,
+        )
         .all()
     )
 
@@ -918,7 +931,7 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
 
     if poids_total == 0:
         raise api_error(
-            status.HTTP_404_NOT_FOUND, "aucun_devoir_evalue", "Aucun devoir clos et evalue pour cette periode."
+            status.HTTP_404_NOT_FOUND, "aucun_devoir_evalue", "Aucun devoir clos et évalué pour cette période."
         )
 
     moyenne = sum(notes_ponderees) / poids_total
@@ -936,6 +949,33 @@ def _calculer_et_enregistrer_bulletin(db: Session, eleve: Eleve, classe_id: str,
     db.commit()
     db.refresh(bulletin)
     return bulletin
+
+
+class PeriodeOut(BaseModel):
+    code: str
+    libelle: str
+    debut: date
+    fin: date
+    courante: bool
+
+
+@router.get("/classes/{classe_id}/periodes", response_model=list[PeriodeOut])
+def periodes_de_la_classe(
+    classe_id: str,
+    db: Session = Depends(get_db),
+    _: Utilisateur = Depends(get_current_user),
+) -> list[PeriodeOut]:
+    """Trimestres (primaire, secondaire) ou semestres (universite) de l'annee de la classe,
+    avec la periode en cours - pour les onglets du bulletin."""
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    etablissement = db.get(Etablissement, classe.etablissement_id)
+    courante = periodes_evaluation.periode_de(datetime.now(timezone.utc), etablissement.type, classe.annee_academique)
+    return [
+        PeriodeOut(code=p.code, libelle=p.libelle, debut=p.debut, fin=p.fin, courante=p.code == courante.code)
+        for p in periodes_evaluation.periodes(etablissement.type, classe.annee_academique)
+    ]
 
 
 @router.get("/eleves/{eleve_utilisateur_id}/bulletins", response_model=BulletinOut)
@@ -956,7 +996,7 @@ def obtenir_bulletin(
 ) -> Bulletin:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Eleve introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Élève introuvable.")
     classe = db.get(Classe, classe_id)
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
@@ -964,13 +1004,13 @@ def obtenir_bulletin(
     if utilisateur.role == RoleUtilisateur.ELEVE and utilisateur.id != eleve_utilisateur_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Ce bulletin ne vous appartient pas.")
     if utilisateur.role == RoleUtilisateur.TUTEUR and eleve.tuteur_id != utilisateur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe.id)
     if utilisateur.role == RoleUtilisateur.ADMIN_ETABLISSEMENT:
         lien = db.get(AdminEtablissement, utilisateur.id)
         if lien is None or lien.etablissement_id != classe.etablissement_id:
-            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet etablissement.")
+            raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'administrez pas cet établissement.")
 
     # Le bulletin est ecrit en base et remonte dans le dossier scolaire national de
     # l'eleve (vie scolaire) : jamais pour une classe dans laquelle il n'est pas inscrit.
@@ -984,7 +1024,7 @@ def obtenir_bulletin(
         .first()
     )
     if inscrit is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cet eleve n'est pas inscrit dans cette classe.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Cet élève n'est pas inscrit dans cette classe.")
 
     return _calculer_et_enregistrer_bulletin(db, eleve, classe_id, periode)
 
@@ -1092,7 +1132,7 @@ def masquer_devoir(
     if devoir is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     if devoir.masque_par_id is not None:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_masque", "Ce devoir est deja masque.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_masque", "Ce devoir est déjà masqué.")
 
     devoir.masque_par_id = admin.id
     devoir.masque_le = datetime.now(timezone.utc)
@@ -1112,7 +1152,7 @@ def demasquer_devoir(
     if devoir is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Devoir introuvable.")
     if devoir.masque_par_id is None:
-        raise api_error(status.HTTP_409_CONFLICT, "pas_masque", "Ce devoir n'est pas masque.")
+        raise api_error(status.HTTP_409_CONFLICT, "pas_masque", "Ce devoir n'est pas masqué.")
 
     devoir.masque_par_id = None
     devoir.masque_le = None

@@ -173,7 +173,7 @@ export function ServicesScolairesAdminPage() {
               <Field label="Nom de la ligne" required>
                 <TextInput value={nomLigne} onChange={(e) => setNomLigne(e.target.value)} placeholder="Ex. Ligne A — Centre-ville" />
               </Field>
-              <div style={{ display: "flex", gap: "12px" }}>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 <Field label="Prix (FCFA)" required>
                   <TextInput type="number" min="0" value={prixLigne} onChange={(e) => setPrixLigne(e.target.value)} />
                 </Field>
@@ -210,7 +210,7 @@ export function ServicesScolairesAdminPage() {
               <Field label="Nom du service" required>
                 <TextInput value={nomType} onChange={(e) => setNomType(e.target.value)} placeholder="Ex. Déjeuner complet" />
               </Field>
-              <div style={{ display: "flex", gap: "12px" }}>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 <Field label="Prix (FCFA)" required>
                   <TextInput type="number" min="0" value={prixType} onChange={(e) => setPrixType(e.target.value)} />
                 </Field>

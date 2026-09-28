@@ -66,7 +66,7 @@ export function AlertesElProfessorPage() {
         <div className="space-y-6">
           {enAttente.map((a) => (
             <Card key={a.id} style={{ border: "1px solid color-mix(in srgb, var(--action-deep) 40%, transparent)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
                 <TriangleAlert size={18} style={{ color: "var(--action-deep)" }} />
                 <Badge tone="error">Non traitée</Badge>
                 <Badge tone="info">{ORIGINES[a.origine] ?? a.origine}</Badge>

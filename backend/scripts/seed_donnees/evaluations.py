@@ -4,9 +4,10 @@
 - une copie est deposee AVANT l'echeance ; corrigee (ou en echec de correction, en
   attente de revision manuelle) - jamais "en correction" indefiniment ;
 - la note suit le niveau de l'eleve ;
-- le bulletin du trimestre est CALCULE comme evaluations/router.py::_calculer_et_enregistrer_bulletin :
-  devoirs SOMMATIFS uniquement, note normalisee sur 100, ponderee par le coefficient du
-  referentiel, 0 pour une copie non rendue une fois l'echeance passee.
+- un bulletin par periode (trimestre, ou semestre a l'universite, voir
+  evaluations/periodes.py), CALCULE comme evaluations/router.py::_calculer_et_enregistrer_bulletin :
+  devoirs SOMMATIFS de la periode uniquement, note normalisee sur 100, ponderee par le
+  coefficient du referentiel, 0 pour une copie non rendue une fois l'echeance passee.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from app.modules.etablissements.models import Classe
+from app.modules.evaluations import periodes
 from app.modules.evaluations.models import (
     BaremeDevoir,
     Bulletin,
@@ -29,8 +31,6 @@ from app.modules.vie_scolaire.models import EntreeVieScolaire, NatureEntreeVieSc
 from .contexte import Contexte, new_id
 from .taxonomie import notion_pour
 
-PERIODE = "trimestre1"
-
 ENONCES = [
     ("Rappelle la définition principale du chapitre et illustre-la par un exemple.", 6.0),
     ("Applique la méthode du cours à la situation suivante et justifie chaque étape.", 8.0),
@@ -45,7 +45,9 @@ REPONSES = [
 
 def creer_devoirs(ctx: Contexte, classe: Classe) -> list[Devoir]:
     inscrits = ctx.inscrits_par_classe[classe.id]
-    notes_ponderees: dict[str, list[tuple[float, float]]] = {i.eleve.id: [] for i in inscrits}
+    type_etab = next(e.type for e in ctx.etablissements if e.id == classe.etablissement_id)
+    # (eleve, code de periode) -> [(note sur 100, coefficient)]
+    notes_ponderees: dict[tuple[str, str], list[tuple[float, float]]] = {}
     devoirs: list[Devoir] = []
 
     for rang in range(ctx.cfg.devoirs_par_classe):
@@ -80,12 +82,13 @@ def creer_devoirs(ctx: Contexte, classe: Classe) -> list[Devoir]:
             questions.append(q)
         points_max = sum(q.points_max for q in questions)
         coefficient = ctx.coefficients.get((classe.niveau, matiere), 1.0)
+        periode = periodes.periode_de(echeance, type_etab, classe.annee_academique).code
 
         for inscrit in inscrits:
             rend = ctx.rng.random() < (0.9 if clos else 0.25)
             if not rend:
                 if clos and nature == NatureEvaluation.SOMMATIVE:
-                    notes_ponderees[inscrit.eleve.id].append((0.0, coefficient))  # non rendu : 0 apres echeance
+                    notes_ponderees.setdefault((inscrit.eleve.id, periode), []).append((0.0, coefficient))  # non rendu : 0 apres echeance
                 continue
             fin_depot = min(echeance, ctx.maintenant) - timedelta(minutes=5)
             depose = ctx.instant(donne_le + timedelta(hours=1), fin_depot)
@@ -116,15 +119,14 @@ def creer_devoirs(ctx: Contexte, classe: Classe) -> list[Devoir]:
             if not echec:
                 soumission.note = round(total, 1)
                 if nature == NatureEvaluation.SOMMATIVE:
-                    notes_ponderees[inscrit.eleve.id].append((soumission.note / points_max * 100, coefficient))
+                    notes_ponderees.setdefault((inscrit.eleve.id, periode), []).append((soumission.note / points_max * 100, coefficient))
 
-    for inscrit in inscrits:
-        notes = notes_ponderees[inscrit.eleve.id]
+    for (eleve_id, periode), notes in notes_ponderees.items():
         poids = sum(c for _, c in notes)
         if poids == 0:
             continue  # aucun devoir clos et evalue : pas de bulletin (l'ecran affiche un etat vide)
         ctx.ajouter(Bulletin(
-            id=new_id(), eleve_id=inscrit.eleve.id, classe_id=classe.id, periode=PERIODE,
+            id=new_id(), eleve_id=eleve_id, classe_id=classe.id, periode=periode,
             moyenne_generale=sum(n * c for n, c in notes) / poids, valide_par_conseil=False,
             created_at=ctx.maintenant - timedelta(hours=ctx.rng.randint(1, 48)),
         ))

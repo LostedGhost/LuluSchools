@@ -101,11 +101,11 @@ def _verifier_eleve_de_l_etablissement(db: Session, utilisateur: Utilisateur, et
         raise api_error(
             status.HTTP_403_FORBIDDEN,
             "acces_refuse",
-            "La marketplace est reservee aux etudiants.",
+            "La marketplace est réservée aux étudiants.",
         )
     if _etablissement_actuel_de_l_eleve(db, utilisateur.id) != etablissement_id:
         raise api_error(
-            status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas inscrit dans cet etablissement."
+            status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas inscrit dans cet établissement."
         )
     return eleve
 
@@ -184,7 +184,7 @@ def creer_annonce(
     utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
 ) -> AnnonceMarketplaceDetailOut:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_eleve_de_l_etablissement(db, utilisateur, etablissement_id)
 
     if not photos or not any(p.filename for p in photos):
@@ -217,7 +217,7 @@ def creer_annonce(
         except FileStorageError as exc:
             db.rollback()
             raise api_error(
-                status.HTTP_502_BAD_GATEWAY, "upload_echoue", "Impossible d'envoyer une photo, veuillez reessayer."
+                status.HTTP_502_BAD_GATEWAY, "upload_echoue", "Impossible d'envoyer une photo, veuillez réessayer."
             ) from exc
         db.add(PhotoAnnonceMarketplace(annonce_id=annonce.id, lulufiles_file_id=file_id, ordre=ordre))
 
@@ -287,7 +287,7 @@ def retirer_ma_annonce(
     if annonce.vendeur_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette annonce ne vous appartient pas.")
     if annonce.statut != StatutAnnonce.DISPONIBLE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette annonce ne peut plus etre retiree.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette annonce ne peut plus être retirée.")
 
     annonce.statut = StatutAnnonce.RETIREE
     db.commit()
@@ -306,9 +306,9 @@ def retirer_annonce_moderation(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Annonce introuvable.")
     verifier_admin_de_l_etablissement(db, admin, annonce.etablissement_id)
     if annonce.statut == StatutAnnonce.VENDUE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une annonce deja vendue ne peut pas etre retiree.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une annonce déjà vendue ne peut pas être retirée.")
     if annonce.statut == StatutAnnonce.RETIREE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette annonce est deja retiree.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette annonce est déjà retirée.")
 
     if annonce.statut == StatutAnnonce.RESERVEE:
         transaction = _transaction_en_cours(db, annonce.id)
@@ -361,7 +361,7 @@ def signaler_annonce(
     db.refresh(signalement)
     background_tasks.add_task(
         trier_en_arriere_plan, session_factory, SignalementAnnonceMarketplace, signalement.id, llm_client,
-        f"{annonce.titre} ({annonce.prix:g} FCFA) : {annonce.description}", "annonce de vente entre etudiants",
+        f"{annonce.titre} ({annonce.prix:g} FCFA) : {annonce.description}", "annonce de vente entre étudiants",
     )
     return signalement
 
@@ -485,7 +485,7 @@ def reserver_annonce(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "trop_de_reservations",
-            f"Vous avez deja {MAX_RESERVATIONS_IMPAYEES} reservations en attente de paiement : payez-les ou annulez-les.",
+            f"Vous avez déjà {MAX_RESERVATIONS_IMPAYEES} réservations en attente de paiement : payez-les ou annulez-les.",
         )
 
     transaction = TransactionMarketplace(annonce_id=annonce_id, acheteur_id=utilisateur.id, prix_paye=annonce.prix)
@@ -525,7 +525,7 @@ def amorcer_paiement_transaction(
             raise api_error(
                 status.HTTP_409_CONFLICT,
                 "en_attente_validation_parentale",
-                "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+                "Cette dépense dépasse le seuil défini par votre tuteur et attend sa validation.",
             )
 
     transaction.kkiapay_transaction_id = payload.transaction_id
@@ -549,7 +549,7 @@ def annuler_transaction(
     if transaction.acheteur_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette transaction ne vous appartient pas.")
     if transaction.statut != StatutTransactionMarketplace.EN_ATTENTE_PAIEMENT:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction ne peut plus etre annulee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction ne peut plus être annulée.")
 
     transaction.statut = StatutTransactionMarketplace.ANNULEE
     annonce = db.get(AnnonceMarketplace, transaction.annonce_id)
@@ -572,7 +572,7 @@ def declarer_remise(
     if annonce.vendeur_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette transaction ne vous appartient pas.")
     if transaction.statut != StatutTransactionMarketplace.PAIEMENT_CONFIRME:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Le paiement n'est pas encore confirme.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Le paiement n'est pas encore confirmé.")
 
     transaction.statut = StatutTransactionMarketplace.REMISE_DECLAREE
     transaction.date_remise_declaree = datetime.now(timezone.utc)
@@ -595,7 +595,7 @@ def confirmer_reception(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette transaction ne vous appartient pas.")
     transaction = _appliquer_confirmation_tacite(db, transaction)
     if transaction.statut != StatutTransactionMarketplace.REMISE_DECLAREE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction ne peut pas etre confirmee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction ne peut pas être confirmée.")
 
     transaction.statut = StatutTransactionMarketplace.CONFIRMEE
     db.commit()
@@ -627,7 +627,7 @@ def contester_transaction(
         raise api_error(
             status.HTTP_409_CONFLICT,
             "statut_invalide",
-            "Cette transaction ne peut plus etre contestee (delai depasse ou statut invalide).",
+            "Cette transaction ne peut plus être contestée (délai dépassé ou statut invalide).",
         )
 
     transaction.statut = StatutTransactionMarketplace.CONTESTEE
@@ -719,11 +719,11 @@ def decider_contestation(
     annonce = db.get(AnnonceMarketplace, transaction.annonce_id)
     verifier_admin_de_l_etablissement(db, admin, annonce.etablissement_id)
     if contestation.statut != StatutContestationMarketplace.EN_ATTENTE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette contestation a deja ete tranchee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette contestation a déjà été tranchée.")
     if payload.decision == StatutContestationMarketplace.REJETEE and not payload.decision_motif:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet.")
     if payload.decision not in (StatutContestationMarketplace.ACCEPTEE, StatutContestationMarketplace.REJETEE):
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Decision invalide.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Décision invalide.")
 
     contestation.statut = payload.decision
     contestation.decision_motif = payload.decision_motif
@@ -753,7 +753,7 @@ def reverser_vendeur(
     verifier_admin_de_l_etablissement(db, admin, annonce.etablissement_id)
     transaction = _appliquer_confirmation_tacite(db, transaction)
     if transaction.statut != StatutTransactionMarketplace.CONFIRMEE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction n'est pas prete a etre reversee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette transaction n'est pas prête à être reversée.")
 
     transaction.reference_paiement_vendeur = payload.reference_paiement
     transaction.statut = StatutTransactionMarketplace.FINALISEE
@@ -781,7 +781,7 @@ def reverser_vendeur_en_lot(
     for transaction, annonce in zip(transactions, annonces):
         verifier_admin_de_l_etablissement(db, admin, annonce.etablissement_id)
         if _appliquer_confirmation_tacite(db, transaction).statut != StatutTransactionMarketplace.CONFIRMEE:
-            raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une des ventes n'est pas prete a etre reversee.")
+            raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une des ventes n'est pas prête à être reversée.")
     for transaction, annonce in zip(transactions, annonces):
         transaction.reference_paiement_vendeur = payload.reference_paiement
         transaction.statut = StatutTransactionMarketplace.FINALISEE
@@ -855,7 +855,7 @@ def _verifier_tuteur_de_l_eleve(db: Session, tuteur: Utilisateur, eleve_utilisat
     """UC-34 : droit de regard en lecture seule du tuteur sur le marketplace de son enfant."""
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != tuteur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte tuteur.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte tuteur.")
 
 
 @router.get(

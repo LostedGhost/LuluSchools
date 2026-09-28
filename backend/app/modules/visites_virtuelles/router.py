@@ -32,7 +32,7 @@ def publier_visite_virtuelle(
     ),
 ) -> VisiteVirtuelle:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     _verifier_droit_gestion(db, utilisateur, etablissement_id)
 
     visite = VisiteVirtuelle(

@@ -76,3 +76,6 @@ export const marquerRemboursementsEffectues = (ids: string[]) =>
   api.post<string[]>("/administration/remboursements/effectues", { ids });
 
 export const genererDocumentActe = (demandeId: string) => api.post(`/demandes-actes/${demandeId}/generer-document`);
+
+/** Pastilles du menu : {chemin de l'entrée : nombre d'éléments qui attendent l'utilisateur}. */
+export const mesCompteurs = () => api.get<Record<string, number>>("/me/compteurs");

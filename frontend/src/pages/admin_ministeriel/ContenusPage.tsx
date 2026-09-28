@@ -9,7 +9,8 @@ import {
 } from "../../api/admin";
 import { messageErreur } from "../../api/client";
 import type { AdminCoursOut, AdminDevoirOut } from "../../types/api";
-import { Badge, Btn, Card, ErrorBanner, Field, PageTitle, SectionHead, Select, SuccessBanner, TextInput } from "../../components/ui";
+import { Badge, Btn, ErrorBanner, Field, PageTitle, SectionHead, Select, SuccessBanner, TextInput } from "../../components/ui";
+import { Modale } from "../../components/Modale";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { EyeOff, Eye } from "lucide-react";
 import { estRempli } from "../../utils/validation";
@@ -146,18 +147,22 @@ export function ContenusPage() {
       <ErrorBanner>{erreur}</ErrorBanner>
       {succes && <div className="mb-4"><SuccessBanner>{succes}</SuccessBanner></div>}
 
-      {cibleMasquage && (
-        <Card className="mb-6 anim-slide-up" style={{ borderColor: "var(--action-deep)", borderWidth: "2px" }}>
-          <strong>Masquer « {cibleMasquage.contenu.titre} »</strong>
-          <Field label="Motif" required helper="Journalisé dans le journal d'audit ministériel. Le contenu reste visible à l'enseignant, plus aux élèves.">
-            <TextInput value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Ex. Contenu signalé comme inapproprié" />
-          </Field>
-          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-            <Btn variant="action" loading={enCoursAction} onClick={confirmerMasquage}>Confirmer le masquage</Btn>
+      <Modale
+        ouvert={cibleMasquage !== null}
+        onFermer={() => setCibleMasquage(null)}
+        titre={`Masquer « ${cibleMasquage?.contenu.titre ?? ""} » ?`}
+        pied={
+          <>
             <Btn variant="ghost" onClick={() => setCibleMasquage(null)}>Annuler</Btn>
-          </div>
-        </Card>
-      )}
+            <Btn variant="action" loading={enCoursAction} onClick={confirmerMasquage}>Masquer</Btn>
+          </>
+        }
+      >
+        <Field label="Motif" required helper="Journalisé dans le journal d'audit ministériel. Le contenu reste visible à l'enseignant, plus aux élèves.">
+          <TextInput value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Ex. Contenu signalé comme inapproprié" />
+        </Field>
+        <ErrorBanner>{erreur}</ErrorBanner>
+      </Modale>
 
       <SectionHead title="Cours" desc="Tous établissements confondus." />
       <DataTable

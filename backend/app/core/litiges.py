@@ -22,9 +22,9 @@ def _faits_marketplace(db, contestation) -> str:
     transaction = db.get(TransactionMarketplace, contestation.transaction_id)
     annonce = db.get(AnnonceMarketplace, transaction.annonce_id)
     return (
-        f"Vente entre etudiants. Annonce : {annonce.titre} — etat annonce : {annonce.etat.value} — prix : {transaction.prix_paye:g} FCFA.\n"
+        f"Vente entre étudiants. Annonce : {annonce.titre} — etat annonce : {annonce.etat.value} — prix : {transaction.prix_paye:g} FCFA.\n"
         f"Description du vendeur : <texte_vendeur>{annonce.description}</texte_vendeur>\n"
-        f"Remise declaree par le vendeur le {transaction.date_remise_declaree:%d/%m/%Y}.\n"
+        f"Remise déclarée par le vendeur le {transaction.date_remise_declaree:%d/%m/%Y}.\n"
         f"Motif de la contestation de l'acheteur : <texte_acheteur>{contestation.motif}</texte_acheteur>"
     )
 
@@ -37,7 +37,7 @@ def _faits_micro_job(db, contestation) -> str:
     return (
         f"Micro-job (service entre membres). Offre : {offre.titre} — prix : {mission.prix_paye:g} FCFA.\n"
         f"Description du client : <texte_client>{offre.description}</texte_client>\n"
-        f"Fin declaree par le prestataire le {mission.date_declaration_fin:%d/%m/%Y}.\n"
+        f"Fin déclarée par le prestataire le {mission.date_declaration_fin:%d/%m/%Y}.\n"
         f"Motif de la contestation du client : <texte_client>{contestation.motif}</texte_client>"
     )
 

@@ -12,6 +12,7 @@ from sqlalchemy.exc import DataError, IntegrityError
 logger = logging.getLogger(__name__)
 
 from app.core.config import settings
+from app.core.messages_validation import message_validation
 from app.modules.actes.router import router as actes_router
 from app.modules.audit.router import router as audit_router
 from app.modules.billetterie.router import router as billetterie_router
@@ -25,6 +26,7 @@ from app.core.files import get_files_client
 from app.core.llm import get_llm_client
 from app.modules.recrutement.automatisation import renoter_tache
 from app.modules.administration.a_traiter import router as a_traiter_router
+from app.modules.administration.compteurs import router as compteurs_router
 from app.modules.pedagogie.el_professor_chat import router as el_professor_chat_router
 from app.modules.pedagogie.router import router as pedagogie_router
 from app.modules.identite.router import admin_router as identite_admin_router
@@ -111,7 +113,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={
             "error": {
                 "code": "validation_error",
-                "message": "Donnees invalides.",
+                "message": message_validation(exc.errors()),
                 "details": {"fields": jsonable_encoder(exc.errors())},
             }
         },
@@ -125,7 +127,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     logger.warning("Contrainte d'integrite violee sur %s %s : %s", request.method, request.url.path, exc.orig)
     return JSONResponse(
         status_code=409,
-        content={"error": {"code": "conflit", "message": "Cette operation entre en conflit avec des donnees existantes.", "details": {}}},
+        content={"error": {"code": "conflit", "message": "Cette opération entre en conflit avec des données existantes.", "details": {}}},
     )
 
 
@@ -168,6 +170,7 @@ app.include_router(recrutement_router, prefix="/api/v1")
 app.include_router(pedagogie_router, prefix="/api/v1")
 app.include_router(el_professor_chat_router, prefix="/api/v1")
 app.include_router(a_traiter_router, prefix="/api/v1")
+app.include_router(compteurs_router, prefix="/api/v1")
 app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(actes_router, prefix="/api/v1")
 app.include_router(controle_acces_router, prefix="/api/v1")

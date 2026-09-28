@@ -68,7 +68,7 @@ def _exiger_client_micro_job(
     distinction)."""
     if utilisateur.role in _ROLES_ADULTES or _est_etudiant_utilisateur(db, utilisateur):
         return utilisateur
-    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Reserve aux adultes et aux etudiants.")
+    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Réservé aux adultes et aux étudiants.")
 
 
 def _exiger_prestataire_micro_job(
@@ -82,7 +82,7 @@ def _exiger_prestataire_micro_job(
     cahier des charges qui excluait aussi les adultes du cote CLIENT)."""
     if _est_etudiant_utilisateur(db, utilisateur):
         return utilisateur
-    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Reserve aux etudiants.")
+    raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Réservé aux étudiants.")
 
 
 def _aware_utc(moment: datetime) -> datetime:
@@ -150,7 +150,7 @@ def amorcer_paiement_offre(
                 raise api_error(
                     status.HTTP_409_CONFLICT,
                     "en_attente_validation_parentale",
-                    "Cette depense depasse le seuil defini par votre tuteur et attend sa validation.",
+                    "Cette dépense dépasse le seuil défini par votre tuteur et attend sa validation.",
                 )
 
     offre.kkiapay_transaction_id = payload.transaction_id
@@ -171,7 +171,7 @@ def annuler_offre(
     if offre.client_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette offre ne vous appartient pas.")
     if offre.statut != StatutOffreMicroJob.EN_ATTENTE_PAIEMENT:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette offre ne peut plus etre annulee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette offre ne peut plus être annulée.")
 
     offre.statut = StatutOffreMicroJob.ANNULEE
     db.commit()
@@ -237,7 +237,7 @@ def declarer_fin_mission(
     if mission.prestataire_id != utilisateur.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette mission ne vous appartient pas.")
     if mission.statut != StatutMissionMicroJob.EN_COURS:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission ne peut pas etre declaree terminee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission ne peut pas être déclarée terminée.")
 
     mission.statut = StatutMissionMicroJob.TERMINEE_DECLAREE
     mission.date_declaration_fin = datetime.now(timezone.utc)
@@ -259,7 +259,7 @@ def valider_mission(
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette mission ne vous appartient pas.")
     mission = _appliquer_validation_tacite(db, mission)
     if mission.statut != StatutMissionMicroJob.TERMINEE_DECLAREE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission ne peut pas etre validee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission ne peut pas être validée.")
 
     mission.statut = StatutMissionMicroJob.VALIDEE
     db.commit()
@@ -286,7 +286,7 @@ def contester_mission(
     mission = _appliquer_validation_tacite(db, mission)
     if mission.statut != StatutMissionMicroJob.TERMINEE_DECLAREE:
         raise api_error(
-            status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission ne peut plus etre contestee (delai depasse ou statut invalide)."
+            status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission ne peut plus être contestée (délai dépassé ou statut invalide)."
         )
 
     mission.statut = StatutMissionMicroJob.CONTESTEE
@@ -406,11 +406,11 @@ def decider_contestation(
     if contestation is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Contestation introuvable.")
     if contestation.statut != StatutContestationMicroJob.EN_ATTENTE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette contestation a deja ete tranchee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette contestation a déjà été tranchée.")
     if payload.decision == StatutContestationMicroJob.REJETEE and not payload.decision_motif:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "motif_requis", "Un motif est requis en cas de rejet.")
     if payload.decision not in (StatutContestationMicroJob.ACCEPTEE, StatutContestationMicroJob.REJETEE):
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Decision invalide.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "decision_invalide", "Décision invalide.")
 
     mission = db.get(MissionMicroJob, contestation.mission_id)
     contestation.statut = payload.decision
@@ -495,7 +495,7 @@ def reverser_prestataire(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Mission introuvable.")
     mission = _appliquer_validation_tacite(db, mission)
     if mission.statut != StatutMissionMicroJob.VALIDEE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission n'est pas prete a etre reversee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette mission n'est pas prête à être reversée.")
 
     mission.reference_paiement_prestataire = payload.reference_paiement
     mission.statut = StatutMissionMicroJob.PAYEE
@@ -522,7 +522,7 @@ def reverser_prestataire_en_lot(
         raise api_error(status.HTTP_409_CONFLICT, "prestataires_multiples", "Un lot ne concerne qu'un seul prestataire.")
     for mission in missions:
         if _appliquer_validation_tacite(db, mission).statut != StatutMissionMicroJob.VALIDEE:
-            raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une des missions n'est pas prete a etre reversee.")
+            raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une des missions n'est pas prête à être reversée.")
     for mission in missions:
         mission.reference_paiement_prestataire = payload.reference_paiement
         mission.statut = StatutMissionMicroJob.PAYEE

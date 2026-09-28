@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { libelle } from "../utils/libelles";
 import { rechercherUtilisateursDesignables } from "../api/controle_acces";
 import { Field, TextInput } from "./ui";
 import type { UtilisateurDesignableOut } from "../types/api";
@@ -122,7 +123,7 @@ export function RechercheUtilisateurDesignable({
                   fontSize: "var(--text-sm)",
                 }}
               >
-                {u.prenom} {u.nom} <span style={{ color: "var(--ink-faint)" }}>({u.role})</span>
+                {u.prenom} {u.nom} <span style={{ color: "var(--ink-faint)" }}>({libelle(u.role)})</span>
               </button>
             ))
           )}

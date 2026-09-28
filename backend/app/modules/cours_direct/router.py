@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 def _verifier_eleve_inscrit(db: Session, eleve_utilisateur_id: str, classe_id: str) -> Eleve:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Compte eleve introuvable.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Compte élève introuvable.")
     inscription = (
         db.query(Inscription)
         .filter(
@@ -71,7 +71,7 @@ def _verifier_eleve_inscrit(db: Session, eleve_utilisateur_id: str, classe_id: s
         .first()
     )
     if inscription is None:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas inscrit dans cette classe.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas inscrit dans cette classe.")
     return eleve
 
 
@@ -153,7 +153,7 @@ def demarrer_session_live(
     if session.enseignant_id != enseignant.id:
         raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cette session ne vous appartient pas.")
     if session.statut != StatutSessionLive.PLANIFIEE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette session ne peut pas etre demarree.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette session ne peut pas être démarrée.")
 
     session.statut = StatutSessionLive.EN_COURS
     db.commit()
@@ -236,12 +236,12 @@ def obtenir_resume_session_live(
     )
     if not a_un_enfant_participant:
         raise api_error(
-            status.HTTP_403_FORBIDDEN, "acces_refuse", "Aucun de vos enfants n'a participe a cette session."
+            status.HTTP_403_FORBIDDEN, "acces_refuse", "Aucun de vos enfants n'a participé à cette session."
         )
     resume = db.query(ResumeSessionLive).filter(ResumeSessionLive.session_id == session_id).first()
     if resume is None:
         raise api_error(
-            status.HTTP_404_NOT_FOUND, "introuvable", "Aucun resume n'est disponible pour cette session."
+            status.HTTP_404_NOT_FOUND, "introuvable", "Aucun résumé n'est disponible pour cette session."
         )
     return resume
 
@@ -274,7 +274,7 @@ def donner_consentement_camera_live(
 ) -> ConsentementCameraLive:
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != tuteur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
 
     consentement = (
         db.query(ConsentementCameraLive)
@@ -304,7 +304,7 @@ def rejoindre_session_live(
     # session EN_COURS. Le tableau reste verrouille en ecriture (voir _a_le_droit_ecrire)
     # et le chat est journalise comme le reste (voir MessageSessionLive).
     if session.statut not in (StatutSessionLive.PLANIFIEE, StatutSessionLive.EN_COURS):
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette session est deja terminee.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cette session est déjà terminée.")
 
     a_consenti = (
         db.query(ConsentementCameraLive)
@@ -380,7 +380,7 @@ def _verifier_session_et_acces(db: Session, session_id: str, utilisateur: Utilis
     if session is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Session introuvable.")
     if not _est_organisateur(session, utilisateur) and not _est_participant(db, session_id, utilisateur):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous ne participez pas a cette session.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous ne participez pas à cette session.")
     return session
 
 
@@ -475,7 +475,7 @@ async def _ajouter_trait(
 ) -> TraitTableau:
     session = _verifier_session_et_acces(db, session_id, utilisateur)
     if session.statut == StatutSessionLive.TERMINEE:
-        raise api_error(status.HTTP_409_CONFLICT, "session_terminee", "Cette session est terminee : le tableau est fige.")
+        raise api_error(status.HTTP_409_CONFLICT, "session_terminee", "Cette session est terminée : le tableau est figé.")
     panneau = db.get(PanneauTableau, panneau_id)
     if panneau is None or panneau.session_id != session_id:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Panneau introuvable.")
@@ -535,7 +535,7 @@ async def demander_la_craie(
 ) -> DemandeCraie:
     session = _verifier_session_et_acces(db, session_id, eleve)
     if _a_le_droit_ecrire(db, session_id, eleve, session):
-        raise api_error(status.HTTP_409_CONFLICT, "deja_autorise", "Vous avez deja la craie sur ce tableau.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_autorise", "Vous avez déjà la craie sur ce tableau.")
 
     existante = (
         db.query(DemandeCraie)
@@ -583,7 +583,7 @@ async def _trancher_demande_craie(
     if demande is None or demande.session_id != session_id:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Demande introuvable.")
     if demande.statut != StatutDemandeCraie.EN_ATTENTE:
-        raise api_error(status.HTTP_409_CONFLICT, "deja_traitee", "Cette demande a deja ete traitee.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_traitee", "Cette demande a déjà été traitée.")
 
     demande.statut = StatutDemandeCraie.ACCORDEE if accordee else StatutDemandeCraie.REFUSEE
     if accordee:
@@ -688,7 +688,7 @@ async def revoquer_la_craie(
         .first()
     )
     if permission is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucune permission d'ecriture pour cet eleve.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Aucune permission d'écriture pour cet élève.")
     db.delete(permission)
     db.commit()
     await gestionnaire_live.diffuser(session_id, {"type": "permission_revoquee", "eleve_utilisateur_id": eleve_utilisateur_id})
@@ -715,7 +715,7 @@ async def envoyer_message_session_live(
     la messagerie generale, mais circuit dedie et plus simple (voir MessageSessionLive)."""
     _verifier_session_et_acces(db, session_id, utilisateur)
     if not payload.contenu.strip():
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "contenu_vide", "Le message ne peut pas etre vide.")
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "contenu_vide", "Le message ne peut pas être vide.")
 
     message = MessageSessionLive(session_id=session_id, auteur_id=utilisateur.id, contenu=payload.contenu.strip())
     db.add(message)

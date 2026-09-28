@@ -54,7 +54,7 @@ def _est_organisateur(db: Session, utilisateur: Utilisateur, evenement: Evenemen
 def _exiger_organisateur(db: Session, utilisateur: Utilisateur, evenement: Evenement) -> None:
     if not _est_organisateur(db, utilisateur, evenement):
         raise api_error(
-            status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'organisez pas cet evenement."
+            status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'organisez pas cet événement."
         )
 
 
@@ -68,7 +68,7 @@ def creer_evenement(
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> Evenement:
     if db.get(Etablissement, etablissement_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Établissement introuvable.")
     verifier_admin_de_l_etablissement(db, admin, etablissement_id)
 
     evenement = Evenement(
@@ -95,10 +95,10 @@ def designer_parrain(
 ) -> Evenement:
     evenement = db.get(Evenement, evenement_id)
     if evenement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Evenement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Événement introuvable.")
     verifier_admin_de_l_etablissement(db, admin, evenement.etablissement_id)
     if db.get(Utilisateur, payload.utilisateur_id) is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur a designer introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Utilisateur à désigner introuvable.")
 
     evenement.parrain_utilisateur_id = payload.utilisateur_id
     db.commit()
@@ -121,7 +121,7 @@ def obtenir_evenement(
 ) -> Evenement:
     evenement = db.get(Evenement, evenement_id)
     if evenement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Evenement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Événement introuvable.")
     return evenement
 
 
@@ -131,10 +131,10 @@ def annuler_evenement(
 ) -> Evenement:
     evenement = db.get(Evenement, evenement_id)
     if evenement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Evenement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Événement introuvable.")
     _exiger_organisateur(db, utilisateur, evenement)
     if evenement.statut != StatutEvenement.OUVERT:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cet evenement n'est plus ouvert.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cet événement n'est plus ouvert.")
 
     evenement.statut = StatutEvenement.ANNULE
     billets_a_rembourser = (
@@ -167,7 +167,7 @@ def _resoudre_beneficiaire_billet(db: Session, utilisateur: Utilisateur, eleve_u
         return utilisateur.id
     eleve = db.query(Eleve).filter(Eleve.utilisateur_id == eleve_utilisateur_id).first()
     if eleve is None or eleve.tuteur_id != utilisateur.id:
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet eleve n'est pas rattache a votre compte.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Cet élève n'est pas rattaché à votre compte.")
     return eleve_utilisateur_id
 
 
@@ -199,13 +199,13 @@ def acheter_billet(
 ) -> BilletEvenement:
     evenement = db.get(Evenement, evenement_id)
     if evenement is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Evenement introuvable.")
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Événement introuvable.")
     if evenement.statut != StatutEvenement.OUVERT:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cet evenement n'accepte plus d'achats.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Cet événement n'accepte plus d'achats.")
 
     beneficiaire_id = _resoudre_beneficiaire_billet(db, utilisateur, payload.eleve_utilisateur_id if payload else None)
     if _aware_utc(evenement.date_heure) < datetime.now(timezone.utc):
-        raise api_error(status.HTTP_409_CONFLICT, "evenement_passe", "Cet evenement a deja eu lieu.")
+        raise api_error(status.HTTP_409_CONFLICT, "evenement_passe", "Cet événement a déjà eu lieu.")
     if (
         db.query(BilletEvenement)
         .filter(
@@ -217,7 +217,7 @@ def acheter_billet(
         .first()
         is not None
     ):
-        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un billet existe deja pour cette personne.")
+        raise api_error(status.HTTP_409_CONFLICT, "deja_achete", "Un billet existe déjà pour cette personne.")
 
     deja_vendus = (
         db.query(BilletEvenement)
@@ -229,7 +229,7 @@ def acheter_billet(
         .count()
     )
     if deja_vendus >= evenement.capacite_max:
-        raise api_error(status.HTTP_409_CONFLICT, "capacite_atteinte", "Cet evenement est complet.")
+        raise api_error(status.HTTP_409_CONFLICT, "capacite_atteinte", "Cet événement est complet.")
 
     billet = BilletEvenement(
         evenement_id=evenement_id,
@@ -274,11 +274,11 @@ def valider_billet(
     if not est_controleur_designe(
         db, controleur.id, evenement.etablissement_id, ServiceControle.EVENEMENT, evenement.id
     ):
-        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'etes pas controleur designe pour cet evenement.")
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas contrôleur désigné pour cet événement.")
     if billet.statut != StatutBillet.ACHETE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce billet ne peut pas etre valide.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce billet ne peut pas être validé.")
     if not billet.paiement_confirme:
-        raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce billet n'est pas confirme.")
+        raise api_error(status.HTTP_409_CONFLICT, "paiement_non_confirme", "Le paiement de ce billet n'est pas confirmé.")
 
     billet.statut = StatutBillet.VALIDE
     db.commit()
@@ -295,10 +295,10 @@ def rembourser_billet(
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Billet introuvable.")
     _verifier_proprietaire_ou_tuteur_billet(db, utilisateur, billet.utilisateur_id)
     if billet.statut != StatutBillet.ACHETE:
-        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce billet ne peut plus etre rembourse.")
+        raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Ce billet ne peut plus être remboursé.")
     evenement = db.get(Evenement, billet.evenement_id)
     if datetime.now(timezone.utc) > _aware_utc(evenement.date_heure) - _DELAI_REMBOURSEMENT_BILLET:
-        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le delai de remboursement est depasse.")
+        raise api_error(status.HTTP_409_CONFLICT, "delai_depasse", "Le délai de remboursement est dépassé.")
 
     billet.statut = StatutBillet.REMBOURSE
     rembourser(kkiapay, billet)
@@ -328,7 +328,7 @@ def obtenir_pdf_billet(
         verifier_admin_de_l_etablissement(db, utilisateur, evenement.etablissement_id)
 
     pdf = generer_pdf_ticket(
-        titre="Billet d'evenement",
+        titre="Billet d'événement",
         sous_titre=evenement.titre,
         type_ticket="evenement",
         ticket_id=billet.id,

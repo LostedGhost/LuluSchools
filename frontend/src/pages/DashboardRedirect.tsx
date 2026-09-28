@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { libelle } from "../utils/libelles";
 import { useAuth } from "../auth/AuthContext";
 
 export function DashboardRedirect() {
@@ -11,7 +12,7 @@ export function DashboardRedirect() {
   if (utilisateur.role === "admin_ministeriel") return <Navigate to="/admin-ministeriel" replace />;
   return (
     <div className="p-8 text-center text-slate-600">
-      Aucun tableau de bord n'est encore disponible pour votre role ({utilisateur.role}).
+      Aucun tableau de bord n'est encore disponible pour votre rôle ({libelle(utilisateur.role)}).
     </div>
   );
 }

@@ -1,24 +1,38 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { obtenirBulletin } from "../../api/evaluations";
+import { obtenirBulletin, periodesDeLaClasse, type PeriodeOut } from "../../api/evaluations";
 import { codeErreur, messageErreur } from "../../api/client";
 import { useEleveProfil } from "../../eleve/EleveProfileContext";
 import type { BulletinOut } from "../../types/api";
-import { Card, ErrorBanner, EmptyState, Btn } from "../../components/ui";
+import { Card, ErrorBanner, EmptyState, Btn, SkeletonCard } from "../../components/ui";
 import { ScoreBurst } from "../../components/gamification";
 import { Award, BarChart3, ChevronRight } from "lucide-react";
 
-const PERIODES = ["trimestre1", "trimestre2", "trimestre3"];
-
 export function BulletinPage() {
   const profil = useEleveProfil();
-  const [periode, setPeriode] = useState(PERIODES[0]);
+  // Trimestres (primaire, secondaire) ou semestres (université) de la classe ; on ouvre
+  // la période en cours.
+  const [periodes, setPeriodes] = useState<PeriodeOut[]>([]);
+  const [periode, setPeriode] = useState<string | null>(null);
   const [bulletin, setBulletin] = useState<BulletinOut | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [chargement, setChargement] = useState(false);
+  const [chargement, setChargement] = useState(!!profil.classe_id);
 
   useEffect(() => {
     if (!profil.classe_id) return;
+    periodesDeLaClasse(profil.classe_id)
+      .then((res) => {
+        setPeriodes(res.data);
+        setPeriode((res.data.find((p) => p.courante) ?? res.data[0])?.code ?? null);
+      })
+      .catch((err) => setErreur(messageErreur(err)));
+  }, [profil.classe_id]);
+
+  const periodeChoisie = periodes.find((p) => p.code === periode);
+  const aVenir = periodeChoisie ? new Date(periodeChoisie.debut) > new Date() : false;
+
+  useEffect(() => {
+    if (!profil.classe_id || !periode) return;
     setChargement(true);
     setErreur(null);
     setBulletin(null);
@@ -26,7 +40,7 @@ export function BulletinPage() {
       .then((res) => setBulletin(res.data))
       .catch((err) => {
         // Aucun devoir encore evalue : situation normale en debut de periode, pas une erreur.
-        if (codeErreur(err) !== "aucun_devoir_evalue") setErreur(messageErreur(err, "Aucune moyenne disponible pour cette periode."));
+        if (codeErreur(err) !== "aucun_devoir_evalue") setErreur(messageErreur(err, "Aucune moyenne disponible pour cette période."));
       })
       .finally(() => setChargement(false));
   }, [profil.classe_id, profil.id, periode]);
@@ -38,27 +52,34 @@ export function BulletinPage() {
         <h1 className="text-headline" style={{ color: "var(--ink)", margin: 0 }}>Mon bulletin</h1>
       </div>
 
-      <div className="mb-6 flex gap-2">
-        {PERIODES.map((p) => (
+      <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Période">
+        {periodes.map((p) => (
           <Btn
-            key={p}
-            variant={periode === p ? "primary" : "ghost"}
+            key={p.code}
+            role="tab"
+            aria-selected={periode === p.code}
+            variant={periode === p.code ? "primary" : "ghost"}
             size="md"
-            onClick={() => setPeriode(p)}
+            onClick={() => setPeriode(p.code)}
           >
-            {p.replace("trimestre", "Trimestre ")}
+            {p.libelle}
+            {p.courante && <span className="sr-only"> (en cours)</span>}
           </Btn>
         ))}
       </div>
 
-      {chargement && <p className="text-slate-500">Chargement...</p>}
+      {chargement && <SkeletonCard />}
       {erreur && <ErrorBanner>{erreur}</ErrorBanner>}
 
       {!chargement && !erreur && !bulletin && (
         <EmptyState
           icon={<BarChart3 size={24} />}
-          title="Aucun bulletin disponible"
-          desc="Les moyennes pour ce trimestre ne sont pas encore publiées."
+          title={aVenir ? "Période à venir" : "Pas encore de moyenne"}
+          desc={
+            aVenir
+              ? `Le ${periodeChoisie?.libelle} commence le ${new Date(periodeChoisie!.debut).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.`
+              : "Aucun devoir de cette période n'a encore été corrigé. Votre moyenne apparaîtra ici dès la première note."
+          }
         />
       )}
 

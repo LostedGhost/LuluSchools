@@ -31,6 +31,7 @@ import { KkiapayButton } from "../../components/KkiapayButton";
 import { Briefcase, Handshake } from "lucide-react";
 import { estRempli } from "../../utils/validation";
 import { NumeroMobileMoney } from "../../components/NumeroMobileMoney";
+import { useConfirmation } from "../../components/Modale";
 
 const STATUT_MISSION_TONE: Record<MissionMicroJobOut["statut"], "pending" | "success" | "error" | "neutral" | "info"> = {
   en_cours: "pending",
@@ -125,7 +126,9 @@ export function MicroJobsPage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const annulerOffreNonPayee = async (offreId: string) => {
+    if (!(await demanderConfirmation({ titre: "Annuler cette offre ?", message: "L'offre n'a pas été payée : elle sera simplement supprimée.", action: "Annuler l'offre" }))) return;
     setActionEnCoursId(offreId);
     setErreur(null);
     try {

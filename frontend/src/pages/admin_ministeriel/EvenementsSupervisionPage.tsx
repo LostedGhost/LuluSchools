@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { annulerEvenement, listerEvenementsSupervision } from "../../api/admin";
 import { messageErreur } from "../../api/client";
 import type { AdminEvenementOut } from "../../types/api";
-import { Badge, Btn, Card, ErrorBanner, PageTitle, Select, SuccessBanner } from "../../components/ui";
+import { Badge, Btn, ErrorBanner, PageTitle, Select, SuccessBanner } from "../../components/ui";
+import { Modale } from "../../components/Modale";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { CalendarX, MapPin } from "lucide-react";
 
@@ -77,18 +78,22 @@ export function EvenementsSupervisionPage() {
       <ErrorBanner>{erreur}</ErrorBanner>
       {succes && <div className="mb-4"><SuccessBanner>{succes}</SuccessBanner></div>}
 
-      {cibleAnnulation && (
-        <Card className="mb-6 anim-slide-up" style={{ borderColor: "var(--action-deep)", borderWidth: "2px" }}>
-          <strong>Annuler « {cibleAnnulation.titre} » ?</strong>
-          <p className="text-sm" style={{ color: "var(--ink-soft)", margin: "8px 0" }}>
-            Tous les billets déjà achetés ou validés seront automatiquement remboursés. Cette action est journalisée dans le journal d'audit ministériel.
-          </p>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <Btn variant="action" loading={enCoursAnnulation} onClick={confirmerAnnulation}>Confirmer l'annulation</Btn>
+      <Modale
+        ouvert={cibleAnnulation !== null}
+        onFermer={() => setCibleAnnulation(null)}
+        titre={`Annuler « ${cibleAnnulation?.titre ?? ""} » ?`}
+        pied={
+          <>
             <Btn variant="ghost" onClick={() => setCibleAnnulation(null)}>Fermer</Btn>
-          </div>
-        </Card>
-      )}
+            <Btn variant="action" loading={enCoursAnnulation} onClick={confirmerAnnulation}>Annuler l'événement</Btn>
+          </>
+        }
+      >
+        <p className="text-sm" style={{ color: "var(--ink-soft)", margin: 0 }}>
+          Tous les billets déjà achetés ou validés seront automatiquement remboursés. Cette action est définitive et journalisée dans le journal d'audit ministériel.
+        </p>
+        <ErrorBanner>{erreur}</ErrorBanner>
+      </Modale>
 
       <DataTable
         columns={colonnes}

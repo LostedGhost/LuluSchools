@@ -201,3 +201,19 @@ def test_boite_a_traiter_de_l_a_plus_plus(client, admin_ministeriel_headers, cla
     assert reponse.status_code == 200
     assert all({"cle", "titre", "nombre", "elements"} <= set(s) for s in reponse.json())
     assert client.get("/api/v1/administration/a-traiter", headers=classe_avec_enseignant_et_eleve["eleve_headers"]).status_code == 403
+
+
+# ─── Pastilles du menu ───────────────────────────────────────────────────────
+
+def test_compteurs_du_menu(client, etablissement_avec_classe, tuteur_headers):
+    ctx = etablissement_avec_classe
+    avant = client.get("/api/v1/me/compteurs", headers=ctx["admin_headers"]).json().get("/admin-etablissement/a-traiter", 0)
+    _inscrire(client, tuteur_headers, ctx["classe"]["id"], "Eyram")  # majeur : attend l'A+
+    mineur = client.post(
+        "/api/v1/inscriptions",
+        json={"nom": "Hounkpe", "prenom": "Fifame", "date_naissance": "2016-03-01", "classe_id": ctx["classe"]["id"]},
+        headers=tuteur_headers,
+    ).json()
+    assert mineur["statut"] == "en_attente_consentement_parental"
+    assert client.get("/api/v1/me/compteurs", headers=ctx["admin_headers"]).json() == {"/admin-etablissement/a-traiter": avant + 1}
+    assert client.get("/api/v1/me/compteurs", headers=tuteur_headers).json() == {"/tuteur": 1}

@@ -17,6 +17,7 @@ import {
   TextInput,
 } from "../../components/ui";
 import { CheckCircle2, XCircle, RefreshCw, AlertCircle, Backpack, Check, BookOpen } from "lucide-react";
+import { useConfirmation } from "../../components/Modale";
 
 export function InscriptionsAValiderPage() {
   const etablissement = useAdminEtab();
@@ -56,7 +57,9 @@ export function InscriptionsAValiderPage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const rejeter = async (id: string) => {
+    if (!(await demanderConfirmation({ titre: "Rejeter cette inscription ?", message: "La famille recevra le motif saisi. Cette décision est définitive.", action: "Rejeter", danger: true }))) return;
     const motif = motifParId[id];
     if (!motif?.trim()) {
       setErreur("Veuillez indiquer un motif de rejet.");

@@ -14,9 +14,9 @@ class DesignationControleurCreate(BaseModel):
     @model_validator(mode="after")
     def _valider_evenement_id(self) -> "DesignationControleurCreate":
         if self.service == ServiceControle.EVENEMENT and not self.evenement_id:
-            raise ValueError("evenement_id est requis pour une designation de service 'evenement'.")
+            raise ValueError("Choisissez l'événement à contrôler.")
         if self.service != ServiceControle.EVENEMENT and self.evenement_id:
-            raise ValueError("evenement_id ne s'applique qu'a une designation de service 'evenement'.")
+            raise ValueError("Un événement ne se choisit que pour un contrôle d'événement.")
         return self
 
 

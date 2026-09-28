@@ -75,7 +75,7 @@ class TraitTableauCreate(BaseModel):
             raise ValueError("Trait trop volumineux.")
         points = value.get("points")
         if isinstance(points, list) and len(points) > _POINTS_MAX_PAR_TRAIT:
-            raise ValueError(f"Un trait est limite a {_POINTS_MAX_PAR_TRAIT} points.")
+            raise ValueError(f"Un trait est limité à {_POINTS_MAX_PAR_TRAIT} points.")
         return value
 
 

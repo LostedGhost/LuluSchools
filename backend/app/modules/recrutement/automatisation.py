@@ -66,7 +66,7 @@ def renoter_documents(db: Session, llm_client: FreeLLMClient, files_client: Lulu
         try:
             contenu = telecharger_borne(files_client.get_signed_link(document.lulufiles_file_id), MAX_DOCUMENT_OCTETS)
             image, type_image = convertir_en_image(contenu, _type_contenu(contenu))
-            document.note_ia = llm_client.noter_document(image, type_image, critere=f"conformite du document '{document.type_document}'")
+            document.note_ia = llm_client.noter_document(image, type_image, critere=f"conformité du document '{document.type_document}'")
             document.statut = StatutDocument.NOTE
             notes += 1
             candidatures_touchees.add(document.candidature_id)

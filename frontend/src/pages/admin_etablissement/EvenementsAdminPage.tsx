@@ -20,6 +20,7 @@ import {
 } from "../../components/ui";
 import { Ban, CalendarDays, ShieldCheck, Star, Ticket } from "lucide-react";
 import { estRempli } from "../../utils/validation";
+import { useConfirmation } from "../../components/Modale";
 
 const STATUT_TONE: Record<EvenementOut["statut"], "success" | "error"> = {
   ouvert: "success",
@@ -89,7 +90,9 @@ export function EvenementsAdminPage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const annuler = async (id: string) => {
+    if (!(await demanderConfirmation({ titre: "Annuler cet événement ?", message: "Les billets déjà achetés seront remboursés automatiquement et l'événement ne sera plus proposé. Cette action est définitive.", action: "Annuler l'événement", danger: true }))) return;
     setActionEnCoursId(id);
     setErreur(null);
     try {

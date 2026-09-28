@@ -23,6 +23,7 @@ from app.modules.coffre_fort.models import ModuleDepenseCoffreFort, PlafondFamil
 from app.modules.controle_acces.models import DesignationControleur  # noqa: E402
 from app.modules.cours_direct.models import ConsentementCameraLive, ParticipationLive, SessionLive, StatutSessionLive  # noqa: E402
 from app.modules.etablissements.models import AdminEtablissement, AffectationEnseignant, Classe, Etablissement, TypeEtablissement  # noqa: E402
+from app.modules.evaluations import periodes  # noqa: E402
 from app.modules.evaluations.models import (  # noqa: E402
     Bulletin, Devoir, NatureEvaluation, QuestionDevoir, ReferentielCoefficient, Soumission, StatutReferentiel, StatutSoumission,
 )
@@ -161,8 +162,11 @@ def verifier() -> bool:
         for b in tout(Bulletin):
             classe = classes[b.classe_id]
             notes = []
+            type_etab = etabs[classe.etablissement_id].type
             for d in devoirs.values():
                 if d.classe_id != b.classe_id or d.nature != NatureEvaluation.SOMMATIVE:
+                    continue
+                if periodes.periode_de(d.date_limite, type_etab, classe.annee_academique).code != b.periode:
                     continue
                 s = soumission_de.get((d.id, b.eleve_id))
                 coef = coefficients.get((classe.niveau, d.matiere), 1.0)

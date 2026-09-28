@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { libelle } from "../../utils/libelles";
 import { contesterCandidature, mesCandidatures } from "../../api/recrutement";
 import { messageErreur } from "../../api/client";
 import type { CandidatureOut, StatutCandidature } from "../../types/api";
@@ -70,12 +71,12 @@ export function MesCandidaturesPage() {
                 <ul className="space-y-2 text-sm text-ink-soft">
                   {c.documents.map((d) => (
                     <li key={d.id} className="flex items-center justify-between bg-slate-50 p-2 rounded-md" style={{ backgroundColor: 'var(--surface-2)' }}>
-                      <span>{d.type_document}</span>
+                      <span>{libelle(d.type_document)}</span>
                       <div className="flex items-center gap-2">
                         <Badge tone={d.statut === "note" ? "success" : d.statut === "echec_notation" ? "error" : "neutral"}>
-                          {d.statut}
+                          {libelle(d.statut)}
                         </Badge>
-                        {d.note_ia !== null && <span className="text-xs font-mono text-magic">{d.note_ia}/10</span>}
+                        {d.note_ia !== null && <span className="text-xs font-mono text-magic">{d.note_ia}/100</span>}
                       </div>
                     </li>
                   ))}

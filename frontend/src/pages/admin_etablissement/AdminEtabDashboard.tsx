@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GuideDemarrage } from "../../components/GuideDemarrage";
 import { Link } from "react-router-dom";
 import { useAdminEtab } from "../../admin/AdminEtabContext";
 import {
@@ -267,6 +268,7 @@ export function AdminEtabDashboard() {
 
   return (
     <div className="page-content">
+      <GuideDemarrage />
       {/* ── Entête Hero Établissement ── */}
       <div
         className="card anim-float-in"

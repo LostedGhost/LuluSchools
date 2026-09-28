@@ -7,7 +7,9 @@ import type {
   TextareaHTMLAttributes,
   SelectHTMLAttributes,
 } from "react";
-import { AlertTriangle, Inbox } from "lucide-react";
+import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement } from "react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Inbox, X } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
    Card
@@ -160,36 +162,73 @@ export function Field({
   error,
   helper,
   required,
+  htmlFor,
 }: {
+  /** Id du champ, quand l'enfant n'est pas un champ unique (champ + bouton « afficher »...). */
+  htmlFor?: string;
   label: string;
   children: ReactNode;
   error?: string | null;
   helper?: string;
   required?: boolean;
 }) {
+  // Accessibilité : l'étiquette est reliée au champ (htmlFor/id) et l'aide ou l'erreur lui
+  // est annoncée (aria-describedby), quand l'enfant est un champ unique.
+  const idAuto = useId();
+  const unique = isValidElement(children) && typeof children.type === "string" && ["input", "select", "textarea"].includes(children.type)
+    || (isValidElement(children) && [TextInput, TextArea, Select].includes(children.type as never));
+  const props = unique ? (children as ReactElement<Record<string, unknown>>).props : {};
+  const idChamp = (props.id as string | undefined) ?? `${idAuto}-champ`;
+  const idAide = `${idAuto}-aide`;
+  const champ = unique
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        id: idChamp,
+        "aria-describedby": error || helper ? idAide : undefined,
+        "aria-invalid": error ? true : undefined,
+        "aria-required": required || undefined,
+      })
+    : children;
+  const cible = unique ? idChamp : htmlFor;
+  const Etiquette = cible ? "label" : "span";
+  // Enfant composite (champ + bouton...) : on relie l'étiquette au premier champ trouvé.
+  const conteneur = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (cible || !conteneur.current) return;
+    const champ = conteneur.current.querySelector<HTMLElement>("input:not([type=hidden]), select, textarea");
+    const etiquette = conteneur.current.querySelector<HTMLElement>(".field-label");
+    if (!champ || !etiquette) return;
+    if (!champ.id) champ.id = `${idAuto}-champ`;
+    etiquette.id = `${idAuto}-etiquette`;
+    if (!champ.getAttribute("aria-label")) champ.setAttribute("aria-labelledby", etiquette.id);
+  });
   return (
-    <div className="field">
-      <span className="field-label">
+    <div className="field" ref={conteneur}>
+      <Etiquette className="field-label" {...(cible ? { htmlFor: cible } : {})}>
         {label}
         {required && (
-          <span style={{ color: "var(--action)", marginLeft: "4px" }}>*</span>
+          <span style={{ color: "var(--action)", marginLeft: "4px" }} aria-hidden="true">*</span>
         )}
-      </span>
-      {children}
+      </Etiquette>
+      {champ}
       {error && (
-        <span className="field-error">
+        <span className="field-error" id={idAide}>
           <AlertTriangle size={14} aria-hidden="true" />
           {error}
         </span>
       )}
-      {!error && helper && <span className="field-helper">{helper}</span>}
+      {!error && helper && <span className="field-helper" id={idAide}>{helper}</span>}
     </div>
   );
 }
 
+/** Hors d'un <Field>, le texte indicatif sert de nom accessible (lecteurs d'écran). */
+const nomParDefaut = (props: { id?: string; placeholder?: string }) =>
+  !props.id && props.placeholder ? props.placeholder : undefined;
+
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
+      aria-label={nomParDefaut(props)}
       {...props}
       className={`field-input ${props.className ?? ""}`}
     />
@@ -199,6 +238,7 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
+      aria-label={nomParDefaut(props)}
       {...props}
       className={`field-input ${props.className ?? ""}`}
       style={{ minHeight: "100px", resize: "vertical", ...props.style }}
@@ -210,8 +250,14 @@ export function Select({
   children,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
+  // Hors d'un <Field> (filtres de liste), l'option vide « Tous statuts » sert de nom
+  // accessible, faute d'étiquette visible.
+  const optionVide = Children.toArray(children).find(
+    (o) => isValidElement<{ value?: unknown; children?: ReactNode }>(o) && o.props.value === "" && typeof o.props.children === "string",
+  ) as ReactElement<{ children: string }> | undefined;
+  const nom = !props.id && optionVide ? `Filtre : ${optionVide.props.children}` : undefined;
   return (
-    <select {...props} className={`field-input ${props.className ?? ""}`}>
+    <select aria-label={nom} {...props} className={`field-input ${props.className ?? ""}`}>
       {children}
     </select>
   );
@@ -221,13 +267,22 @@ export function Select({
    Feedback
    ═══════════════════════════════════════════════════════════════ */
 
+/** Erreur affichée à l'endroit du formulaire ; elle défile jusqu'à être visible quand elle
+ * apparaît (une action en bas de page ne doit pas échouer « en silence » hors de l'écran). */
 export function ErrorBanner({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const texte = typeof children === "string" ? children : children ? "x" : "";
+  useEffect(() => {
+    if (texte) ref.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [texte]);
   if (!children) return null;
   return (
     <div
+      ref={ref}
       className="chip chip-error rounded-[var(--radius-md)] px-4 py-3 text-sm w-full justify-start"
       role="alert"
-      aria-live="polite"
+      aria-live="assertive"
+      style={{ whiteSpace: "normal", lineHeight: 1.5 }}
     >
       <span className="chip-dot" />
       {children}
@@ -235,17 +290,28 @@ export function ErrorBanner({ children }: { children: ReactNode }) {
   );
 }
 
-export function SuccessBanner({ children }: { children: ReactNode }) {
-  if (!children) return null;
-  return (
-    <div
-      className="chip chip-success rounded-[var(--radius-md)] px-4 py-3 text-sm w-full justify-start"
-      role="status"
-      aria-live="polite"
-    >
+/** Confirmation d'une action réussie : notification flottante en bas de l'écran (visible
+ * quel que soit l'endroit de la page où l'action a eu lieu), qui disparaît d'elle-même. */
+export function SuccessBanner({ children, duree = 6000 }: { children: ReactNode; duree?: number }) {
+  const [masque, setMasque] = useState<ReactNode>(null);
+  useEffect(() => {
+    if (!children) {
+      setMasque(null);
+      return;
+    }
+    const t = window.setTimeout(() => setMasque(children), duree);
+    return () => window.clearTimeout(t);
+  }, [children, duree]);
+  if (!children || masque === children) return null;
+  return createPortal(
+    <div className="toast chip chip-success anim-slide-up" role="status" aria-live="polite">
       <span className="chip-dot" />
-      {children}
-    </div>
+      <span style={{ flex: 1 }}>{children}</span>
+      <button type="button" className="toast-fermer" onClick={() => setMasque(children)} aria-label="Fermer la notification">
+        <X size={14} />
+      </button>
+    </div>,
+    document.body,
   );
 }
 

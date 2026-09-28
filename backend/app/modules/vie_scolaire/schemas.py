@@ -16,9 +16,9 @@ class EntreeVieScolaireCreate(BaseModel):
     @model_validator(mode="after")
     def _valider_coherence(self) -> "EntreeVieScolaireCreate":
         if not self.description.strip():
-            raise ValueError("description ne peut pas etre vide.")
+            raise ValueError("La description ne peut pas être vide.")
         if self.matiere is not None and not self.matiere.strip():
-            raise ValueError("matiere ne peut pas etre une chaine vide - omettez le champ pour une entree globale.")
+            raise ValueError("Choisissez une matière, ou aucune pour une entrée globale.")
         return self
 
 

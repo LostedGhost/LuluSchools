@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { libelle } from "../../utils/libelles";
 import { listerSessionsLive, obtenirResumeSessionLive } from "../../api/cours_direct";
 import { messageErreur, codeErreur } from "../../api/client";
 import { useMesEnfants } from "../../tuteur/useMesEnfants";
@@ -84,7 +85,7 @@ export function SessionsLiveEnfantPage() {
                 <Card key={s.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                     <span style={{ fontSize: "var(--text-sm)" }}>{new Date(s.date_heure).toLocaleString("fr-FR")}</span>
-                    <Badge tone={s.statut === "terminee" ? "success" : s.statut === "en_cours" ? "pending" : "neutral"}>{s.statut}</Badge>
+                    <Badge tone={s.statut === "terminee" ? "success" : s.statut === "en_cours" ? "pending" : "neutral"}>{libelle(s.statut)}</Badge>
                   </div>
                   {s.statut === "terminee" && (
                     <div style={{ marginTop: "12px" }}>

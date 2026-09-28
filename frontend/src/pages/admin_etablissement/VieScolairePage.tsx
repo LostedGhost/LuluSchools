@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { libelle } from "../../utils/libelles";
 import { useParams, useNavigate } from "react-router-dom";
 import { consulterVieScolaire } from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
@@ -116,7 +117,7 @@ export function VieScolairePage() {
                       {i.classe_niveau}{i.classe_filiere ? ` ${i.classe_filiere}` : ""} — {i.annee_academique}
                     </span>
                   </div>
-                  <Badge tone={TONE_STATUT[i.statut] ?? "neutral"}>{i.statut}</Badge>
+                  <Badge tone={TONE_STATUT[i.statut] ?? "neutral"}>{libelle(i.statut)}</Badge>
                 </div>
               </Card>
             ))}
@@ -132,7 +133,7 @@ export function VieScolairePage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
                     <div>
                       <strong style={{ color: "var(--ink)" }}>{b.etablissement_nom}</strong>
-                      <span className="text-sm" style={{ color: "var(--ink-soft)", marginLeft: "8px" }}>{b.periode}</span>
+                      <span className="text-sm" style={{ color: "var(--ink-soft)", marginLeft: "8px" }}>{libelle(b.periode)}</span>
                     </div>
                     <span className="monospace" style={{ fontWeight: 700, color: "var(--primary-deep)" }}>
                       {b.moyenne_generale.toFixed(2)}/20 {b.decision_passage ? `— ${b.decision_passage}` : ""}
