@@ -53,7 +53,10 @@ de schéma), tests PostgreSQL en CI, arbitrages messagerie/contrôleurs, parcour
 (flux SSE, pièces jointes image/PDF, aide générale de l'élève, synthèse vocale, migration `0018`,
 vérifiée contre le vrai FreeLLM), plafonds de tokens retirés (1000 messages/jour), et
 **seed réécrit** (`backend/scripts/seed_donnees/`, UAC toujours présente, auto-vérifié sur
-39 règles métier, `seed_render.bat` pour la base en ligne). 311 tests au vert
+39 règles métier, `seed_render.bat` pour la base en ligne), migration 0017 rendue idempotente
+(échec du déploiement Render), puis **simplification de l'administration** (boîte « À traiter »,
+automatisations, actions groupées, IA qui prépare, remboursements Kkiapay automatiques, migration
+`0019`, voir `docs/simplification-administration.md`). 323 tests au vert
 sous SQLite et PostgreSQL. Rapport, actions hors code (rotation du mot de passe DB exposé
 dans l'historique git, secrets Render) et risques résiduels :
 `docs/audit-securite-2026-09-27.md`.

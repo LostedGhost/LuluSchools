@@ -37,6 +37,19 @@ API LuluSchools : Python 3.13, FastAPI, SQLAlchemy 2.0 + Alembic, PostgreSQL, pa
 - `app/modules/evaluations/` — enrichi (UC-26) : nature formative/sommative, sujet/barème en document, soumission par copie image
 - `app/modules/pedagogie/` — enrichi (UC-27) : El Professor côté enseignant (conseil éducatif/moral/professionnel) + garde-fou d'alerte
 - `app/modules/pedagogie/el_professor_chat.py` (2026-09-27) — interface de conversation commune aux 4 personas : `POST /el-professor/{persona}/sessions/{id}/flux` (SSE, pièce jointe image/PDF), `PATCH`/`DELETE` d'une conversation, `GET/POST /el-professor/eleve/sessions` (aide générale sans cours), `POST /el-professor/synthese-vocale`. Réutilise les contrôles d'accès et `_detecter_signal_alerte` de `router.py` ; persistance après le flux via `get_session_factory`. Côté élève, seule la question déclenche l'alerte (origine `ELEVE`, exclue de la vue tuteur) et une consigne « détresse » est ajoutée avant l'appel.
+- **Simplification de l'administration (2026-09-28, `docs/simplification-administration.md`)** :
+  `app/modules/administration/a_traiter.py` (`GET /administration/a-traiter` : toutes les files
+  de l'A+ ou de l'A++, `POST /administration/remboursements/effectues`) ;
+  `inscriptions/router.py::valider_inscription_interne` (validation unitaire, `valider-en-lot`,
+  `rejeter-en-lot`, admission automatique via `Etablissement.admission_automatique`,
+  `PATCH /etablissements/{id}/parametres`) ; `actes/generation.py` (attestation/relevé générés
+  et livrés au paiement, `TypeActeAcademique.modele_document`) et `actes/analyse.py` (avis IA sur
+  les réclamations) ; `recrutement/automatisation.py` (renotation planifiée, `recruter` en un clic,
+  `reconduire-en-lot`) ; `etablissements/affectations_auto.py` (proposition/application) ;
+  `core/moderation.py` (triage IA des signalements + `traiter-en-lot`) ; `core/litiges.py` (avis IA
+  sur les litiges) ; `core/kkiapay.py` (remboursement automatique, `remboursement_effectue`) ;
+  reversements groupés (`marketplace/transactions/reverser-en-lot`, `missions-micro-job/reverser-en-lot`).
+  Migration `0019`. Tests : `tests/test_simplification_admin.py`.
 - `app/core/documents.py` — lecture des PDF pour FreeLLM (qui ignore tout bloc non texte/image, voir `server/src/lib/content.ts` du fork) : texte extrait, ou 3 premières pages en PNG si scanné ; téléchargement borné. `pedagogie/router.py::texte_du_cours` fournit le texte d'un cours PDF à El Professor et à la génération de quiz (`Cours.texte_extrait`, extrait à la publication ou à la première demande).
 - `app/core/llm.py` — consignes El Professor factorisées (`consigne_eleve_cours`, `consigne_eleve_general`, `consigne_enseignant`, `consigne_tuteur`, `consigne_famille`, `construire_messages_el_professor`), `diffuser_el_professor` (stream), `synthese_vocale` (voix Gemini, WAV allégé de moitié par `alleger_wav`). Consigne commune : Markdown + LaTeX, contexte béninois, jamais de numéro d'urgence cité.
 - `app/modules/cours_direct/` — enrichi (UC-25) : tableau collaboratif, permissions de craie, chat de session, canal WebSocket temps réel

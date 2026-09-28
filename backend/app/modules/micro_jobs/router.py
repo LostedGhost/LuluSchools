@@ -1,11 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.litiges import recommander_en_arriere_plan
+from app.core.kkiapay import KkiapayClient, get_kkiapay_client, rembourser
 from app.core.audit import journaliser_action_ministerielle
-from app.core.database import get_db
+from app.core.database import get_db, get_session_factory
+from app.core.llm import FreeLLMClient, get_llm_client
 from app.core.deps import api_error, get_current_active_user, require_roles
 from app.core.etudiant import est_etudiant
 from app.modules.coffre_fort.models import ModuleDepenseCoffreFort
@@ -30,6 +33,8 @@ from app.modules.micro_jobs.schemas import (
     MissionMicroJobOut,
     OffreMicroJobCreate,
     OffreMicroJobOut,
+    ResultatReversementEnLot,
+    ReversementEnLotRequest,
     ReverserPrestataireRequest,
 )
 from app.modules.paiements.schemas import AmorcerPaiementRequest
@@ -266,7 +271,10 @@ def valider_mission(
 def contester_mission(
     mission_id: str,
     payload: ContesterMissionRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    session_factory: sessionmaker = Depends(get_session_factory),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
     utilisateur: Utilisateur = Depends(_exiger_client_micro_job),
 ) -> ContestationMicroJob:
     mission = db.get(MissionMicroJob, mission_id)
@@ -286,6 +294,7 @@ def contester_mission(
     db.add(contestation)
     db.commit()
     db.refresh(contestation)
+    background_tasks.add_task(recommander_en_arriere_plan, session_factory, ContestationMicroJob, contestation.id, llm_client)
     return contestation
 
 
@@ -335,6 +344,8 @@ def lister_contestations_micro_job(
                 motif=contestation.motif,
                 statut=contestation.statut,
                 decision_motif=contestation.decision_motif,
+                ia_decision=contestation.ia_decision,
+                ia_justification=contestation.ia_justification,
                 created_at=contestation.created_at,
                 offre_titre=offre.titre,
                 prix=mission.prix_paye,
@@ -388,6 +399,7 @@ def decider_contestation(
     contestation_id: str,
     payload: DecisionContestationRequest,
     db: Session = Depends(get_db),
+    kkiapay: KkiapayClient = Depends(get_kkiapay_client),
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> ContestationMicroJob:
     contestation = db.get(ContestationMicroJob, contestation_id)
@@ -409,6 +421,8 @@ def decider_contestation(
         if payload.decision == StatutContestationMicroJob.ACCEPTEE
         else StatutMissionMicroJob.VALIDEE
     )
+    if mission.statut == StatutMissionMicroJob.REMBOURSEE:
+        rembourser(kkiapay, mission)
     journaliser_action_ministerielle(
         db, admin, f"micro_job.contestation.{payload.decision.value}", "contestation_micro_job", contestation.id,
         payload.decision_motif,
@@ -491,6 +505,32 @@ def reverser_prestataire(
     db.commit()
     db.refresh(mission)
     return mission
+
+
+@router.post("/missions-micro-job/reverser-en-lot", response_model=ResultatReversementEnLot)
+def reverser_prestataire_en_lot(
+    payload: ReversementEnLotRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ResultatReversementEnLot:
+    """Toutes les missions validees d'un meme prestataire, payees par un seul virement
+    Mobile Money (tout ou rien, un seul prestataire par lot)."""
+    missions = [db.get(MissionMicroJob, i) for i in dict.fromkeys(payload.ids)]
+    if any(m is None for m in missions):
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Une ou plusieurs missions sont introuvables.")
+    if len({m.prestataire_id for m in missions}) != 1:
+        raise api_error(status.HTTP_409_CONFLICT, "prestataires_multiples", "Un lot ne concerne qu'un seul prestataire.")
+    for mission in missions:
+        if _appliquer_validation_tacite(db, mission).statut != StatutMissionMicroJob.VALIDEE:
+            raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une des missions n'est pas prete a etre reversee.")
+    for mission in missions:
+        mission.reference_paiement_prestataire = payload.reference_paiement
+        mission.statut = StatutMissionMicroJob.PAYEE
+        journaliser_action_ministerielle(
+            db, admin, "micro_job.reverser", "mission_micro_job", mission.id, f"reference={payload.reference_paiement} (lot)"
+        )
+    db.commit()
+    return ResultatReversementEnLot(reverses=[m.id for m in missions], montant_total=sum(m.prix_paye for m in missions))
 
 
 @router.get("/mes-missions-micro-job", response_model=list[MissionMicroJobOut])

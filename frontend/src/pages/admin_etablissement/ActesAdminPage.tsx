@@ -18,6 +18,7 @@ import {
   Field,
   PageTitle,
   SectionHead,
+  Select,
   SkeletonCard,
   TextInput,
 } from "../../components/ui";
@@ -34,6 +35,7 @@ export function ActesAdminPage() {
   const [nom, setNom] = useState("");
   const [prix, setPrix] = useState(0);
   const [piecesRequises, setPiecesRequises] = useState("");
+  const [modeleDocument, setModeleDocument] = useState<"" | "attestation_scolarite" | "releve_notes">("");
   const [schemaFormulaire, setSchemaFormulaire] = useState<ChampFormulaire[]>([]);
   const [motifParId, setMotifParId] = useState<Record<string, string>>({});
   const [livraisonEnCoursId, setLivraisonEnCoursId] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function ActesAdminPage() {
         nom,
         prix,
         pieces_requises: piecesRequises,
+        modele_document: modeleDocument || null,
         schema_formulaire: schemaFormulaire.filter((c) => c.label.trim()).length > 0
           ? schemaFormulaire.filter((c) => c.label.trim())
           : undefined,
@@ -137,6 +140,13 @@ export function ActesAdminPage() {
             </Field>
             <Field label="Prix (FCFA, 0 = gratuit)" error={champErreurs.prix}>
               <TextInput type="number" min={0} value={prix} onChange={(e) => setPrix(Number(e.target.value))} style={{ width: "140px" }} />
+            </Field>
+            <Field label="Délivrance">
+              <Select value={modeleDocument} onChange={(e) => setModeleDocument(e.target.value as typeof modeleDocument)}>
+                <option value="">Traitée à la main (vous téléversez le document)</option>
+                <option value="attestation_scolarite">Automatique : attestation de scolarité générée et livrée dès le paiement</option>
+                <option value="releve_notes">Automatique : relevé de notes généré et livré dès le paiement</option>
+              </Select>
             </Field>
             <Field label="Pièces requises (description)" error={champErreurs.piecesRequises}>
               <TextInput value={piecesRequises} onChange={(e) => setPiecesRequises(e.target.value)} placeholder="Ex. CIP, acte de naissance" />

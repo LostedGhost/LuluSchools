@@ -276,6 +276,9 @@ def verifier() -> bool:
             if t is not None and t.etablissement_id != classes[classe_de_eleve[d.eleve_id]].etablissement_id:
                 violations.append(d.id)
         c.regle("Actes : payés avant traitement, document final pour un acte accepté, type de l'établissement de l'élève", violations)
+        c.regle("Actes à modèle (attestation, relevé) : livrés automatiquement dès le paiement",
+                [d.id for d in tout(DemandeActeAcademique) if types_acte.get(d.type_acte_id) is not None
+                 and types_acte[d.type_acte_id].modele_document and d.paiement_confirme and d.statut != StatutDemandeActe.ACCEPTEE])
 
         # ─── Économie étudiante ───
         etudiants = {u for u, e in etab_de_user_eleve.items() if etabs[e].type == TypeEtablissement.UP}
@@ -316,6 +319,12 @@ def verifier() -> bool:
         c.regle("Validation parentale : dépense réelle, au-dessus du seuil fixé par la famille",
                 [v.id for v in tout(ValidationParentale) if v.reference_id not in references[v.module]
                  or v.eleve_utilisateur_id not in plafonds or v.montant <= (plafonds[v.eleve_utilisateur_id].seuil_validation or 0)])
+
+        rembourses = [(TicketTransport, StatutTicket.REMBOURSE), (TicketCantine, StatutTicket.REMBOURSE),
+                      (BilletEvenement, StatutBillet.REMBOURSE), (TransactionMarketplace, StatutTransactionMarketplace.REMBOURSEE),
+                      (MissionMicroJob, StatutMissionMicroJob.REMBOURSEE)]
+        c.regle("Remboursements passés effectués (aucun faux « à rembourser à la main »)",
+                [r.id for modele, statut in rembourses for r in tout(modele) if r.statut == statut and r.paiement_confirme and not r.remboursement_effectue])
 
         # ─── Fichiers et dates ───
         colonnes = [(Cours, "lulufiles_file_id"), (Devoir, "sujet_lulufiles_file_id"), (Soumission, "copie_image_lulufiles_file_id"),

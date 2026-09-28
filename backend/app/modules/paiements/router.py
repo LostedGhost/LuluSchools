@@ -1,11 +1,13 @@
 import hmac
 import logging
 
-from fastapi import APIRouter, Depends, Header, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, status
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, get_session_factory
+from app.core.files import LuluFilesClient, get_files_client
+from app.modules.actes.generation import livrer_en_arriere_plan
 from app.core.deps import api_error
 from app.modules.actes.models import DemandeActeAcademique, StatutDemandeActe, TypeActeAcademique
 from app.modules.billetterie.models import BilletEvenement, StatutBillet
@@ -111,7 +113,10 @@ def _detacher_des_autres_ressources(db: Session, transaction_id: str, ressource)
 @router.post("/paiements/webhook/kkiapay", include_in_schema=False)
 def webhook_kkiapay(
     payload: KkiapayWebhookPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    session_factory: sessionmaker = Depends(get_session_factory),
+    files_client: LuluFilesClient = Depends(get_files_client),
     x_kkiapay_secret: str | None = Header(default=None),
 ) -> dict:
     """URL UNIQUE et fixe pour TOUT le compte Kkiapay de LuluSchools. Verifie le secret
@@ -144,4 +149,7 @@ def webhook_kkiapay(
     ressource.kkiapay_transaction_id = payload.transactionId
     _marquer_paye(ressource)
     db.commit()
+    if isinstance(ressource, DemandeActeAcademique):
+        # Acte standard : genere et livre des le paiement, sans intervention de l'A+.
+        background_tasks.add_task(livrer_en_arriere_plan, session_factory, ressource.id, files_client)
     return {"ok": True}

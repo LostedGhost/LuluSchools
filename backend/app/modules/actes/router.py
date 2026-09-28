@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, File, UploadFile, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import get_db
+from app.core.database import get_db, get_session_factory
+from app.core.llm import FreeLLMClient, get_llm_client
+from app.modules.actes.analyse import analyser_reclamation_en_arriere_plan
+from app.modules.actes.generation import generer_et_livrer, livrer_en_arriere_plan
 from app.core.deps import api_error, require_roles, verifier_portee_etablissement
 from app.core.files import MO, TYPES_DOCUMENT, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.formulaire import valider_reponses_formulaire
@@ -65,6 +68,7 @@ def creer_type_acte(
         pieces_requises=payload.pieces_requises,
         condition_eligibilite=payload.condition_eligibilite,
         schema_formulaire=[c.model_dump() for c in payload.schema_formulaire] if payload.schema_formulaire else None,
+        modele_document=payload.modele_document,
     )
     db.add(type_acte)
     db.commit()
@@ -131,7 +135,11 @@ def mes_demandes_actes(
 @router.post("/demandes-actes", response_model=DemandeActeOut, status_code=status.HTTP_201_CREATED)
 def soumettre_demande_acte(
     payload: DemandeActeCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    session_factory: sessionmaker = Depends(get_session_factory),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
     utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR)),
 ) -> DemandeActeAcademique:
     """UC-10 : seuls le titulaire (l'eleve) et ses tuteurs sont habilites a soumettre."""
@@ -181,6 +189,12 @@ def soumettre_demande_acte(
     db.add(demande)
     db.commit()
     db.refresh(demande)
+    # Acte gratuit a modele : genere et livre tout de suite (en arriere-plan) ; reclamation :
+    # l'IA prepare son avis pour l'A+ pendant que la demande attend.
+    if demande.statut == StatutDemandeActe.EN_TRAITEMENT and not demande.est_reclamation:
+        background_tasks.add_task(livrer_en_arriere_plan, session_factory, demande.id, files_client)
+    if demande.est_reclamation:
+        background_tasks.add_task(analyser_reclamation_en_arriere_plan, session_factory, demande.id, llm_client)
     return demande
 
 
@@ -385,3 +399,27 @@ def obtenir_lien_document_acte(
     except FileStorageError as exc:
         raise api_error(status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du document.") from exc
     return LienDocumentOut(url=url)
+
+
+@router.post("/demandes-actes/{demande_id}/generer-document", response_model=DemandeActeOut)
+def generer_document_acte(
+    demande_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> DemandeActeAcademique:
+    """Relance manuelle de la generation automatique (ex. LuluFiles etait indisponible au
+    moment du paiement) : un clic au lieu de rediger et televerser le document."""
+    demande = db.get(DemandeActeAcademique, demande_id)
+    if demande is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Demande introuvable.")
+    eleve = db.get(Eleve, demande.eleve_id)
+    _verifier_admin_de_l_etablissement(db, admin, _etablissement_actuel_de_l_eleve(db, eleve))
+    if not generer_et_livrer(db, demande, files_client):
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "generation_impossible",
+            "Ce document ne peut pas etre genere automatiquement (type d'acte sans modele, demande non payee ou stockage indisponible).",
+        )
+    db.refresh(demande)
+    return demande

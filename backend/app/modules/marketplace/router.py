@@ -1,10 +1,15 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import get_db
+from app.core.litiges import recommander_en_arriere_plan
+from app.core.kkiapay import KkiapayClient, get_kkiapay_client, rembourser
+from app.core.database import get_db, get_session_factory
+from app.core.llm import FreeLLMClient, get_llm_client
+from app.core.moderation import LIBELLES_DECISION, trier_en_arriere_plan
+from app.modules.messagerie.schemas import ResultatLotSignalements, TraiterSignalementsEnLotRequest
 from app.core.deps import api_error, require_roles
 from app.core.etudiant import est_etudiant
 from app.core.files import MO, TYPES_IMAGE, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
@@ -35,6 +40,8 @@ from app.modules.marketplace.schemas import (
     ContesterTransactionRequest,
     DecisionContestationMarketplaceRequest,
     PhotoAnnonceLienOut,
+    ResultatReversementEnLot,
+    ReversementEnLotRequest,
     ReverserVendeurRequest,
     RetirerAnnonceRequest,
     SignalementAnnonceOut,
@@ -291,6 +298,7 @@ def retirer_annonce_moderation(
     annonce_id: str,
     payload: RetirerAnnonceRequest,
     db: Session = Depends(get_db),
+    kkiapay: KkiapayClient = Depends(get_kkiapay_client),
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> AnnonceMarketplace:
     annonce = db.get(AnnonceMarketplace, annonce_id)
@@ -310,6 +318,7 @@ def retirer_annonce_moderation(
                 if transaction.paiement_confirme
                 else StatutTransactionMarketplace.ANNULEE
             )
+            rembourser(kkiapay, transaction)
 
     annonce.statut = StatutAnnonce.RETIREE
     db.commit()
@@ -323,7 +332,12 @@ def retirer_annonce_moderation(
     status_code=status.HTTP_201_CREATED,
 )
 def signaler_annonce(
-    annonce_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE))
+    annonce_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    session_factory: sessionmaker = Depends(get_session_factory),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
 ) -> SignalementAnnonceMarketplace:
     annonce = db.get(AnnonceMarketplace, annonce_id)
     if annonce is None:
@@ -345,6 +359,10 @@ def signaler_annonce(
     db.add(signalement)
     db.commit()
     db.refresh(signalement)
+    background_tasks.add_task(
+        trier_en_arriere_plan, session_factory, SignalementAnnonceMarketplace, signalement.id, llm_client,
+        f"{annonce.titre} ({annonce.prix:g} FCFA) : {annonce.description}", "annonce de vente entre etudiants",
+    )
     return signalement
 
 
@@ -370,6 +388,38 @@ def signalements_en_attente(
         )
         .all()
     )
+
+
+@router.post("/marketplace/signalements/traiter-en-lot", response_model=ResultatLotSignalements)
+def traiter_signalements_annonces_en_lot(
+    payload: TraiterSignalementsEnLotRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ResultatLotSignalements:
+    """Suggestion "masquer" appliquee : l'annonce est retiree, seulement si elle est encore
+    disponible (une annonce reservee implique un remboursement : decision individuelle)."""
+    resultat = ResultatLotSignalements(traites=[], ignores=[])
+    for signalement_id in payload.signalement_ids:
+        signalement = db.get(SignalementAnnonceMarketplace, signalement_id)
+        if signalement is None or signalement.traite:
+            resultat.ignores.append(signalement_id)
+            continue
+        annonce = db.get(AnnonceMarketplace, signalement.annonce_id)
+        try:
+            verifier_admin_de_l_etablissement(db, admin, annonce.etablissement_id)
+        except HTTPException:
+            resultat.ignores.append(signalement_id)
+            continue
+        decision = payload.decision or LIBELLES_DECISION.get(signalement.ia_decision)
+        if decision is None or (payload.decision is None and signalement.ia_decision == "masquer" and annonce.statut != StatutAnnonce.DISPONIBLE):
+            resultat.ignores.append(signalement_id)
+            continue
+        if payload.decision is None and signalement.ia_decision == "masquer":
+            annonce.statut = StatutAnnonce.RETIREE
+        signalement.traite, signalement.decision, signalement.traite_par_id = True, decision, admin.id
+        resultat.traites.append(signalement_id)
+    db.commit()
+    return resultat
 
 
 @router.post("/marketplace/signalements/{signalement_id}/traiter", response_model=SignalementAnnonceOut)
@@ -561,7 +611,10 @@ def confirmer_reception(
 def contester_transaction(
     transaction_id: str,
     payload: ContesterTransactionRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    session_factory: sessionmaker = Depends(get_session_factory),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
     utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE)),
 ) -> ContestationMarketplace:
     transaction = db.get(TransactionMarketplace, transaction_id)
@@ -582,6 +635,7 @@ def contester_transaction(
     db.add(contestation)
     db.commit()
     db.refresh(contestation)
+    background_tasks.add_task(recommander_en_arriere_plan, session_factory, ContestationMarketplace, contestation.id, llm_client)
     return contestation
 
 
@@ -640,6 +694,8 @@ def contestations_en_attente(
                 "motif": contestation.motif,
                 "statut": contestation.statut,
                 "decision_motif": contestation.decision_motif,
+                "ia_decision": contestation.ia_decision,
+                "ia_justification": contestation.ia_justification,
                 "created_at": contestation.created_at,
                 "annonce_titre": annonce.titre if annonce is not None else "Annonce introuvable",
                 "prix_paye": transaction.prix_paye if transaction is not None else 0.0,
@@ -653,6 +709,7 @@ def decider_contestation(
     contestation_id: str,
     payload: DecisionContestationMarketplaceRequest,
     db: Session = Depends(get_db),
+    kkiapay: KkiapayClient = Depends(get_kkiapay_client),
     admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
 ) -> ContestationMarketplace:
     contestation = db.get(ContestationMarketplace, contestation_id)
@@ -674,6 +731,7 @@ def decider_contestation(
     if payload.decision == StatutContestationMarketplace.ACCEPTEE:
         transaction.statut = StatutTransactionMarketplace.REMBOURSEE
         annonce.statut = StatutAnnonce.DISPONIBLE
+        rembourser(kkiapay, transaction)
     else:
         transaction.statut = StatutTransactionMarketplace.CONFIRMEE
     db.commit()
@@ -703,6 +761,33 @@ def reverser_vendeur(
     db.commit()
     db.refresh(transaction)
     return transaction
+
+
+@router.post("/marketplace/transactions/reverser-en-lot", response_model=ResultatReversementEnLot)
+def reverser_vendeur_en_lot(
+    payload: ReversementEnLotRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ResultatReversementEnLot:
+    """Toutes les ventes pretes d'un meme vendeur, payees par un seul virement : tout ou
+    rien (un lot melangeant plusieurs vendeurs ou une vente pas encore confirmee est refuse,
+    pour qu'une reference ne soit jamais rattachee au mauvais beneficiaire)."""
+    transactions = [db.get(TransactionMarketplace, i) for i in dict.fromkeys(payload.ids)]
+    if any(t is None for t in transactions):
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Une ou plusieurs transactions sont introuvables.")
+    annonces = [db.get(AnnonceMarketplace, t.annonce_id) for t in transactions]
+    if len({a.vendeur_id for a in annonces}) != 1:
+        raise api_error(status.HTTP_409_CONFLICT, "vendeurs_multiples", "Un lot ne concerne qu'un seul vendeur.")
+    for transaction, annonce in zip(transactions, annonces):
+        verifier_admin_de_l_etablissement(db, admin, annonce.etablissement_id)
+        if _appliquer_confirmation_tacite(db, transaction).statut != StatutTransactionMarketplace.CONFIRMEE:
+            raise api_error(status.HTTP_409_CONFLICT, "statut_invalide", "Une des ventes n'est pas prete a etre reversee.")
+    for transaction, annonce in zip(transactions, annonces):
+        transaction.reference_paiement_vendeur = payload.reference_paiement
+        transaction.statut = StatutTransactionMarketplace.FINALISEE
+        annonce.statut = StatutAnnonce.VENDUE
+    db.commit()
+    return ResultatReversementEnLot(reverses=[t.id for t in transactions], montant_total=sum(t.prix_paye for t in transactions))
 
 
 @router.get(
@@ -740,6 +825,7 @@ def transactions_a_reverser(
                 id=transaction.id,
                 annonce_titre=annonce.titre,
                 prix_paye=transaction.prix_paye,
+                vendeur_id=annonce.vendeur_id,
                 vendeur_nom=vendeur.nom if vendeur else "",
                 vendeur_prenom=vendeur.prenom if vendeur else "",
                 vendeur_telephone=vendeur.telephone if vendeur else None,

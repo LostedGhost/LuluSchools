@@ -12,7 +12,10 @@ from app.core.config import settings
 from app.core.database import Base, get_db, get_session_factory
 from app.core.email import EmailDeliveryError, get_email_client
 from app.core.files import get_files_client
+from app.core.kkiapay import get_kkiapay_client
 from app.core.llm import (
+    AssistanceAdminError,
+    ReclamationAnalyseError,
     CorrectionError,
     DigestFamilleError,
     DocumentScoringError,
@@ -175,6 +178,12 @@ class FakeLLMClient:
         self.messages_flux_el_professor: list[list[dict]] = []
         self.audio_synthese = b"RIFF-audio-simule"
         self.echec_synthese_vocale = False
+        # Aides a la decision administrative (simplification A+/A++)
+        self.analyse_reclamation = "Réclamation partiellement fondée : la question 2 mérite un point de plus."
+        self.syllabus = "Missions : enseigner la matière selon le référentiel national."
+        self.triage_signalement = {"gravite": "faible", "resume": "Désaccord sans gravité.", "decision": "classer"}
+        self.avis_litige = {"decision": "acceptee", "justification": "L'article ne correspond pas à l'annonce."}
+        self.echec_assistance = False
 
     def noter_document(self, image_bytes: bytes, content_type: str, critere: str) -> float:
         for type_document in self.types_en_echec:
@@ -247,6 +256,26 @@ class FakeLLMClient:
             raise SyntheseVocaleError("echec simule")
         return self.audio_synthese
 
+    def analyser_reclamation(self, copie: str, motif: str) -> str:
+        if self.echec_assistance:
+            raise ReclamationAnalyseError("echec simule")
+        return self.analyse_reclamation
+
+    def rediger_syllabus(self, titre_poste: str, matiere, etablissement: str) -> str:
+        if self.echec_assistance:
+            raise AssistanceAdminError("echec simule")
+        return self.syllabus
+
+    def trier_signalement(self, contenu_signale: str, contexte: str) -> dict:
+        if self.echec_assistance:
+            raise AssistanceAdminError("echec simule")
+        return dict(self.triage_signalement)
+
+    def recommander_litige(self, faits: str) -> dict:
+        if self.echec_assistance:
+            raise AssistanceAdminError("echec simule")
+        return dict(self.avis_litige)
+
     def generer_digest_famille(self, eleve_nom: str, sources: list[str]) -> str:
         if self.echec_digest_famille:
             raise DigestFamilleError("echec simule")
@@ -258,6 +287,25 @@ def fake_llm_client() -> FakeLLMClient:
     return FakeLLMClient()
 
 
+class FakeKkiapayClient:
+    """Remboursements Kkiapay simules : jamais d'appel reseau pendant les tests."""
+
+    def __init__(self) -> None:
+        self.rembourses: list[str] = []
+        self.echec = False
+
+    def rembourser(self, transaction_id: str) -> bool:
+        if self.echec or not transaction_id:
+            return False
+        self.rembourses.append(transaction_id)
+        return True
+
+
+@pytest.fixture()
+def fake_kkiapay_client() -> FakeKkiapayClient:
+    return FakeKkiapayClient()
+
+
 @pytest.fixture()
 def test_session_factory(db_session):
     """Sessionmaker lie au MEME moteur (StaticPool) que db_session, pour que les
@@ -267,7 +315,7 @@ def test_session_factory(db_session):
 
 
 @pytest.fixture()
-def client(db_session, test_session_factory, fake_email_client, fake_files_client, fake_llm_client):
+def client(db_session, test_session_factory, fake_email_client, fake_files_client, fake_llm_client, fake_kkiapay_client):
     def _override_get_db():
         yield db_session
 
@@ -276,6 +324,7 @@ def client(db_session, test_session_factory, fake_email_client, fake_files_clien
     app.dependency_overrides[get_email_client] = lambda: fake_email_client
     app.dependency_overrides[get_files_client] = lambda: fake_files_client
     app.dependency_overrides[get_llm_client] = lambda: fake_llm_client
+    app.dependency_overrides[get_kkiapay_client] = lambda: fake_kkiapay_client
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

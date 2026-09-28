@@ -61,3 +61,27 @@ class EleveMeOut(BaseModel):
     est_etudiant: bool = False
     professeur_principal_nom: str | None = None
     professeur_principal_prenom: str | None = None
+
+
+class LotInscriptionsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    inscription_ids: list[str] = Field(min_length=1, max_length=500)
+
+
+class LotRejetInscriptionsRequest(LotInscriptionsRequest):
+    motif: str = Field(min_length=3, max_length=500)
+
+
+class EchecLot(BaseModel):
+    id: str
+    code: str
+    message: str
+
+
+class ResultatLotInscriptions(BaseModel):
+    """`validees` : inscriptions traitees (validees, ou rejetees pour un rejet en lot) ;
+    `refusees` : celles qui n'ont pas pu l'etre, avec leur motif."""
+
+    validees: list[str]
+    refusees: list[EchecLot]

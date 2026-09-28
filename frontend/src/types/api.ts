@@ -55,6 +55,8 @@ export interface EtablissementOut {
   longitude: number | null;
   description: string | null;
   actif: boolean;
+  /** Admission automatique des inscriptions (classes à l'ordre d'arrivée). */
+  admission_automatique?: boolean;
 }
 
 export interface ClasseOut {

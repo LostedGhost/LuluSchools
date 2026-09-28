@@ -9,7 +9,14 @@ from app.core.deps import api_error, require_roles, verifier_portee_etablissemen
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.etudiant import est_etudiant as est_etudiant_fn
 from app.core.security import generate_temporary_password, hash_password
-from app.modules.etablissements.models import AdminEtablissement, AffectationEnseignant, Classe, Etablissement, TypeEtablissement
+from app.modules.etablissements.models import (
+    AdminEtablissement,
+    AffectationEnseignant,
+    Classe,
+    Etablissement,
+    PolitiqueDepassement,
+    TypeEtablissement,
+)
 from app.modules.identite.models import RoleUtilisateur, Tuteur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, Nationalite, StatutInscription
 from app.modules.inscriptions.schemas import (
@@ -17,7 +24,11 @@ from app.modules.inscriptions.schemas import (
     InscriptionAvecEleveOut,
     InscriptionCreate,
     InscriptionOut,
+    EchecLot,
+    LotInscriptionsRequest,
+    LotRejetInscriptionsRequest,
     RejetInscriptionRequest,
+    ResultatLotInscriptions,
 )
 
 router = APIRouter(prefix="/inscriptions", tags=["inscriptions"])
@@ -100,6 +111,7 @@ def _enfant_existant(db: Session, tuteur_id: str, payload: InscriptionCreate) ->
 def creer_inscription(
     payload: InscriptionCreate,
     db: Session = Depends(get_db),
+    email_client: BrevoEmailClient = Depends(get_email_client),
     utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR, RoleUtilisateur.ELEVE)),
 ) -> Inscription:
     """UC-02. Seuls le titulaire (l'eleve, pour une reinscription sur son propre compte
@@ -165,6 +177,7 @@ def creer_inscription(
     )
     db.add(inscription)
     db.commit()
+    admettre_automatiquement(db, inscription, email_client)
     db.refresh(inscription)
     return inscription
 
@@ -173,6 +186,7 @@ def creer_inscription(
 def donner_consentement_parental(
     inscription_id: str,
     db: Session = Depends(get_db),
+    email_client: BrevoEmailClient = Depends(get_email_client),
     tuteur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
 ) -> Inscription:
     inscription = db.get(Inscription, inscription_id)
@@ -193,46 +207,37 @@ def donner_consentement_parental(
     inscription.statut = StatutInscription.SOUMISE
     inscription.consentement_parental_horodatage = datetime.now(timezone.utc)
     db.commit()
+    admettre_automatiquement(db, inscription, email_client)
     db.refresh(inscription)
     return inscription
 
 
-@router.post("/{inscription_id}/valider", response_model=InscriptionOut)
-def valider_inscription(
-    inscription_id: str,
-    db: Session = Depends(get_db),
-    email_client: BrevoEmailClient = Depends(get_email_client),
-    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
-) -> Inscription:
-    inscription = db.get(Inscription, inscription_id)
-    if inscription is None:
-        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Inscription introuvable.")
+class ValidationImpossible(Exception):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code, self.message = code, message
 
-    classe = db.get(Classe, inscription.classe_id)
-    verifier_portee_etablissement(db, admin, classe.etablissement_id)
 
-    if inscription.statut == StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL:
-        raise api_error(
-            status.HTTP_409_CONFLICT,
-            "consentement_manquant",
-            "Le consentement parental n'a pas encore ete donne.",
-        )
-    if inscription.statut != StatutInscription.SOUMISE:
-        raise api_error(
-            status.HTTP_409_CONFLICT, "statut_invalide", "Cette inscription n'est pas en attente de validation."
-        )
-
-    places_prises = (
+def _places_restantes(db: Session, classe: Classe) -> int:
+    prises = (
         db.query(func.count(Inscription.id))
         .filter(Inscription.classe_id == classe.id, Inscription.statut == StatutInscription.VALIDEE)
         .scalar()
     )
-    if places_prises >= classe.capacite:
-        raise api_error(
-            status.HTTP_409_CONFLICT,
-            "classe_complete",
-            "La capacite de cette classe est atteinte.",
-        )
+    return classe.capacite - prises
+
+
+def valider_inscription_interne(db: Session, inscription: Inscription, email_client: BrevoEmailClient) -> None:
+    """Validation d'une inscription SOUMISE (compte eleve, matricule, identifiants envoyes
+    au tuteur). Partagee par la validation unitaire, la validation en lot et l'admission
+    automatique. Valide et commite, ou leve ValidationImpossible sans rien modifier."""
+    classe = db.get(Classe, inscription.classe_id)
+    if inscription.statut == StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL:
+        raise ValidationImpossible("consentement_manquant", "Le consentement parental n'a pas encore ete donne.")
+    if inscription.statut != StatutInscription.SOUMISE:
+        raise ValidationImpossible("statut_invalide", "Cette inscription n'est pas en attente de validation.")
+    if _places_restantes(db, classe) <= 0:
+        raise ValidationImpossible("classe_complete", "La capacite de cette classe est atteinte.")
 
     eleve = db.get(Eleve, inscription.eleve_id)
     if eleve.utilisateur_id is not None:
@@ -240,13 +245,11 @@ def valider_inscription(
         # regeneres (regle du matricule) - aucun nouvel identifiant a envoyer.
         inscription.statut = StatutInscription.VALIDEE
         db.commit()
-        db.refresh(inscription)
-        return inscription
+        return
 
     etablissement = db.get(Etablissement, classe.etablissement_id)
     matricule = _generer_matricule(db, etablissement.type, eleve.nationalite)
     mot_de_passe_temporaire = generate_temporary_password()
-
     utilisateur_eleve = Utilisateur(
         nom=eleve.nom,
         prenom=eleve.prenom,
@@ -259,13 +262,11 @@ def valider_inscription(
     )
     db.add(utilisateur_eleve)
     db.flush()
-
     eleve.matricule = matricule
     eleve.utilisateur_id = utilisateur_eleve.id
 
     tuteur = db.get(Tuteur, eleve.tuteur_id)
     tuteur_utilisateur = db.get(Utilisateur, tuteur.utilisateur_id) if tuteur else None
-
     if tuteur_utilisateur is not None and tuteur_utilisateur.email:
         try:
             email_client.send_temporary_credentials_email(
@@ -276,16 +277,102 @@ def valider_inscription(
             )
         except EmailDeliveryError as exc:
             db.rollback()
-            raise api_error(
-                status.HTTP_502_BAD_GATEWAY,
-                "envoi_email_echoue",
-                "Impossible d'envoyer les identifiants au tuteur, veuillez reessayer.",
+            raise ValidationImpossible(
+                "envoi_email_echoue", "Impossible d'envoyer les identifiants au tuteur, veuillez reessayer."
             ) from exc
 
     inscription.statut = StatutInscription.VALIDEE
     db.commit()
+
+
+def admettre_automatiquement(db: Session, inscription: Inscription, email_client: BrevoEmailClient) -> None:
+    """Admission automatique [Delegue] : si l'etablissement l'a activee, une inscription
+    SOUMISE est validee sans attendre l'A+, mais seulement pour une classe dont la regle de
+    depassement est l'ORDRE D'ARRIVEE (critere objectif fixe par l'etablissement) et tant
+    qu'il reste de la place. Decision favorable uniquement : un refus, un concours ou un
+    tirage au sort restent des decisions humaines (Art. 401). Au moindre empechement
+    (classe complete, e-mail en echec), l'inscription reste simplement SOUMISE."""
+    if inscription.statut != StatutInscription.SOUMISE:
+        return
+    classe = db.get(Classe, inscription.classe_id)
+    etablissement = db.get(Etablissement, classe.etablissement_id)
+    if not etablissement.admission_automatique or classe.politique_depassement != PolitiqueDepassement.ORDRE_ARRIVEE:
+        return
+    try:
+        valider_inscription_interne(db, inscription, email_client)
+    except ValidationImpossible:
+        db.refresh(inscription)
+
+
+@router.post("/{inscription_id}/valider", response_model=InscriptionOut)
+def valider_inscription(
+    inscription_id: str,
+    db: Session = Depends(get_db),
+    email_client: BrevoEmailClient = Depends(get_email_client),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> Inscription:
+    inscription = db.get(Inscription, inscription_id)
+    if inscription is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Inscription introuvable.")
+    classe = db.get(Classe, inscription.classe_id)
+    verifier_portee_etablissement(db, admin, classe.etablissement_id)
+    try:
+        valider_inscription_interne(db, inscription, email_client)
+    except ValidationImpossible as exc:
+        code = status.HTTP_502_BAD_GATEWAY if exc.code == "envoi_email_echoue" else status.HTTP_409_CONFLICT
+        raise api_error(code, exc.code, exc.message) from exc
     db.refresh(inscription)
     return inscription
+
+
+@router.post("/valider-en-lot", response_model=ResultatLotInscriptions)
+def valider_inscriptions_en_lot(
+    payload: LotInscriptionsRequest,
+    db: Session = Depends(get_db),
+    email_client: BrevoEmailClient = Depends(get_email_client),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ResultatLotInscriptions:
+    """Validation groupee, par ordre d'arrivee (les plus anciennes d'abord) : chaque
+    inscription est traitee independamment ; celles qui ne peuvent pas l'etre (classe
+    complete, consentement manquant...) sont renvoyees avec leur motif."""
+    inscriptions = db.query(Inscription).filter(Inscription.id.in_(payload.inscription_ids)).all()
+    if len(inscriptions) != len(set(payload.inscription_ids)):
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Une ou plusieurs inscriptions sont introuvables.")
+    for inscription in inscriptions:
+        verifier_portee_etablissement(db, admin, db.get(Classe, inscription.classe_id).etablissement_id)
+
+    resultat = ResultatLotInscriptions(validees=[], refusees=[])
+    for inscription in sorted(inscriptions, key=lambda i: i.created_at):
+        try:
+            valider_inscription_interne(db, inscription, email_client)
+            resultat.validees.append(inscription.id)
+        except ValidationImpossible as exc:
+            resultat.refusees.append(EchecLot(id=inscription.id, code=exc.code, message=exc.message))
+    return resultat
+
+
+@router.post("/rejeter-en-lot", response_model=ResultatLotInscriptions)
+def rejeter_inscriptions_en_lot(
+    payload: LotRejetInscriptionsRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ResultatLotInscriptions:
+    """Rejet groupe avec un motif commun (ex. classe complete) - toujours une decision de
+    l'A+, jamais automatique."""
+    inscriptions = db.query(Inscription).filter(Inscription.id.in_(payload.inscription_ids)).all()
+    if len(inscriptions) != len(set(payload.inscription_ids)):
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Une ou plusieurs inscriptions sont introuvables.")
+    resultat = ResultatLotInscriptions(validees=[], refusees=[])
+    for inscription in inscriptions:
+        verifier_portee_etablissement(db, admin, db.get(Classe, inscription.classe_id).etablissement_id)
+        if inscription.statut not in (StatutInscription.SOUMISE, StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL):
+            resultat.refusees.append(EchecLot(id=inscription.id, code="statut_invalide", message="Inscription deja traitee."))
+            continue
+        inscription.statut = StatutInscription.REJETEE
+        inscription.motif_rejet = payload.motif
+        resultat.validees.append(inscription.id)
+    db.commit()
+    return resultat
 
 
 @router.post("/{inscription_id}/rejeter", response_model=InscriptionOut)

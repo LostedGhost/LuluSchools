@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.actes.models import StatutDemandeActe
@@ -13,6 +15,8 @@ class TypeActeCreate(BaseModel):
     pieces_requises: str
     condition_eligibilite: str | None = None
     schema_formulaire: list[ChampFormulaire] | None = None
+    # Genere et livre automatiquement des le paiement ; None = traitement manuel.
+    modele_document: Literal["attestation_scolarite", "releve_notes"] | None = None
 
 
 class TypeActeOut(BaseModel):
@@ -25,6 +29,7 @@ class TypeActeOut(BaseModel):
     pieces_requises: str
     condition_eligibilite: str | None
     schema_formulaire: list[ChampFormulaire] | None
+    modele_document: str | None = None
 
 
 class DemandeActeCreate(BaseModel):
@@ -63,6 +68,7 @@ class DemandeActeOut(BaseModel):
     statut: StatutDemandeActe
     paiement_confirme: bool
     motif_rejet: str | None
+    analyse_ia: str | None = None
 
 
 class TraiterDemandeRequest(BaseModel):

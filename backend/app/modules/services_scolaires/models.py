@@ -47,6 +47,9 @@ class TicketTransport(Base):
     prix_paye: Mapped[float] = mapped_column(Float)
     paiement_confirme: Mapped[bool] = mapped_column(Boolean, default=False)
     kkiapay_transaction_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
+    # Remboursement Kkiapay reellement effectue (automatique, voir core/kkiapay.py) ; False
+    # sur une ressource remboursee = remboursement a faire a la main (boite « A traiter »).
+    remboursement_effectue: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -74,4 +77,7 @@ class TicketCantine(Base):
     prix_paye: Mapped[float] = mapped_column(Float)
     paiement_confirme: Mapped[bool] = mapped_column(Boolean, default=False)
     kkiapay_transaction_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
+    # Remboursement Kkiapay reellement effectue (automatique, voir core/kkiapay.py) ; False
+    # sur une ressource remboursee = remboursement a faire a la main (boite « A traiter »).
+    remboursement_effectue: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

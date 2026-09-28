@@ -14,6 +14,7 @@ from app.core.deps import (
 from app.core.email import BrevoEmailClient, EmailDeliveryError, get_email_client
 from app.core.files import MO, TYPES_IMAGE, FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.security import generate_temporary_password, hash_password
+from app.modules.etablissements import affectations_auto
 from app.modules.etablissements.models import (
     AdminEtablissement,
     AffectationEnseignant,
@@ -44,6 +45,10 @@ from app.modules.etablissements.schemas import (
     ConsoleTuteurOut,
     ConsoleTuteursPageOut,
     DescriptionUpdate,
+    AppliquerAffectationsRequest,
+    ParametresEtablissementUpdate,
+    PropositionAffectationOut,
+    ResultatAffectationsAuto,
     EleveClasseOut,
     EtablissementCreate,
     EtablissementOut,
@@ -346,6 +351,25 @@ def modifier_description_etablissement(
     _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
 
     etablissement.description = payload.description
+    db.commit()
+    db.refresh(etablissement)
+    return etablissement
+
+
+@router.patch("/{etablissement_id}/parametres", response_model=EtablissementOut)
+def modifier_parametres_etablissement(
+    etablissement_id: str,
+    payload: ParametresEtablissementUpdate,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT)),
+) -> Etablissement:
+    """Reglages de fonctionnement choisis par l'A+ lui-meme (admission automatique des
+    inscriptions) - jamais par l'A++, qui ne gere pas le quotidien d'un etablissement."""
+    etablissement = db.get(Etablissement, etablissement_id)
+    if etablissement is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Etablissement introuvable.")
+    _verifier_admin_de_l_etablissement(db, utilisateur, etablissement_id)
+    etablissement.admission_automatique = payload.admission_automatique
     db.commit()
     db.refresh(etablissement)
     return etablissement
@@ -1053,6 +1077,29 @@ def affecter_enseignant(
     db.commit()
     db.refresh(affectation)
     return affectation
+
+
+@router.get("/{etablissement_id}/affectations/proposition", response_model=list[PropositionAffectationOut])
+def proposition_affectations(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> list[dict]:
+    """Affectations proposees automatiquement (voir affectations_auto.py), a appliquer en un clic."""
+    verifier_portee_etablissement(db, admin, etablissement_id)
+    return affectations_auto.proposer(db, etablissement_id)
+
+
+@router.post("/{etablissement_id}/affectations/appliquer", response_model=ResultatAffectationsAuto)
+def appliquer_affectations(
+    etablissement_id: str,
+    payload: AppliquerAffectationsRequest,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(RoleUtilisateur.ADMIN_ETABLISSEMENT, RoleUtilisateur.ADMIN_MINISTERIEL)),
+) -> ResultatAffectationsAuto:
+    verifier_portee_etablissement(db, admin, etablissement_id)
+    n = affectations_auto.appliquer(db, etablissement_id, [l.model_dump() for l in payload.lignes])
+    return ResultatAffectationsAuto(affectations_creees=n)
 
 
 @classes_router.get("/classes/{classe_id}/affectations", response_model=list[AffectationEnseignantOut])

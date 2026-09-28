@@ -36,6 +36,13 @@ class EtablissementOut(BaseModel):
     longitude: float | None
     description: str | None
     actif: bool
+    admission_automatique: bool = False
+
+
+class ParametresEtablissementUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    admission_automatique: bool
 
 
 class LocalisationUpdate(BaseModel):
@@ -402,3 +409,31 @@ class ConsoleNotesPageOut(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class PropositionAffectationOut(BaseModel):
+    classe_id: str
+    classe: str
+    enseignant_utilisateur_id: str
+    enseignant: str
+    matiere: str | None
+    principal: bool
+    motif: str
+
+
+class LigneAffectation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    classe_id: str
+    enseignant_utilisateur_id: str
+    principal: bool = False
+
+
+class AppliquerAffectationsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lignes: list[LigneAffectation] = Field(min_length=1, max_length=1000)
+
+
+class ResultatAffectationsAuto(BaseModel):
+    affectations_creees: int
