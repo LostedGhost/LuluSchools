@@ -83,6 +83,8 @@ def creer_cours(ctx: Contexte, classe: Classe) -> list[Cours]:
             chapitre=chapitre, format=format_cours, lulufiles_file_id=fichier,
             contenu_texte=contenu if format_cours == FormatCours.TEXTE else None,
             texte_extrait=contenu if format_cours == FormatCours.PDF else None,
+            # Lot 7.3 : tout cours oral publie porte sa transcription.
+            transcription=contenu if format_cours == FormatCours.AUDIO else None,
             created_at=publie,
         )
         ctx.ajouter(cours)

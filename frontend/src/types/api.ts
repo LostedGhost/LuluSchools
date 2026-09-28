@@ -144,6 +144,9 @@ export interface CoursOut {
   format: FormatCours;
   contenu_texte: string | null;
   lulufiles_file_id: string | null;
+  /** Lot 7.3 : obligatoire pour un cours audio ou vidéo (élèves sourds ou malentendants). */
+  transcription?: string | null;
+  a_des_sous_titres?: boolean;
 }
 
 export interface LienFichierOut {

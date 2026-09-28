@@ -16,7 +16,9 @@ import {
   EmptyState,
   Skeleton,
 } from "../../components/ui";
-import { School, BookOpen, ExternalLink } from "lucide-react";
+import { School, BookOpen, ExternalLink, Captions } from "lucide-react";
+import { ChampSousTitres, ChampTranscription } from "../../components/transcription/ChampTranscription";
+import { ModaleTranscription } from "../../components/transcription/ModaleTranscription";
 import { estRempli } from "../../utils/validation";
 
 const LABEL_FORMAT: Record<FormatCours, string> = {
@@ -60,6 +62,10 @@ export function MesCoursPage() {
   const [format, setFormat] = useState<FormatCours>("texte");
   const [contenuTexte, setContenuTexte] = useState("");
   const [fichier, setFichier] = useState<File | null>(null);
+  // Lot 7.3 : transcription obligatoire d'un cours audio/vidéo, sous-titres facultatifs.
+  const [transcription, setTranscription] = useState("");
+  const [sousTitres, setSousTitres] = useState<File | null>(null);
+  const [coursTranscription, setCoursTranscription] = useState<CoursOut | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [formErreur, setFormErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
@@ -120,6 +126,10 @@ export function MesCoursPage() {
       setFormErreur(`Veuillez joindre un fichier ${LABEL_FORMAT[format].toLowerCase()}.`);
       return;
     }
+    if ((format === "audio" || format === "video") && transcription.trim().length < 20) {
+      setFormErreur("Ajoutez la transcription du cours : les élèves sourds ou malentendants en ont besoin pour le suivre.");
+      return;
+    }
     if (format === "texte" && !contenuTexte.trim()) {
       setFormErreur("Veuillez saisir le contenu du cours.");
       return;
@@ -134,8 +144,12 @@ export function MesCoursPage() {
         format,
         format === "texte" ? contenuTexte : undefined,
         format !== "texte" ? fichier ?? undefined : undefined,
+        format === "audio" || format === "video" ? transcription.trim() : undefined,
+        format === "video" ? sousTitres ?? undefined : undefined,
       );
       setTitre("");
+      setTranscription("");
+      setSousTitres(null);
       setChapitre("");
       setContenuTexte("");
       setFichier(null);
@@ -309,6 +323,12 @@ export function MesCoursPage() {
                       required
                     />
                   </Field>
+                  {(format === "audio" || format === "video") && (
+                    <div style={{ marginTop: "12px", display: "grid", gap: "12px" }}>
+                      <ChampTranscription valeur={transcription} onChange={setTranscription} />
+                      {format === "video" && <ChampSousTitres onChange={setSousTitres} />}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -478,6 +498,9 @@ export function MesCoursPage() {
                           {c.titre}
                         </h3>
                         <Badge tone="success">Publié</Badge>
+                        {(c.format === "audio" || c.format === "video") && !c.transcription && (
+                          <Badge tone="pending">Transcription manquante</Badge>
+                        )}
                       </div>
                       <p
                         className="font-mono text-sm"
@@ -497,6 +520,16 @@ export function MesCoursPage() {
                       flexShrink: 0,
                     }}
                   >
+                    {(c.format === "audio" || c.format === "video") && (
+                      <Btn
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCoursTranscription(c)}
+                        leftIcon={<Captions size={14} aria-hidden="true" />}
+                      >
+                        Transcription
+                      </Btn>
+                    )}
                     <Btn
                       variant="outline"
                       size="sm"
@@ -597,6 +630,16 @@ export function MesCoursPage() {
             );
           })}
         </div>
+      )}
+      {coursTranscription && (
+        <ModaleTranscription
+          cours={coursTranscription}
+          onFermer={() => setCoursTranscription(null)}
+          onEnregistre={(maj) => {
+            setCours((liste) => liste.map((x) => (x.id === maj.id ? maj : x)));
+            setCoursTranscription(null);
+          }}
+        />
       )}
     </div>
   );

@@ -17,7 +17,9 @@ import {
   Btn,
   Skeleton,
 } from "../../components/ui";
-import { Target, FileText, Headphones, Video, ExternalLink, Sparkles } from "lucide-react";
+import { Target, FileText, Headphones, Video, ExternalLink, Sparkles, Volume2 } from "lucide-react";
+import { LecteurCours, TranscriptionCours } from "../../components/transcription/LecteurCours";
+import { lireTexte } from "../../accessibilite/lecteurVocal";
 
 const LABEL_FORMAT: Record<CoursOut["format"], string> = {
   texte: "Texte",
@@ -121,9 +123,31 @@ export function CoursDetailPage() {
         <SectionHead title="Contenu du cours" />
         <Card variant="soft">
           <div style={{ padding: 'var(--space-4)' }}>
-            {cours.format === "texte" ? (
+            {cours.format === "audio" || cours.format === "video" ? (
+              <>
+                <LecteurCours cours={cours} />
+                {cours.transcription ? (
+                  <TranscriptionCours texte={cours.transcription} />
+                ) : (
+                  <p style={{ color: 'var(--ink-soft)', fontSize: 'var(--text-sm)', marginTop: 'var(--space-4)' }}>
+                    La transcription de ce cours n'a pas encore été ajoutée par l'enseignant.
+                  </p>
+                )}
+              </>
+            ) : cours.format === "texte" ? (
               cours.contenu_texte ? (
-                <p style={{ color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{cours.contenu_texte}</p>
+                <>
+                  <Btn
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void lireTexte(cours.contenu_texte ?? "").catch(() => {})}
+                    leftIcon={<Volume2 size={14} aria-hidden="true" />}
+                    style={{ marginBottom: 'var(--space-3)' }}
+                  >
+                    Écouter ce cours
+                  </Btn>
+                  <p style={{ color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{cours.contenu_texte}</p>
+                </>
               ) : (
                 <p style={{ color: 'var(--ink-soft)' }}>Ce cours n'a pas encore de contenu texte renseigné.</p>
               )

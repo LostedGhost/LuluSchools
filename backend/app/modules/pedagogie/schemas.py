@@ -31,6 +31,23 @@ class CoursOut(BaseModel):
     format: FormatCours
     contenu_texte: str | None
     lulufiles_file_id: str | None
+    # Lot 7.3 : lisible par tous ceux qui voient le cours (eleve sourd, tuteur, El Professor).
+    transcription: str | None = None
+    a_des_sous_titres: bool = False
+
+
+class TranscriptionCoursIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    transcription: str = Field(min_length=20, max_length=100_000)
+    # WebVTT complet ("WEBVTT" en premiere ligne) ; None = retirer les sous-titres.
+    sous_titres_vtt: str | None = Field(default=None, max_length=500_000)
+
+
+class TranscriptionProposeeOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    transcription: str
 
 
 class LienFichierOut(BaseModel):

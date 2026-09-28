@@ -38,11 +38,21 @@ class Cours(Base):
     # plus anciens) : donne a El Professor et a la generation de quiz le contenu reel du
     # document, que contenu_texte laisse vide pour ce format.
     texte_extrait: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Lot 7.3 (handicap auditif) : transcription obligatoire pour publier un cours audio ou
+    # video, et sous-titres WebVTT facultatifs (texte court, garde en base pour etre servi
+    # et mis en cache hors ligne sans passer par LuluFiles). La transcription nourrit aussi
+    # El Professor et la generation de quiz, jusque-la aveugles sur ces formats.
+    transcription: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sous_titres_vtt: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     # UC-37/53 (lot admin ministeriel) : masquage non destructif d'un contenu signale, meme
     # pattern que Message.masque_par en messagerie (Phase 2/3) - jamais une suppression.
     masque_par_id: Mapped[str | None] = mapped_column(ForeignKey("utilisateurs.id"), nullable=True)
     masque_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def a_des_sous_titres(self) -> bool:
+        return bool(self.sous_titres_vtt)
 
 
 class Quiz(Base):

@@ -21,6 +21,7 @@ from app.core.llm import (
     DocumentScoringError,
     ElProfessorError,
     SyntheseVocaleError,
+    TranscriptionError,
     QuizGenerationError,
     ResumeSessionLiveError,
     get_llm_client,
@@ -268,6 +269,11 @@ class FakeLLMClient:
         if self.echec_flux_el_professor:
             raise ElProfessorError("echec simule")
         yield from self.morceaux_el_professor
+
+    def mettre_en_forme_transcription(self, texte: str) -> str:
+        if self.echec_assistance:
+            raise TranscriptionError("echec simule")
+        return "## Introduction\n\n" + texte
 
     def synthese_vocale(self, texte: str) -> bytes:
         if self.echec_synthese_vocale:

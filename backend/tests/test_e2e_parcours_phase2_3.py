@@ -212,7 +212,7 @@ def test_parcours_complet_des_phases_2_et_3(
 
     cours_video = client.post(
         f"/api/v1/classes/{classe['id']}/cours",
-        data={"titre": "Documentaire", "chapitre": "Chapitre 3", "format": "video"},
+        data={"titre": "Documentaire", "chapitre": "Chapitre 3", "format": "video", "transcription": "Transcription complete du cours video pour les eleves sourds."},
         files={"fichier": ("doc.mp4", io.BytesIO(b"contenu-video"), "video/mp4")},
         headers=enseignant_headers,
     )

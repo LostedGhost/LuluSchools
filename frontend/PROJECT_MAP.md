@@ -297,3 +297,9 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   `public/sw.js` (coquille en cache, contenus pédagogiques « réseau d'abord, copie sinon », vidés à la
   déconnexion, enregistré en production seulement dans `main.tsx`) ; `BandeauHorsLigne.tsx` ;
   `AuthContext` ne déconnecte plus sur une simple absence de réseau.
+- **Handicap auditif (7.3)** : `src/components/transcription/` — `ChampTranscription`/`ChampSousTitres`
+  (saisie ou dictée via `accessibilite/dictee.ts::useDictee`), `ModaleTranscription` (compléter un cours
+  existant, proposition de mise en forme par l'IA à accepter explicitement), `LecteurCours` (lecteur
+  audio/vidéo dans la page, `preload="none"`, sous-titres chargés en blob car `<track>` ne transmet pas
+  le jeton) et `TranscriptionCours` (Markdown + « Écouter »). Badge « Transcription manquante » dans
+  `MesCoursPage` ; « Écouter ce cours » sur les cours texte (`CoursDetailPage`).

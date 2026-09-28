@@ -52,6 +52,10 @@ class LectureDocumentError(Exception):
     """Lecture d'un document papier photographie (saisie papier) impossible."""
 
 
+class TranscriptionError(Exception):
+    """Levee quand FreeLLM ne peut pas mettre en forme la transcription d'un cours (Lot 7.3)."""
+
+
 class DigestFamilleError(Exception):
     """Levee quand FreeLLM ne peut pas generer le digest hebdomadaire du Radar familial (UC-36)."""
 
@@ -403,6 +407,25 @@ class FreeLLMClient:
             raise CorrectionError(f"Reponse FreeLLM non interpretable comme une note : {texte!r}")
 
         return max(0.0, min(points_max_total, float(correspondance.group())))
+
+    def mettre_en_forme_transcription(self, texte: str) -> str:
+        """Lot 7.3 : remet en forme une transcription brute (dictee, copier-coller) en
+        paragraphes et intertitres, sans rien ajouter ni retrancher. Simple PROPOSITION :
+        l'enseignant la relit et decide de l'enregistrer ou non."""
+        consigne = (
+            "Tu remets en forme la transcription d'un cours oral pour des eleves sourds ou "
+            "malentendants. Corrige la ponctuation et les fautes evidentes, decoupe en paragraphes "
+            "courts avec des intertitres Markdown (##) quand le sujet change. N'ajoute AUCUNE "
+            "information, ne resume pas, ne supprime rien d'important. Reponds uniquement avec le "
+            "texte mis en forme, en francais."
+        )
+        try:
+            response = self._client.chat.completions.create(
+                model="auto", messages=[{"role": "system", "content": consigne}, {"role": "user", "content": texte}]
+            )
+        except OpenAIError as exc:
+            raise TranscriptionError("FreeLLM indisponible ou a refuse la requete.") from exc
+        return _texte_ou_erreur(response, TranscriptionError).strip()
 
     def generer_quiz(self, contenu_cours: str, nombre_questions: int = 5) -> list[dict]:
         """UC-07 : le quiz est genere par le LLM a partir du contenu du cours. Format

@@ -65,7 +65,7 @@ def test_publication_cours_video_accepte_un_format_plus_grand(client, classe_ave
     ctx = classe_avec_enseignant_et_eleve
     reponse = client.post(
         f"/api/v1/classes/{ctx['classe']['id']}/cours",
-        data={"titre": "Video de cours", "chapitre": "Chapitre 1", "format": "video"},
+        data={"titre": "Video de cours", "chapitre": "Chapitre 1", "format": "video", "transcription": "Transcription complete du cours video pour les eleves sourds."},
         files={"fichier": ("cours.mp4", io.BytesIO(b"contenu-video"), "video/mp4")},
         headers=ctx["enseignant_headers"],
     )
@@ -80,7 +80,7 @@ def test_publication_cours_video_refuse_au_dela_de_200_mo(client, classe_avec_en
     ctx = classe_avec_enseignant_et_eleve
     reponse = client.post(
         f"/api/v1/classes/{ctx['classe']['id']}/cours",
-        data={"titre": "Video trop lourde", "chapitre": "Chapitre 1", "format": "video"},
+        data={"titre": "Video trop lourde", "chapitre": "Chapitre 1", "format": "video", "transcription": "Transcription complete du cours video pour les eleves sourds."},
         files={"fichier": ("cours.mp4", io.BytesIO(b"contenu-video-plus-long-que-la-limite"), "video/mp4")},
         headers=ctx["enseignant_headers"],
     )

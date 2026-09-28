@@ -451,3 +451,15 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
 - `POST /accessibilite/synthese-vocale` : lecture à voix haute pour TOUS les rôles (repli quand le
   navigateur n'a pas de voix française), 60 lectures/heure, texte ≤ 4000 caractères.
 - Migration `0021_preferences_accessibilite`.
+
+### app/modules/pedagogie/ (7.3, handicap auditif)
+- `Cours.transcription` (obligatoire à la publication d'un cours `audio`/`video`, ≥ 20 caractères,
+  erreur `transcription_requise`) et `Cours.sous_titres_vtt` (WebVTT facultatif, vidéo, validé
+  « WEBVTT », 500 Ko max). `CoursOut.transcription` + `a_des_sous_titres`.
+- `PUT /cours/{id}/transcription` (auteur seulement), `POST /cours/{id}/transcription/mise-en-forme`
+  (PROPOSITION FreeLLM `mettre_en_forme_transcription`, jamais enregistrée d'office, 20/heure),
+  `GET /cours/{id}/sous-titres` (text/vtt).
+- `texte_du_cours()` lit la transcription d'un cours oral : quiz et El Professor fonctionnent
+  désormais sur l'audio et la vidéo. FreeLLM n'a pas de route de transcription audio (vérifié dans son
+  code source) : la transcription vient de l'enseignant (saisie ou dictée navigateur).
+- Migration `0022_transcriptions_cours` ; seed : les cours audio portent leur transcription.

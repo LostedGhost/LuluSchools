@@ -3,7 +3,7 @@ import unicodedata
 import httpx
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,8 @@ from app.core.deps import (
     verifier_portee_etablissement,
 )
 from app.core.files import FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
-from app.core.llm import ElProfessorError, FreeLLMClient, QuizGenerationError, get_llm_client
+from app.core.llm import ElProfessorError, FreeLLMClient, QuizGenerationError, TranscriptionError, get_llm_client
+from app.core.rate_limit import consommer
 from app.modules.etablissements.models import AffectationEnseignant, Classe, Etablissement
 from app.modules.identite.models import RoleUtilisateur, Utilisateur
 from app.modules.inscriptions.models import Eleve, Inscription, StatutInscription
@@ -61,6 +62,8 @@ from app.modules.pedagogie.schemas import (
     SessionElProfessorTuteurOut,
     TentativeQuizCreate,
     TentativeQuizOut,
+    TranscriptionCoursIn,
+    TranscriptionProposeeOut,
 )
 from app.modules.vie_scolaire.models import EntreeVieScolaire
 
@@ -75,6 +78,44 @@ _TYPES_PAR_FORMAT = {
     FormatCours.AUDIO: frozenset({"audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/webm", "audio/aac"}),
     FormatCours.VIDEO: frozenset({"video/mp4", "video/webm", "video/ogg", "video/quicktime"}),
 }
+
+
+_FORMATS_ORAUX = (FormatCours.AUDIO, FormatCours.VIDEO)
+_MIN_TRANSCRIPTION = 20
+_MAX_SOUS_TITRES_OCTETS = 500_000
+_MISES_EN_FORME_PAR_HEURE = 20
+
+
+def _valider_vtt(texte: str | None) -> str | None:
+    """Lot 7.3 : sous-titres WebVTT facultatifs. Tout autre format est refuse plutot que
+    servi plus tard a un lecteur video qui l'ignorerait sans le dire."""
+    if texte is None or not texte.strip():
+        return None
+    if not texte.lstrip().startswith("WEBVTT"):
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "sous_titres_invalides",
+            "Les sous-titres doivent être au format WebVTT (fichier .vtt commençant par « WEBVTT »).",
+        )
+    return texte.strip() + "\n"
+
+
+def _lire_sous_titres(fichier: UploadFile | None) -> str | None:
+    if fichier is None:
+        return None
+    brut = fichier.file.read(_MAX_SOUS_TITRES_OCTETS + 1)
+    if len(brut) > _MAX_SOUS_TITRES_OCTETS:
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "fichier_trop_volumineux", "Sous-titres trop volumineux (500 Ko au plus)."
+        )
+    return _valider_vtt(brut.decode("utf-8-sig", errors="replace"))
+
+
+def _verifier_auteur_du_cours(enseignant: Utilisateur, cours: Cours) -> None:
+    if enseignant.role != RoleUtilisateur.ENSEIGNANT or cours.enseignant_id != enseignant.id:
+        raise api_error(
+            status.HTTP_403_FORBIDDEN, "acces_refuse", "Seul l'enseignant auteur du cours peut modifier sa transcription."
+        )
 
 
 def _verifier_enseignant_rattache(db: Session, enseignant: Utilisateur, classe_id: str) -> None:
@@ -154,9 +195,12 @@ def _verifier_lecture_contenus_classe(db: Session, utilisateur: Utilisateur, cla
 def texte_du_cours(db: Session, cours: Cours, files_client: LuluFilesClient) -> str:
     """Contenu textuel d'un cours : saisi par l'enseignant, ou extrait de son PDF. Les cours
     PDF publies avant l'extraction a l'upload sont lus une fois, a la premiere demande, puis
-    memorises (texte_extrait vide = PDF sans texte exploitable, on ne reessaie pas)."""
+    memorises (texte_extrait vide = PDF sans texte exploitable, on ne reessaie pas).
+    Lot 7.3 : un cours audio/video est lu a travers sa transcription."""
     if cours.contenu_texte:
         return cours.contenu_texte
+    if cours.format in _FORMATS_ORAUX:
+        return cours.transcription or ""
     if cours.format != FormatCours.PDF or not cours.lulufiles_file_id:
         return ""
     if cours.texte_extrait is None:
@@ -189,6 +233,8 @@ def publier_cours(
     format: FormatCours = Form(...),
     contenu_texte: str | None = Form(None),
     fichier: UploadFile | None = File(None),
+    transcription: str | None = Form(None, max_length=100_000),
+    sous_titres: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
     enseignant: Utilisateur = Depends(get_current_active_user),
@@ -197,6 +243,16 @@ def publier_cours(
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
     _verifier_enseignant_rattache(db, enseignant, classe.id)
+    # Lot 7.3 : un eleve sourd ou malentendant doit pouvoir suivre tout cours oral.
+    transcription = (transcription or "").strip() or None
+    if format in _FORMATS_ORAUX and (transcription is None or len(transcription) < _MIN_TRANSCRIPTION):
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "transcription_requise",
+            "Ajoutez la transcription du cours (quelques phrases au moins) : elle permet aux élèves sourds "
+            "ou malentendants de le suivre.",
+        )
+    sous_titres_vtt = _lire_sous_titres(sous_titres) if format == FormatCours.VIDEO else None
 
     lulufiles_file_id = None
     texte_extrait = None
@@ -226,6 +282,8 @@ def publier_cours(
         contenu_texte=contenu_texte,
         lulufiles_file_id=lulufiles_file_id,
         texte_extrait=texte_extrait,
+        transcription=transcription if format in _FORMATS_ORAUX else None,
+        sous_titres_vtt=sous_titres_vtt,
     )
     db.add(cours)
     db.commit()
@@ -266,6 +324,57 @@ def obtenir_lien_fichier_cours(
             status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir le lien du fichier, veuillez réessayer."
         ) from exc
     return LienFichierOut(url=url)
+
+
+@router.put("/cours/{cours_id}/transcription", response_model=CoursOut)
+def enregistrer_transcription(
+    cours_id: str,
+    payload: TranscriptionCoursIn,
+    db: Session = Depends(get_db),
+    enseignant: Utilisateur = Depends(get_current_active_user),
+) -> Cours:
+    """Lot 7.3 : complete ou corrige la transcription (cours publies avant cette regle)."""
+    cours = _cours_lisible(db, enseignant, cours_id)
+    _verifier_auteur_du_cours(enseignant, cours)
+    if cours.format not in _FORMATS_ORAUX:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "format_incompatible", "Seul un cours audio ou vidéo a une transcription.")
+    cours.transcription = payload.transcription.strip()
+    if cours.format == FormatCours.VIDEO:
+        cours.sous_titres_vtt = _valider_vtt(payload.sous_titres_vtt)
+    db.commit()
+    db.refresh(cours)
+    return cours
+
+
+@router.post("/cours/{cours_id}/transcription/mise-en-forme", response_model=TranscriptionProposeeOut)
+def proposer_mise_en_forme_transcription(
+    cours_id: str,
+    payload: TranscriptionCoursIn,
+    db: Session = Depends(get_db),
+    llm_client: FreeLLMClient = Depends(get_llm_client),
+    enseignant: Utilisateur = Depends(get_current_active_user),
+) -> TranscriptionProposeeOut:
+    """PROPOSITION de l'IA, jamais enregistree d'office : l'enseignant relit puis enregistre."""
+    cours = _cours_lisible(db, enseignant, cours_id)
+    _verifier_auteur_du_cours(enseignant, cours)
+    consommer(db, f"transcription_ia:{enseignant.id}", _MISES_EN_FORME_PAR_HEURE, 3600)
+    try:
+        texte = llm_client.mettre_en_forme_transcription(payload.transcription)
+    except TranscriptionError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "ia_indisponible", "La mise en forme automatique est indisponible, réessayez plus tard."
+        ) from exc
+    return TranscriptionProposeeOut(transcription=texte)
+
+
+@router.get("/cours/{cours_id}/sous-titres")
+def obtenir_sous_titres(
+    cours_id: str, db: Session = Depends(get_db), utilisateur: Utilisateur = Depends(get_current_active_user)
+) -> Response:
+    cours = _cours_lisible(db, utilisateur, cours_id)
+    if not cours.sous_titres_vtt:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Ce cours n'a pas de sous-titres.")
+    return Response(content=cours.sous_titres_vtt, media_type="text/vtt; charset=utf-8")
 
 
 @router.get("/cours/{cours_id}/quiz", response_model=list[QuizOut])
