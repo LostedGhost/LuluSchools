@@ -40,6 +40,7 @@ import {
   Sparkles,
   Inbox,
   Menu,
+  ScanLine,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -142,6 +143,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
     return [
       { to: "/admin-etablissement/a-traiter", label: "À traiter", court: "À traiter", icon: <Inbox size={iconSize} /> },
       { to: "/admin-etablissement", label: "Tableau de bord", icon: <LayoutDashboard size={iconSize} />, end: true },
+      { to: "/admin-etablissement/saisie-papier", label: "Saisie papier", court: "Papier", icon: <ScanLine size={iconSize} /> },
       { to: "/admin-etablissement/rentree", label: "Rentrée scolaire", icon: <Send size={iconSize} /> },
       { to: "/admin-etablissement/inscriptions", label: "Inscriptions", icon: <UserCheck size={iconSize} /> },
       { to: "/admin-etablissement/vie-scolaire", label: "Vie scolaire", icon: <BookMarked size={iconSize} /> },

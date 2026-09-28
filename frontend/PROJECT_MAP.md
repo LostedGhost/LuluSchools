@@ -212,6 +212,12 @@ pour les phases précédentes.
 
 **Validé par `tsc -b` (aucune erreur), `vite build` (bundle généré) et `oxlint` (0 erreur, uniquement des warnings déjà présents partout ailleurs dans le projet) — ET, contrairement aux Phases 2 à 5, par un parcours manuel complet en navigateur réel** : serveur backend lancé avec base SQLite jetable et `get_email_client`/`get_llm_client`/`get_files_client`/`get_session_factory` substitués par des doublures de test (même principe que `tests/conftest.py`), un établissement/classe/enseignant (professeur principal)/tuteur/élève créés via de vrais appels HTTP (pas d'insertion directe en base), puis Playwright (Chromium headless déjà présent dans l'environnement) piloté avec de vrais jetons JWT pour visiter les 10 nouvelles routes tuteur et les 2 nouvelles routes élève. Parcours vérifiés bout en bout avec de vraies données : résumé de session live généré à la demande, invitation El Professor Famille → l'élève rejoint → échange de messages avec attribution de rôle correcte, formulaire Coffre-fort enregistré et persistant après rechargement. Zéro erreur console (une seule ligne `ERR_CERT_AUTHORITY_INVALID` sans rapport, liée à l'interception TLS du bac à sable, pas à l'application).
 
+## Saisie papier (2026-09-28)
+Détail : `docs/saisie-papier.md`. `pages/admin_etablissement/SaisiePapierPage.tsx` (route
+`/admin-etablissement/saisie-papier`, menu A+ en 3e position) ; `components/saisie_papier/PrisePhotos.tsx`
+(capture appareil photo / fichiers) et `CopiesPapier.tsx` (aussi dans `enseignant/MesDevoirsPage`) ;
+« Signé sur papier » dans `RecrutementPage` ; `api/saisie_papier.ts`.
+
 ## Documents officiels (2026-09-28)
 Détail : `docs/documents-officiels.md`. `components/ConseilDeClasse.tsx` (professeur principal,
 dans `enseignant/MesSallesPage`) ; `components/BoutonBulletinPdf.tsx` (parent, `TuteurDashboard`) ;

@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { libelle } from "../../utils/libelles";
 import { ouvrirBlobPdf } from "../../utils/telechargerBlob";
+import { Modale } from "../../components/Modale";
+import { PrisePhotos } from "../../components/saisie_papier/PrisePhotos";
+import { contratSigneSurPapier } from "../../api/saisie_papier";
 import { useConfirmation } from "../../components/Modale";
 import { useAdminEtab } from "../../admin/AdminEtabContext";
 import {
@@ -92,6 +95,23 @@ export function RecrutementPage() {
   const [syllabusParCandidature, setSyllabusParCandidature] = useState<Record<string, string>>({});
   const [dateFinParCandidature, setDateFinParCandidature] = useState<Record<string, string>>({});
   const [erreur, setErreur] = useState<string | null>(null);
+  // Enseignant sans smartphone : contrat imprime (PDF), signe a la main, photographie ici.
+  const [contratPapier, setContratPapier] = useState<{ id: string; enseignant_prenom: string; enseignant_nom: string } | null>(null);
+  const [photoContrat, setPhotoContrat] = useState<File[]>([]);
+  const [enCoursPapier, setEnCoursPapier] = useState(false);
+  const enregistrerContratPapier = async () => {
+    if (!contratPapier || photoContrat.length === 0) return;
+    setEnCoursPapier(true);
+    try {
+      await contratSigneSurPapier(contratPapier.id, photoContrat);
+      setContratPapier(null);
+      charger();
+    } catch (err) {
+      setErreur(messageErreur(err));
+    } finally {
+      setEnCoursPapier(false);
+    }
+  };
   const [enCours, setEnCours] = useState(false);
   const [lienEnCoursId, setLienEnCoursId] = useState<string | null>(null);
   const [casierEnCoursId, setCasierEnCoursId] = useState<string | null>(null);
@@ -317,6 +337,19 @@ export function RecrutementPage() {
 
   return (
     <div className="page-content">
+      <Modale ouvert={contratPapier !== null} onFermer={() => setContratPapier(null)}
+        titre={`Contrat signé sur papier — ${contratPapier?.enseignant_prenom ?? ""} ${contratPapier?.enseignant_nom ?? ""}`}
+        pied={<>
+          <Btn variant="ghost" onClick={() => setContratPapier(null)}>Annuler</Btn>
+          <Btn loading={enCoursPapier} disabled={photoContrat.length === 0} onClick={enregistrerContratPapier}>Enregistrer la signature</Btn>
+        </>}>
+        <p className="text-sm" style={{ marginTop: 0, color: "var(--ink-soft)" }}>
+          Pour un enseignant sans smartphone : imprimez le contrat (bouton PDF), faites-le signer à la main, puis photographiez la
+          ou les pages signées. Les photos sont conservées comme preuve et l'original reste à l'établissement.
+        </p>
+        <PrisePhotos fichiers={photoContrat} onChange={setPhotoContrat}
+          aide="Une photo par page du contrat signé, dans l'ordre ; la dernière doit porter la signature de l'enseignant." />
+      </Modale>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-4)" }}>
         <PageTitle eyebrow="Espace établissement">Recrutement</PageTitle>
         <Btn variant="primary" leftIcon={<Plus size={16} />} onClick={() => setShowForm((v) => !v)}>
@@ -576,6 +609,11 @@ export function RecrutementPage() {
                         >
                           PDF
                         </Btn>
+                        {c.statut === "en_attente_signature" && (
+                          <Btn variant="outline" size="sm" leftIcon={<FileSignature size={14} />} onClick={() => { setContratPapier(c); setPhotoContrat([]); }}>
+                            Signé sur papier
+                          </Btn>
+                        )}
                         {reconductible && (
                           <Btn
                             variant="outline"

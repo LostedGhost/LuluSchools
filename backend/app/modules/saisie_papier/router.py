@@ -19,6 +19,7 @@ from datetime import date, datetime, time, timezone
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core import pdf_officiel as pdf
@@ -40,7 +41,7 @@ from app.modules.recrutement.models import Contrat, StatutContrat
 from app.modules.saisie_papier import lecture
 from app.modules.saisie_papier.models import DocumentPapier, StatutDocumentPapier, TypeDocumentPapier
 from app.modules.saisie_papier.schemas import (
-    AppelEnregistrement, CopieLue, CopiesEnregistrement, CopiesLectureOut, CoursEnregistrement, DocumentPapierOut,
+    AppelEnregistrement, ConsentementEnAttente, ContexteClasse, CopieLue, DevoirCandidat, EnseignantCandidat, CopiesEnregistrement, CopiesLectureOut, CoursEnregistrement, DocumentPapierOut,
     EleveCandidat, InscriptionGuichet, InscriptionGuichetOut, LectureOut, LigneLue, NotesEnregistrement,
     ResultatEnregistrement,
 )
@@ -516,7 +517,7 @@ def enregistrer_copies(
 @router.post("/contrats/{contrat_id}/signature-papier", response_model=ResultatEnregistrement)
 def signer_contrat_sur_papier(
     contrat_id: str,
-    fichier: UploadFile = File(...),
+    fichiers: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
     admin: Utilisateur = Depends(require_roles(*_ADMINS)),
@@ -531,14 +532,13 @@ def signer_contrat_sur_papier(
     verifier_portee_etablissement(db, admin, contrat.etablissement_id)
     if contrat.statut != StatutContrat.EN_ATTENTE_SIGNATURE:
         raise api_error(status.HTTP_409_CONFLICT, "deja_signe", "Ce contrat est déjà signé.")
-    contenu = lire_upload_borne(fichier, MAX_FICHIER_OCTETS, TYPES_DOCUMENT)
-    file_id = _stocker(files_client, contenu, fichier.filename or "contrat-signe", fichier.content_type or "image/jpeg")
+    ids = [_stocker(files_client, c, nom, t) for c, nom, t in _lire_fichiers(fichiers)]  # une photo par page
     contrat.statut = StatutContrat.SIGNE
     contrat.signature_horodatage = datetime.now(timezone.utc)
     contrat.signature_hash_document = hashlib.sha256(contrat.syllabus.encode("utf-8")).hexdigest()
-    contrat.signature_image_lulufiles_id = file_id  # « Voir la signature » ouvre la photo du contrat signe
+    contrat.signature_image_lulufiles_id = ids[-1]  # « Voir la signature » : derniere page (celle qui porte la signature)
     document = DocumentPapier(etablissement_id=contrat.etablissement_id, type=TypeDocumentPapier.CONTRAT_SIGNE,
-                              fichiers=[file_id], saisi_par_id=admin.id)
+                              fichiers=ids, saisi_par_id=admin.id)
     db.add(document)
     _terminer(document, "contrat", contrat.id, {"contrat_id": contrat.id})
     db.commit()
@@ -548,7 +548,7 @@ def signer_contrat_sur_papier(
 @router.post("/inscriptions/{inscription_id}/consentement-papier", response_model=ResultatEnregistrement)
 def consentement_sur_papier(
     inscription_id: str,
-    fichier: UploadFile = File(...),
+    fichiers: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
     files_client: LuluFilesClient = Depends(get_files_client),
     email_client: BrevoEmailClient = Depends(get_email_client),
@@ -565,12 +565,11 @@ def consentement_sur_papier(
     verifier_portee_etablissement(db, admin, classe.etablissement_id)
     if inscription.statut != StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL:
         raise api_error(status.HTTP_409_CONFLICT, "consentement_non_attendu", "Cette inscription n'attend pas de consentement parental.")
-    contenu = lire_upload_borne(fichier, MAX_FICHIER_OCTETS, TYPES_DOCUMENT)
-    file_id = _stocker(files_client, contenu, fichier.filename or "consentement", fichier.content_type or "image/jpeg")
+    ids = [_stocker(files_client, c, nom, t) for c, nom, t in _lire_fichiers(fichiers)]
     inscription.statut = StatutInscription.SOUMISE
     inscription.consentement_parental_horodatage = datetime.now(timezone.utc)
     document = DocumentPapier(etablissement_id=classe.etablissement_id, type=TypeDocumentPapier.CONSENTEMENT,
-                              fichiers=[file_id], saisi_par_id=admin.id)
+                              fichiers=ids, saisi_par_id=admin.id)
     db.add(document)
     _terminer(document, "inscription", inscription.id, {"inscription_id": inscription.id})
     db.commit()
@@ -632,3 +631,52 @@ def lien_photo(
     except FileStorageError as exc:
         raise api_error(status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'obtenir la photo, veuillez réessayer.") from exc
     return LienFichierOut(url=url)
+
+
+# ─── 6. Contexte pour l'ecran de saisie ─────────────────────────────────────
+
+@router.get("/classes/{classe_id}/saisie-papier/contexte", response_model=ContexteClasse)
+def contexte_classe(
+    classe_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(*_ADMINS)),
+) -> ContexteClasse:
+    """Eleves, enseignants affectes (avec leur matiere) et devoirs de la classe : de quoi
+    remplir les listes de l'ecran de saisie papier."""
+    from app.modules.etablissements.affectations_auto import enseignants_sous_contrat
+
+    classe = db.get(Classe, classe_id)
+    if classe is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Classe introuvable.")
+    verifier_portee_etablissement(db, admin, classe.etablissement_id)
+    matieres = enseignants_sous_contrat(db, classe.etablissement_id)
+    ids = [a.enseignant_id for a in db.query(AffectationEnseignant).filter(AffectationEnseignant.classe_id == classe_id)]
+    enseignants = db.query(Utilisateur).filter(Utilisateur.id.in_(ids)).order_by(Utilisateur.nom).all() if ids else []
+    devoirs = db.query(Devoir).filter(Devoir.classe_id == classe_id, Devoir.masque_par_id.is_(None)).order_by(Devoir.date_limite.desc()).all()
+    copies = {d: n for d, n in db.query(Soumission.devoir_id, func.count(Soumission.id)).filter(
+        Soumission.devoir_id.in_([d.id for d in devoirs])).group_by(Soumission.devoir_id)} if devoirs else {}
+    return ContexteClasse(
+        eleves=_candidats(_eleves_de_la_classe(db, classe_id)),
+        enseignants=[EnseignantCandidat(id=u.id, nom=u.nom, prenom=u.prenom, matiere=matieres.get(u.id)) for u in enseignants],
+        devoirs=[DevoirCandidat(id=d.id, titre=d.titre, matiere=d.matiere, date_limite=d.date_limite, copies=copies.get(d.id, 0)) for d in devoirs],
+    )
+
+
+@router.get("/etablissements/{etablissement_id}/saisie-papier/consentements-en-attente", response_model=list[ConsentementEnAttente])
+def consentements_en_attente(
+    etablissement_id: str,
+    db: Session = Depends(get_db),
+    admin: Utilisateur = Depends(require_roles(*_ADMINS)),
+) -> list[ConsentementEnAttente]:
+    verifier_portee_etablissement(db, admin, etablissement_id)
+    lignes = (
+        db.query(Inscription, Eleve, Classe)
+        .join(Eleve, Eleve.id == Inscription.eleve_id)
+        .join(Classe, Classe.id == Inscription.classe_id)
+        .filter(Classe.etablissement_id == etablissement_id,
+                Inscription.statut == StatutInscription.EN_ATTENTE_CONSENTEMENT_PARENTAL)
+        .order_by(Inscription.created_at)
+        .all()
+    )
+    return [ConsentementEnAttente(inscription_id=i.id, eleve=f"{e.prenom} {e.nom}", classe=c.niveau + (f" — {c.filiere}" if c.filiere else ""),
+                                  depose_le=i.created_at) for i, e, c in lignes]

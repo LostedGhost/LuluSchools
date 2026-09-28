@@ -16,11 +16,14 @@ import type { BaremeDevoir, DevoirOut, NatureEvaluation, SalleEnseignantOut, Sou
 import { Card, ErrorBanner, Field, SectionHead, Btn, TextInput, Select, EmptyState } from "../../components/ui";
 import { AIBadge } from "../../components/gamification";
 import { estRempli, erreurDateFuture } from "../../utils/validation";
-import { FileText, ScrollText } from "lucide-react";
+import { FileText, ScanLine, ScrollText } from "lucide-react";
+import { Modale } from "../../components/Modale";
+import { CopiesPapier } from "../../components/saisie_papier/CopiesPapier";
 
 export function MesDevoirsPage() {
   const [classes, setClasses] = useState<SalleEnseignantOut[]>([]);
   const [classeId, setClasseId] = useState("");
+  const [copiesPapierDevoir, setCopiesPapierDevoir] = useState<DevoirOut | null>(null);
   const [devoirs, setDevoirs] = useState<DevoirOut[]>([]);
   const [aRevoirParDevoir, setARevoirParDevoir] = useState<Record<string, SoumissionOut[]>>({});
   const [baremeParDevoir, setBaremeParDevoir] = useState<Record<string, Record<string, string>>>({});
@@ -312,6 +315,14 @@ export function MesDevoirsPage() {
 
       {classeId && devoirs.length > 0 && (
         <div className="space-y-6">
+          <Modale ouvert={copiesPapierDevoir !== null} onFermer={() => setCopiesPapierDevoir(null)} largeur={640}
+            titre={`Copies papier — ${copiesPapierDevoir?.titre ?? ""}`}>
+            <p className="text-sm" style={{ marginTop: 0, color: "var(--ink-soft)" }}>
+              Pour les élèves sans smartphone : photographiez leurs copies papier, l'IA reconnaît le nom de chacun puis corrige
+              selon votre barème. Vous pouvez reprendre une note ensuite, comme pour une copie envoyée en ligne.
+            </p>
+            {copiesPapierDevoir && <CopiesPapier devoirId={copiesPapierDevoir.id} />}
+          </Modale>
           {devoirs.map((devoir, idx) => (
             <Card key={devoir.id} className={`anim-float-in delay-${(idx % 5) + 1}`}>
               <div className="flex justify-between items-start mb-4 border-b pb-4" style={{ borderColor: 'var(--border)' }}>
@@ -327,6 +338,9 @@ export function MesDevoirsPage() {
               </div>
 
               <div className="flex flex-wrap gap-2 mb-4">
+                <Btn variant="outline" size="sm" leftIcon={<ScanLine size={14} />} onClick={() => setCopiesPapierDevoir(devoir)}>
+                  Copies papier
+                </Btn>
                 <label className="btn btn-outline btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                   <FileText size={14} />
                   {devoir.sujet_lulufiles_file_id ? "Remplacer le sujet (document)" : "Ajouter un sujet (document)"}

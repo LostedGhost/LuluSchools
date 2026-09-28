@@ -140,3 +140,31 @@ class DocumentPapierOut(BaseModel):
     created_at: datetime
     enregistre_le: datetime | None
     resume: str | None
+
+
+class EnseignantCandidat(BaseModel):
+    id: str
+    nom: str
+    prenom: str
+    matiere: str | None
+
+
+class DevoirCandidat(BaseModel):
+    id: str
+    titre: str
+    matiere: str
+    date_limite: datetime
+    copies: int
+
+
+class ContexteClasse(BaseModel):
+    eleves: list[EleveCandidat]
+    enseignants: list[EnseignantCandidat]
+    devoirs: list[DevoirCandidat]
+
+
+class ConsentementEnAttente(BaseModel):
+    inscription_id: str
+    eleve: str
+    classe: str
+    depose_le: datetime

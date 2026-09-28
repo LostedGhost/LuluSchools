@@ -50,6 +50,8 @@ def test_feuille_de_notes_lue_puis_validee(client, classe_avec_enseignant_et_ele
         "lignes": [{"nom": "DOSSOU Aïsha", "note": 14.5, "absent": False, "lisible": True},
                    {"nom": "Personne Inconnue", "note": 3, "absent": False, "lisible": True}],
     }
+    contexte = client.get(f"/api/v1/classes/{ctx['classe']['id']}/saisie-papier/contexte", headers=ctx["admin_headers"]).json()
+    assert [e["id"] for e in contexte["enseignants"]] == [_enseignant_id(ctx)] and len(contexte["eleves"]) == 1
     lu = _lire(client, ctx, "feuille_notes").json()
     eleve_id = lu["eleves"][0]["eleve_id"]
     assert lu["lignes"][0]["eleve_id"] == eleve_id and lu["lignes"][0]["confiance"] == "sur"
@@ -169,11 +171,11 @@ def test_contrat_signe_sur_papier(client, classe_avec_enseignant_et_eleve, db_se
     db_session.add(contrat)
     db_session.commit()
     url = f"/api/v1/contrats/{contrat.id}/signature-papier"
-    assert client.post(url, files={"fichier": ("contrat.jpg", _photo()[1][1], "image/jpeg")}, headers=ctx["enseignant_headers"]).status_code == 403
-    assert client.post(url, files={"fichier": ("contrat.jpg", _photo()[1][1], "image/jpeg")}, headers=ctx["admin_headers"]).status_code == 200
+    assert client.post(url, files=[_photo("p1.jpg")], headers=ctx["enseignant_headers"]).status_code == 403
+    assert client.post(url, files=[_photo("p1.jpg"), _photo("p2.jpg")], headers=ctx["admin_headers"]).status_code == 200
     db_session.refresh(contrat)
     assert contrat.statut == StatutContrat.SIGNE and contrat.signature_horodatage
-    assert db_session.query(DocumentPapier).filter(DocumentPapier.objet_id == contrat.id).count() == 1
+    assert len(db_session.query(DocumentPapier).filter(DocumentPapier.objet_id == contrat.id).one().fichiers) == 2
     texte = _texte_pdf(client.get(f"/api/v1/contrats/{contrat.id}/pdf", headers=ctx["admin_headers"]).content)
     assert "Contrat signé à la main sur papier" in texte
 
@@ -186,8 +188,11 @@ def test_consentement_parental_sur_papier(client, etablissement_avec_classe, tut
         headers=tuteur_headers,
     ).json()
     assert inscription["statut"] == "en_attente_consentement_parental"
+    attente = client.get(f"/api/v1/etablissements/{ctx['etablissement']['id']}/saisie-papier/consentements-en-attente",
+                         headers=ctx["admin_headers"]).json()
+    assert [a["inscription_id"] for a in attente] == [inscription["id"]]
     reponse = client.post(f"/api/v1/inscriptions/{inscription['id']}/consentement-papier",
-                          files={"fichier": ("consentement.jpg", _photo()[1][1], "image/jpeg")}, headers=ctx["admin_headers"])
+                          files=[_photo("consentement.jpg")], headers=ctx["admin_headers"])
     assert reponse.status_code == 200
     apres = client.get(f"/api/v1/inscriptions/{inscription['id']}", headers=ctx["admin_headers"]).json()
     assert apres["statut"] == "soumise" and apres["consentement_parental_horodatage"]
