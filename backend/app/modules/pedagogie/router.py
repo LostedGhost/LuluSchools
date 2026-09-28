@@ -64,6 +64,7 @@ from app.modules.pedagogie.schemas import (
     TentativeQuizOut,
     TranscriptionCoursIn,
     TranscriptionProposeeOut,
+    EssaiQuizOut,
 )
 from app.modules.vie_scolaire.models import EntreeVieScolaire
 
@@ -183,7 +184,11 @@ def _verifier_lecture_contenus_classe(db: Session, utilisateur: Utilisateur, cla
         _verifier_eleve_inscrit(db, utilisateur.id, classe_id)
         return False
     if utilisateur.role == RoleUtilisateur.TUTEUR:
-        _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, classe_id)
+        # Lot 7.7 : un adulte inscrit en alphabetisation lit les cours de SA classe.
+        from app.modules.alphabetisation.service import est_apprenant_de_la_classe
+
+        if not est_apprenant_de_la_classe(db, utilisateur.id, classe_id):
+            _verifier_tuteur_a_un_enfant_dans_la_classe(db, utilisateur.id, classe_id)
         return False
     if utilisateur.role == RoleUtilisateur.ENSEIGNANT:
         _verifier_enseignant_rattache(db, utilisateur, classe_id)
@@ -436,8 +441,12 @@ def creer_quiz(
 
 @router.get("/quiz/{quiz_id}", response_model=QuizOut)
 def obtenir_quiz(
-    quiz_id: str, db: Session = Depends(get_db), eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE))
+    quiz_id: str,
+    db: Session = Depends(get_db),
+    eleve_utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.ELEVE, RoleUtilisateur.TUTEUR)),
 ) -> Quiz:
+    """Eleve de la classe, ou (Lot 7.7) adulte en alphabetisation / parent d'un eleve de
+    la classe : la lecture du quiz suit exactement la portee de lecture du cours."""
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Quiz introuvable.")
@@ -483,6 +492,28 @@ def tenter_quiz(
     db.commit()
     db.refresh(tentative)
     return tentative
+
+
+@router.post("/quiz/{quiz_id}/essai", response_model=EssaiQuizOut)
+def essayer_quiz(
+    quiz_id: str,
+    payload: TentativeQuizCreate,
+    db: Session = Depends(get_db),
+    utilisateur: Utilisateur = Depends(require_roles(RoleUtilisateur.TUTEUR)),
+) -> EssaiQuizOut:
+    """Lot 7.7 : entrainement d'un adulte en alphabetisation (quiz oral). Note et
+    corrige sans rien enregistrer : un adulte apprend a son rythme, sans historique."""
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Quiz introuvable.")
+    _cours_lisible(db, utilisateur, quiz.cours_id)
+    questions = sorted(quiz.questions, key=lambda q: q.ordre)
+    if len(payload.reponses) != len(questions):
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "reponses_incompletes", "Répondez à toutes les questions.")
+    corrections = [question.reponse_correcte_index for question in questions]
+    bonnes = sum(1 for reponse, bonne in zip(payload.reponses, corrections) if reponse == bonne)
+    score = (bonnes / len(questions)) * 100 if questions else 0.0
+    return EssaiQuizOut(score=score, reussie=score >= quiz.seuil_reussite, bonnes_reponses=corrections)
 
 
 @router.get("/quiz/{quiz_id}/mes-tentatives", response_model=list[TentativeQuizOut])

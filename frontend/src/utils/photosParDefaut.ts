@@ -32,6 +32,8 @@ export const PHOTOS_PAR_DEFAUT: Record<TypeEtablissement, PhotoParDefaut[]> = {
     { url: pexels(10604063, 800), credit: "Adedire Abiodun — Pexels" },
     { url: pexels(12497063, 800), credit: "Amos Getanda — Pexels" },
   ],
+  // Lot 7.7 : centres d'alphabétisation (adultes) — mêmes photos de salle de classe.
+  CA: [{ url: pexels(35305047, 800), credit: "Speak Media Uganda — Pexels" }],
 };
 
 /** Bande photo pleine largeur (landing page) - même photo que ES[1], en plus haute résolution. */

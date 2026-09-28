@@ -20,7 +20,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const TYPE_LABEL: Record<string, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur" };
+const TYPE_LABEL: Record<string, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur", CA: "Alphabétisation" };
 const TYPE_ICON: Record<string, typeof School> = { EP: School, ES: Building2, UP: GraduationCap };
 
 // Centre par défaut : Cotonou, en l'absence de tout établissement géolocalisé.
@@ -53,7 +53,7 @@ export function CartesPage() {
   const [items, setItems] = useState<EtablissementVitrine[] | null>(null);
   const [erreur, setErreur] = useState(false);
   const [q, setQ] = useState("");
-  const [type, setType] = useState<"" | "EP" | "ES" | "UP">("");
+  const [type, setType] = useState<"" | "EP" | "ES" | "UP" | "CA">("");
   const [selectionId, setSelectionId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -128,8 +128,8 @@ export function CartesPage() {
               style={{ width: "100%", paddingLeft: "40px" }}
             />
           </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {(["", "EP", "ES", "UP"] as const).map((t) => (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {(["", "EP", "ES", "UP", "CA"] as const).map((t) => (
               <button
                 key={t || "tous"}
                 type="button"

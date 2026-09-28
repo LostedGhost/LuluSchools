@@ -44,6 +44,7 @@ from app.modules.radar_familial.router import router as radar_familial_router
 from app.modules.accessibilite.router import router as accessibilite_router
 from app.modules.ecoute.router import router as ecoute_router
 from app.modules.indicateurs.router import router as indicateurs_router
+from app.modules.alphabetisation.router import router as alphabetisation_router
 from app.modules.recrutement.router import router as recrutement_router
 from app.modules.services_scolaires.router import router as services_scolaires_router
 from app.modules.vie_scolaire.router import router as vie_scolaire_router
@@ -167,6 +168,7 @@ app.include_router(me_router, prefix="/api/v1")
 app.include_router(accessibilite_router, prefix="/api/v1")
 app.include_router(ecoute_router, prefix="/api/v1")
 app.include_router(indicateurs_router, prefix="/api/v1")
+app.include_router(alphabetisation_router, prefix="/api/v1")
 app.include_router(identite_admin_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(etablissements_router, prefix="/api/v1")

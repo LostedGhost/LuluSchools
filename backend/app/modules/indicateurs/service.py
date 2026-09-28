@@ -15,6 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Query, Session
 
 from app.core.territoires import DEPARTEMENTS
+from app.modules.alphabetisation.models import InscriptionAlphabetisation
 from app.modules.etablissements.models import Classe, Etablissement, StatutEtablissement, TypeEtablissement
 from app.modules.evaluations.models import Bulletin
 from app.modules.identite.models import Utilisateur
@@ -172,6 +173,15 @@ def calculer_indicateurs(db: Session, p: Perimetre) -> dict:
         "comptes_mode_ecoute": sum(1 for x in preferences if x.get("mode_ecoute")),
         "comptes_reglages_accessibilite": len(preferences),
         "messages_vocaux": db.query(func.count(Message.id)).filter(Message.audio_lulufiles_id.isnot(None)).scalar() or 0,
+        # PAG action 4 : alphabetisation et education des adultes (Lot 7.7).
+        "apprenants_alphabetisation": _filtrer_etablissements(
+            db.query(func.count(func.distinct(InscriptionAlphabetisation.utilisateur_id)))
+            .join(Classe, Classe.id == InscriptionAlphabetisation.classe_id)
+            .join(Etablissement, Etablissement.id == Classe.etablissement_id)
+            .filter(Classe.annee_academique == p.annee_academique),
+            p,
+        ).scalar()
+        or 0,
     }
 
     resultat = {

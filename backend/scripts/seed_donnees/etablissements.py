@@ -51,6 +51,7 @@ VILLES = {
     "abomey-calavi": (6.4485, 2.3557), "porto-novo": (6.4969, 2.6289), "seme-kpodji": (6.3661, 2.6156),
     "godomey": (6.3958, 2.3336), "akpakpa": (6.3644, 2.4453), "parakou": (9.3372, 2.6303),
     "abomey": (7.1825, 1.9911), "lokossa": (6.6389, 1.7167), "cotonou": (6.3703, 2.3912),
+    "bohicon": (7.1782, 2.0667),
 }
 INSTITUTIONS = {
     "mathieu bouke": VILLES["parakou"], "toffa 1er": VILLES["porto-novo"], "behanzin": VILLES["porto-novo"],
@@ -71,7 +72,7 @@ TERRITOIRE_DES_VILLES = {
     "abomey-calavi": ("Atlantique", "Abomey-Calavi"), "godomey": ("Atlantique", "Abomey-Calavi"),
     "porto-novo": ("Ouémé", "Porto-Novo"), "seme-kpodji": ("Ouémé", "Sèmè-Kpodji"),
     "akpakpa": ("Littoral", "Cotonou"), "cotonou": ("Littoral", "Cotonou"), "parakou": ("Borgou", "Parakou"),
-    "abomey": ("Zou", "Abomey"), "lokossa": ("Mono", "Lokossa"),
+    "abomey": ("Zou", "Abomey"), "lokossa": ("Mono", "Lokossa"), "bohicon": ("Zou", "Bohicon"),
 }
 CHEFS_LIEUX = {  # departement : (commune, coordonnees approchees)
     "Littoral": ("Cotonou", (6.3703, 2.3912)), "Atlantique": ("Allada", (6.665, 2.151)),
@@ -249,6 +250,8 @@ def _nom_unique(pool: list[str], i: int) -> str:
 
 
 def creer_etablissements(ctx: Contexte) -> None:
+    from . import alphabetisation
+
     cfg = ctx.cfg
     # L'Universite d'Abomey-Calavi en premier : toujours presente, code UP01.
     ctx.uac = _universite(ctx, UAC_NOM, FILIERES_UAC, FILIERES_UAC_AVEC_MASTER, public=True)
@@ -267,3 +270,5 @@ def creer_etablissements(ctx: Contexte) -> None:
         _universite(
             ctx, _nom_unique(pool, i // 2), {f: filieres_pool[f] for f in choisies}, choisies[:1], public
         )
+    # Lot 7.7 : un centre d'alphabetisation pour adultes (PAG, action 4).
+    alphabetisation.creer_centre(ctx, _etablissement, _classe)

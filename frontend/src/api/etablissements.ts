@@ -57,7 +57,7 @@ export function designerProfesseurPrincipal(classeId: string, enseignantUtilisat
 
 export interface EtablissementPayload {
   nom: string;
-  type: "EP" | "ES" | "UP";
+  type: "EP" | "ES" | "UP" | "CA";
   statut: "public" | "prive";
   admin: { nom: string; prenom: string; email: string };
   latitude: number;
@@ -112,7 +112,7 @@ export function monEtablissement() {
 export interface EtablissementVitrine {
   id: string;
   nom: string;
-  type: "EP" | "ES" | "UP";
+  type: "EP" | "ES" | "UP" | "CA";
   statut: "public" | "prive";
   nb_classes: number;
   nb_postes_ouverts: number;
@@ -125,7 +125,7 @@ export interface PosteVitrine {
   titre: string;
   etablissement_id: string;
   etablissement_nom: string;
-  etablissement_type: "EP" | "ES" | "UP";
+  etablissement_type: "EP" | "ES" | "UP" | "CA";
 }
 
 export interface VitrinePublique {
@@ -145,7 +145,7 @@ export interface AnnuairePublique {
   offset: number;
 }
 
-export function annuairePublic(params: { type?: "EP" | "ES" | "UP"; q?: string; limit?: number; offset?: number } = {}) {
+export function annuairePublic(params: { type?: "EP" | "ES" | "UP" | "CA"; q?: string; limit?: number; offset?: number } = {}) {
   return api.get<AnnuairePublique>("/etablissements/annuaire-public", { params });
 }
 

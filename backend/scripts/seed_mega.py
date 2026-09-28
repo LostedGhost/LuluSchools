@@ -38,7 +38,7 @@ from app.core.config import settings  # noqa: E402
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
 from app.modules.etablissements.models import TypeEtablissement  # noqa: E402
 
-from seed_donnees import automatisations, demo, economie, evaluations, pedagogie, recrutement, scolarite, services, supervision, vie_classe  # noqa: E402
+from seed_donnees import alphabetisation, automatisations, demo, economie, evaluations, pedagogie, recrutement, scolarite, services, supervision, vie_classe  # noqa: E402
 from seed_donnees.contexte import MOT_DE_PASSE_COMMUN, Config, Contexte  # noqa: E402
 from seed_donnees.etablissements import creer_etablissements  # noqa: E402
 from seed_donnees.fichiers import Fichiers  # noqa: E402
@@ -71,6 +71,12 @@ def executer(ctx: Contexte) -> None:
             debut = time.monotonic()
             recrutement.recruter_et_affecter(ctx, etab)
             classes = ctx.classes_par_etab[etab.id]
+            if etab.type == TypeEtablissement.CA:
+                # Adultes inscrits sur leur propre compte, cours courts a ecouter (Lot 7.7).
+                alphabetisation.peupler(ctx, etab)
+                ctx.persister(db)
+                print(f"  [{rang}/{len(ctx.etablissements)}] {etab.code_etablissement} {etab.nom} — centre d'alphabétisation")
+                continue
             for classe in classes:
                 scolarite.inscrire_classe(ctx, etab, classe)
             if etab.type == TypeEtablissement.UP:

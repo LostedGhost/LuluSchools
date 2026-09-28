@@ -43,7 +43,7 @@ export interface TuteurOut {
   email_verifie: boolean;
 }
 
-export type TypeEtablissement = "EP" | "ES" | "UP";
+export type TypeEtablissement = "EP" | "ES" | "UP" | "CA";
 export type StatutEtablissement = "public" | "prive";
 export type PolitiqueDepassement = "ordre_arrivee" | "notes_concours" | "tirage_sort";
 

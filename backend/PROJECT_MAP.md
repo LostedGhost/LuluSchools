@@ -483,3 +483,14 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   A++ : national ou par département ; A+ : forcé sur son établissement. Cases < 5 élèves masquées (`None`).
 - Migration `0024_territoires_parite` ; seed : territoire de chaque établissement (villes connues, sinon
   chef-lieu d'un département tiré au sort pondéré) et sexe des élèves ; `verifier_seed.py` : 2 règles de plus.
+
+### app/modules/alphabetisation/ (7.7, PAG action 4)
+- `TypeEtablissement.CA` (centre d'alphabétisation) ; aucune inscription d'enfant n'y est acceptée
+  (`centre_alphabetisation`, 409). `InscriptionAlphabetisation` (adulte = compte tuteur existant, classe) :
+  `GET /alphabetisation/classes`, `POST /alphabetisation/inscriptions` (capacité, doublon 409),
+  `GET /etablissements/{id}/apprenants-adultes` (A+/A++).
+- Pédagogie : un apprenant adulte lit les cours et quiz de SA classe (`_verifier_lecture_contenus_classe`) ;
+  `POST /quiz/{id}/essai` note sans rien enregistrer et renvoie la correction (quiz oral).
+- Indicateurs : `inclusion.apprenants_alphabetisation`, `par_type.CA`. Migration `0025_alphabetisation`
+  (`ALTER TYPE ... ADD VALUE` en autocommit). Seed : `seed_donnees/alphabetisation.py` (centre de Bohicon,
+  leçons courtes + quiz, parents inscrits, compte de démo « parent en mode Écoute », centre protégé des suspensions).

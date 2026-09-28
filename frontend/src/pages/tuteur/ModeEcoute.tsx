@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  BookOpenCheck,
   CalendarCheck,
   ChevronRight,
   GraduationCap,
@@ -35,6 +36,7 @@ const PICTOGRAMMES: Record<string, ReactNode> = {
   messages: <MessageCircle size={40} aria-hidden="true" />,
   inscrire: <UserPlus size={40} aria-hidden="true" />,
   aide: <HandHelping size={40} aria-hidden="true" />,
+  apprendre: <BookOpenCheck size={40} aria-hidden="true" />,
 };
 
 const AIDE =
@@ -191,6 +193,12 @@ export function ModeEcoute() {
             titre="Inscrire"
             onParler={() => dire("inscrire", "Touchez la flèche pour inscrire un enfant dans une école.")}
             onOuvrir={() => navigate("/tuteur/nouvelle-inscription")}
+          />
+          <Tuile
+            cle="apprendre"
+            titre="Apprendre à lire"
+            onParler={() => dire("apprendre", "Touchez la flèche pour apprendre à lire, à écrire et à compter, avec des leçons à écouter.")}
+            onOuvrir={() => navigate("/tuteur/alphabetisation")}
           />
           <Tuile cle="aide" titre="Aide" onParler={() => dire("aide", AIDE)} />
         </div>

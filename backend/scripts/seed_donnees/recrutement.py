@@ -47,6 +47,8 @@ def _titre_et_matiere(type_etab: TypeEtablissement, matiere: str | None, niveau:
         return f"Instituteur / Institutrice — {niveau}", None
     if type_etab == TypeEtablissement.ES:
         return f"Professeur de {matiere}", matiere
+    if type_etab == TypeEtablissement.CA:
+        return f"Alphabétiseur / Alphabétiseuse — {matiere}", matiere
     return f"Enseignant-chercheur en {matiere}", matiere
 
 

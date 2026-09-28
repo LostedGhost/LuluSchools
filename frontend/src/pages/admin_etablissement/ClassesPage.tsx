@@ -35,10 +35,11 @@ const LIBELLES_POLITIQUE: Record<
 // backend (aucune enumeration DB) : la filiere/serie (A1/B/C/D, F2/G1...) et les
 // filieres universitaires ne sont PAS standardisables globalement, elles restent en
 // texte libre avec autocompletion (voir plus bas).
-const NIVEAUX_PAR_TYPE: Record<"EP" | "ES" | "UP", string[]> = {
+const NIVEAUX_PAR_TYPE: Record<"EP" | "ES" | "UP" | "CA", string[]> = {
   EP: ["Maternelle 1", "Maternelle 2", "CI", "CP", "CE1", "CE2", "CM1", "CM2"],
   ES: ["6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Terminale"],
   UP: ["1ère année de Licence", "2ème année de Licence", "3ème année de Licence", "1ère année de Master", "2ème année de Master"],
+  CA: ["Alphabétisation initiale", "Post-alphabétisation", "Formation de base"],
 };
 
 function anneeAcademiqueCourante(): string {

@@ -58,6 +58,7 @@ _PREFIXES_CYCLE_MATRICULE = {
     TypeEtablissement.EP: "7",
     TypeEtablissement.ES: "8",
     TypeEtablissement.UP: "",
+    TypeEtablissement.CA: "9",  # jamais utilise (pas d'eleve en centre d'alphabetisation)
 }
 
 
@@ -120,6 +121,12 @@ def creer_inscription(
     if classe is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "classe_introuvable", "Classe introuvable.")
     etablissement = db.get(Etablissement, classe.etablissement_id)
+    if etablissement is not None and etablissement.type == TypeEtablissement.CA:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "centre_alphabetisation",
+            "Un centre d'alphabétisation accueille des adultes : inscrivez-vous depuis « Apprendre à lire ».",
+        )
     if etablissement is None or not etablissement.actif:
         raise api_error(
             status.HTTP_409_CONFLICT, "etablissement_suspendu", "Cet établissement n'accepte pas d'inscription."

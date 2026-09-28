@@ -43,6 +43,7 @@ import {
   ScanLine,
   Accessibility,
   BarChart3,
+  BookOpenCheck,
 } from "lucide-react";
 
 import { BandeauHorsLigne } from "../accessibilite/BandeauHorsLigne";
@@ -105,6 +106,7 @@ function navPourRole(role: string | undefined, estEtudiant = false): NavItem[] {
       { to: "/billetterie", label: "Billetterie", icon: <Ticket size={iconSize} /> },
       { to: "/micro-jobs", label: "Micro-jobs", icon: <Handshake size={iconSize} /> },
       { to: "/messagerie", label: "Messagerie", icon: <MessageCircle size={iconSize} /> },
+      { to: "/tuteur/alphabetisation", label: "Apprendre à lire", icon: <BookOpenCheck size={iconSize} /> },
     ];
   }
   if (role === "eleve") {

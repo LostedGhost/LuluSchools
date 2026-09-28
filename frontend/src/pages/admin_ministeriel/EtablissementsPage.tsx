@@ -29,7 +29,7 @@ import { Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, MapPin } from "lu
 import { lienGoogleMaps } from "../../utils/geo";
 import { estRempli, estEmailValide } from "../../utils/validation";
 
-const TYPE_LABEL: Record<TypeEtablissement, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur" };
+const TYPE_LABEL: Record<TypeEtablissement, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur", CA: "Alphabétisation" };
 
 export function EtablissementsPage() {
   const [etablissements, setEtablissements] = useState<EtablissementOut[]>([]);
@@ -273,6 +273,7 @@ export function EtablissementsPage() {
                   <option value="EP">Primaire (EP)</option>
                   <option value="ES">Secondaire (ES)</option>
                   <option value="UP">Universitaire (UP)</option>
+                  <option value="CA">Centre d'alphabétisation (CA)</option>
                 </Select>
               </Field>
               <Field label="Statut">
@@ -337,6 +338,7 @@ export function EtablissementsPage() {
               <option value="EP">Primaire</option>
               <option value="ES">Secondaire</option>
               <option value="UP">Supérieur</option>
+              <option value="CA">Alphabétisation</option>
             </Select>
             <Select value={filtreActif} onChange={(e) => setFiltreActif(e.target.value as "" | "actif" | "suspendu")} style={{ width: "160px" }}>
               <option value="">Tous statuts</option>

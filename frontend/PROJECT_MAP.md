@@ -316,3 +316,8 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   `components/ChoixTerritoire.tsx` (création d'établissement A++, `LocalisationEtablissementManager` A+).
   Sexe facultatif dans `NouvelleInscriptionPage` et l'inscription au guichet. La tuile « Couverture
   académique » codée en dur du tableau A++ est remplacée par les élèves inscrits réels.
+- **Alphabétisation (7.7)** : `pages/tuteur/AlphabetisationPage.tsx` (`/tuteur/alphabetisation`, menu
+  « Apprendre à lire », tuile « Apprendre à lire » du mode Écoute) : choix du centre, leçons à écouter,
+  `components/alphabetisation/QuizOral.tsx` (question et réponses lues, grands boutons numérotés, essai non
+  enregistré) ; `ApprenantsAdultesPanel` sur le tableau de bord A+ d'un centre `CA` ; type `CA` ajouté aux
+  libellés, filtres de l'annuaire et des cartes, niveaux de `ClassesPage`, photos par défaut.

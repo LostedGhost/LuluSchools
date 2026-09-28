@@ -16,7 +16,7 @@ export interface IndicateursOut {
   annee_academique: string;
   perimetre: string;
   seuil_anonymat: number;
-  etablissements: { total: number; publics: number; prives: number; par_type: Record<"EP" | "ES" | "UP", number>; sans_territoire: number };
+  etablissements: { total: number; publics: number; prives: number; par_type: Record<"EP" | "ES" | "UP" | "CA", number>; sans_territoire: number };
   eleves: { total: number; filles: number | null; garcons: number | null; sexe_non_renseigne: number | null; indice_parite: number | null };
   reussite: { bulletins: number; taux_reussite: number | null; taux_reussite_filles: number | null; taux_reussite_garcons: number | null };
   assiduite: { absences: number; retards: number; absences_par_eleve: number | null };

@@ -1279,3 +1279,26 @@ html[data-donnees-reduites] .hero-glow { display: none; }
 .indicateur-barre-remplie { display: block; height: 12px; min-width: 2px; border-radius: 0 4px 4px 0; background: var(--primary-deep); }
 .indicateur-barre-valeur { font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
 .table-defilante { width: 100%; overflow-x: auto; }
+
+/* Quiz oral (Lot 7.7) — grandes réponses numérotées, chaque élément peut se faire lire. */
+.quiz-oral { display: grid; gap: var(--space-5); }
+.quiz-oral-question { border: none; padding: 0; margin: 0; }
+.quiz-oral-question legend { display: flex; align-items: center; gap: 12px; font-size: var(--text-lg); font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+.quiz-oral-ecouter {
+  flex: none; width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--primary-deep); color: var(--on-primary); display: inline-flex; align-items: center; justify-content: center;
+}
+.quiz-oral-choix { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.quiz-oral-reponse {
+  display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 14px; border-radius: var(--radius-lg);
+  border: 2px solid var(--border-strong); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--text-lg);
+  font-weight: 600; text-align: left; cursor: pointer;
+}
+.quiz-oral-reponse.choisie { border-color: var(--primary-deep); background: var(--primary-tint); }
+.quiz-oral-reponse.bonne { border-color: var(--primary-deep); background: var(--primary-tint); }
+.quiz-oral-reponse.fausse { border-color: var(--action); background: var(--action-tint, #FBE7E7); }
+.quiz-oral-reponse:disabled { cursor: default; }
+.quiz-oral-numero {
+  flex: none; width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ink); color: var(--bg); font-weight: 800;
+}

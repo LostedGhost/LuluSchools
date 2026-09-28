@@ -89,6 +89,14 @@ class TentativeQuizCreate(BaseModel):
     reponses: list[int]
 
 
+class EssaiQuizOut(BaseModel):
+    """Lot 7.7 : resultat d'un entrainement (non enregistre), avec la correction."""
+
+    score: float
+    reussie: bool
+    bonnes_reponses: list[int]
+
+
 class TentativeQuizOut(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 

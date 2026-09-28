@@ -36,6 +36,7 @@ const SessionsLiveEnfantPage = lazy(() => import("./pages/tuteur/SessionsLiveEnf
 const ElProfessorTuteurPage = lazy(() => import("./pages/tuteur/ElProfessorTuteurPage").then((m) => ({ default: m.ElProfessorTuteurPage })));
 const CoffreFortPage = lazy(() => import("./pages/tuteur/CoffreFortPage").then((m) => ({ default: m.CoffreFortPage })));
 const RadarFamilialPage = lazy(() => import("./pages/tuteur/RadarFamilialPage").then((m) => ({ default: m.RadarFamilialPage })));
+const AlphabetisationPage = lazy(() => import("./pages/tuteur/AlphabetisationPage").then((m) => ({ default: m.AlphabetisationPage })));
 const PasseportEnfantPage = lazy(() => import("./pages/tuteur/PasseportEnfantPage").then((m) => ({ default: m.PasseportEnfantPage })));
 
 const EleveDashboard = lazy(() => import("./pages/eleve/EleveDashboard").then((m) => ({ default: m.EleveDashboard })));
@@ -271,6 +272,14 @@ function App() {
               element={
                 <RequireAuth roles={["tuteur"]}>
                   <BulletinsEnfantPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tuteur/alphabetisation"
+              element={
+                <RequireAuth roles={["tuteur"]}>
+                  <AlphabetisationPage />
                 </RequireAuth>
               }
             />

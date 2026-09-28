@@ -120,6 +120,7 @@ const LIBELLES: Record<string, string> = {
   EP: "Enseignement primaire",
   ES: "Enseignement secondaire",
   UP: "Université",
+  CA: "Centre d'alphabétisation",
 
   // Périodes d'évaluation
   trimestre1: "1er trimestre",

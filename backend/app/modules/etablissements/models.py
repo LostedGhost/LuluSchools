@@ -32,6 +32,10 @@ class TypeEtablissement(str, enum.Enum):
     EP = "EP"
     ES = "ES"
     UP = "UP"
+    # Lot 7.7 (PAG, action 4 : alphabetisation et education des adultes). Les apprenants
+    # y sont des adultes inscrits sur leur propre compte (InscriptionAlphabetisation),
+    # jamais des eleves : aucune inscription d'enfant n'y est acceptee.
+    CA = "CA"
 
 
 class StatutEtablissement(str, enum.Enum):

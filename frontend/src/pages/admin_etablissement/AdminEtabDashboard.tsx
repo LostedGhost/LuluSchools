@@ -15,6 +15,7 @@ import { listerPostes, contestationsEnAttente } from "../../api/recrutement";
 import { demandesActesEtablissement } from "../../api/actes";
 import { PhotosEtablissementManager } from "../../components/PhotosEtablissementManager";
 import { LocalisationEtablissementManager } from "../../components/LocalisationEtablissementManager";
+import { ApprenantsAdultesPanel } from "../../components/alphabetisation/ApprenantsAdultesPanel";
 import {
   School,
   UserCheck,
@@ -805,6 +806,7 @@ export function AdminEtabDashboard() {
         </div>
       </div>
 
+      {etablissement.type === "CA" && <ApprenantsAdultesPanel etablissementId={etablissement.id} />}
       <LocalisationEtablissementManager
         etablissementId={etablissement.id}
         latitude={etablissement.latitude}

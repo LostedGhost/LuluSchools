@@ -21,7 +21,7 @@ import {
   MapPin,
 } from "lucide-react";
 
-const TYPE_LABEL: Record<string, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur" };
+const TYPE_LABEL: Record<string, string> = { EP: "Primaire", ES: "Secondaire", UP: "Supérieur", CA: "Alphabétisation" };
 const TYPE_ICON: Record<string, ReactNode> = {
   EP: <School size={20} />,
   ES: <Building2 size={20} />,
@@ -117,7 +117,7 @@ export function EtablissementsAnnuairePage() {
   const [total, setTotal] = useState(0);
   const [erreur, setErreur] = useState(false);
   const [q, setQ] = useState("");
-  const [type, setType] = useState<"" | "EP" | "ES" | "UP">("");
+  const [type, setType] = useState<"" | "EP" | "ES" | "UP" | "CA">("");
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -178,8 +178,8 @@ export function EtablissementsAnnuairePage() {
               style={{ width: "100%", paddingLeft: "40px" }}
             />
           </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {(["", "EP", "ES", "UP"] as const).map((t) => (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {(["", "EP", "ES", "UP", "CA"] as const).map((t) => (
               <button
                 key={t || "tous"}
                 type="button"

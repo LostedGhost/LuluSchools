@@ -41,6 +41,7 @@ const TYPE_LABEL: Record<string, string> = {
   EP: "Primaire",
   ES: "Secondaire",
   UP: "Supérieur",
+  CA: "Alphabétisation",
 };
 
 /* ═══════════════════════════════════════════════════════════════
