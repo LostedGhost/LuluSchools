@@ -359,7 +359,7 @@ export function MarketplaceAdminPage() {
             </Field>
             <ErrorBanner>{erreurLitige}</ErrorBanner>
             <SuccessBanner>{succesLitige}</SuccessBanner>
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <Btn variant="primary" loading={enCoursDecision === "acceptee"} onClick={() => trancherLitige("acceptee")} leftIcon={<CheckCircle2 size={16} />}>
                 Accepter (rembourser l'acheteur)
               </Btn>

@@ -26,12 +26,12 @@
   --clr-green-100:     #E3F6EA;
   --clr-green-50:      #F2FBF5;
 
-  --clr-amber-700:     #92660A;
+  --clr-amber-700:     #86600A;
   --clr-amber-500:     #D97706;
   --clr-amber-100:     #FDF0DB;
 
   --clr-red-700:       #9B2C2C;
-  --clr-red-500:       #DC2626;
+  --clr-red-500:       #C81E1E;
   --clr-red-100:       #FBE7E7;
 
   --clr-blue-700:      #1E4E8C;
@@ -40,7 +40,7 @@
 
   --clr-ink-900:       #0E1712;
   --clr-ink-700:       #3C4A43;
-  --clr-ink-500:       #6B7A73;
+  --clr-ink-500:       #5B6961;
 
   --clr-bg:            #F4F7F5;
   --clr-surface:       #FFFFFF;
@@ -169,6 +169,7 @@
 
     --clr-green-500:  #34C97D;
     --clr-green-300:  #7FE3A8;
+    --clr-green-700:  #4CC98A;
     --clr-green-100:  #123423;
     --clr-green-50:   #0E2A1B;
 
@@ -177,7 +178,7 @@
     --clr-amber-100:  #33260C;
 
     --clr-red-500:    #EF6A6A;
-    --clr-red-700:    #C4514F;
+    --clr-red-700:    #F0827F;
     --clr-red-100:    #341313;
 
     --clr-blue-500:   #5B9BD9;
@@ -201,6 +202,7 @@
 
   --clr-green-500:  #34C97D;
   --clr-green-300:  #7FE3A8;
+  --clr-green-700:  #4CC98A;
   --clr-green-100:  #123423;
   --clr-green-50:   #0E2A1B;
 
@@ -209,7 +211,7 @@
   --clr-amber-100:  #33260C;
 
   --clr-red-500:    #EF6A6A;
-  --clr-red-700:    #C4514F;
+  --clr-red-700:    #F0827F;
   --clr-red-100:    #341313;
 
   --clr-blue-500:   #5B9BD9;
@@ -1081,3 +1083,8 @@ button, a, [role="button"], select, summary { cursor: pointer; }
 .guide-lien { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--ink); text-decoration: none; }
 .guide-lien:hover, .guide-lien:focus-visible { text-decoration: underline; }
 @media (max-width: 480px) { .guide-fermer-texte { display: none; } }
+
+/* Téléphone : un libellé de bouton long passe à la ligne au lieu de déborder de l'écran */
+@media (max-width: 640px) {
+  .btn { white-space: normal; text-align: center; max-width: 100%; line-height: 1.3; }
+}

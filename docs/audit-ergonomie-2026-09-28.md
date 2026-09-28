@@ -65,6 +65,11 @@ l'écran des corrections.
 - Champs et filtres sans étiquette visible : nom accessible (texte indicatif, option
   « Tous… »), recherche des tableaux étiquetée.
 - Cibles tactiles d'au moins 40 px sur écran tactile ; lien imbriqué dans un bouton supprimé.
+- **Contrastes (WCAG AA, 4,5:1)** : en thème sombre, le vert des liens et de l'entrée de menu
+  active tombait à 2,9:1 et le rouge des erreurs à 3,5:1 ; en thème clair, le gris secondaire
+  à 3,9:1. Couleurs ajustées (`index.css`) : pire cas désormais 4,67:1 (clair) et 4,89:1
+  (sombre) pour tous les textes sur tous les fonds.
+- Téléphone : un libellé de bouton long passe à la ligne au lieu de déborder.
 - Fenêtres de dialogue : Échap, focus piégé puis restauré, `aria-modal`.
 - Page des coefficients (A+) : 270 cartes à plat → filtrées sur les niveaux de
   l'établissement, recherche, regroupement par niveau.
