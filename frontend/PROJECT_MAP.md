@@ -303,3 +303,10 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   audio/vidéo dans la page, `preload="none"`, sous-titres chargés en blob car `<track>` ne transmet pas
   le jeton) et `TranscriptionCours` (Markdown + « Écouter »). Badge « Transcription manquante » dans
   `MesCoursPage` ; « Écouter ce cours » sur les cours texte (`CoursDetailPage`).
+- **Mode Écoute (7.4)** : `pages/tuteur/ModeEcoute.tsx` remplace `TuteurDashboard` quand
+  `preferences.mode_ecoute` (activé par le bandeau « Mode Écoute » du tableau de bord ou le panneau
+  d'accessibilité) : grandes tuiles pictogrammes qui parlent (`lecteurVocal`), flèche vers l'écran
+  détaillé, consentement donné en un geste. Libellés enregistrés en langues nationales :
+  `public/audio/ecoute/index.json` + `<langue>/<clé>.mp3` (aucun enregistrement livré pour l'instant ;
+  repli sur la voix française). Messages vocaux : `components/messagerie/MessageVocal.tsx`
+  (MediaRecorder Opus 24 kbit/s, 2 min max ; lecture à la demande), branchés dans `ConversationPage`.

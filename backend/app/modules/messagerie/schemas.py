@@ -44,6 +44,8 @@ class MessageOut(BaseModel):
     auteur_prenom: str | None = None
     contenu: str
     created_at: datetime
+    est_vocal: bool = False
+    duree_audio_s: int | None = None
 
 
 class SignalementOut(BaseModel):

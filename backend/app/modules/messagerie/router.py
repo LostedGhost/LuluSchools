@@ -1,7 +1,8 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import get_db, get_session_factory
+from app.core.files import FileStorageError, LuluFilesClient, get_files_client, lire_upload_borne
 from app.core.llm import FreeLLMClient, get_llm_client
 from app.core.moderation import LIBELLES_DECISION, trier_en_arriere_plan
 from app.core.deps import api_error, get_current_active_user, require_roles
@@ -319,6 +320,72 @@ def envoyer_message(
     sortie.auteur_nom = utilisateur.nom
     sortie.auteur_prenom = utilisateur.prenom
     return sortie
+
+
+_TYPES_AUDIO = frozenset({"audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav", "audio/aac"})
+_MAX_AUDIO_OCTETS = 2 * 1024 * 1024  # ~2 min en Opus : leger sur un forfait mobile
+_DUREE_MAX_S = 120
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages-vocaux", response_model=MessageOut, status_code=status.HTTP_201_CREATED
+)
+def envoyer_message_vocal(
+    conversation_id: str,
+    audio: UploadFile = File(...),
+    duree_secondes: int = Form(..., ge=1, le=_DUREE_MAX_S),
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> MessageOut:
+    """Lot 7.4 : un parent qui ne sait pas ecrire parle a l'enseignant. Memes regles
+    d'acces qu'un message ecrit (membre de la conversation)."""
+    conversation = db.get(Conversation, conversation_id)
+    if conversation is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Conversation introuvable.")
+    if not _est_participant(db, utilisateur, conversation):
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas membre de cette conversation.")
+    contenu_audio = lire_upload_borne(audio, _MAX_AUDIO_OCTETS, _TYPES_AUDIO)
+    try:
+        file_id = files_client.upload(contenu_audio, audio.filename or "message-vocal", audio.content_type or "audio/webm")
+    except FileStorageError as exc:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Impossible d'envoyer le message vocal, veuillez réessayer."
+        ) from exc
+    message = Message(
+        conversation_id=conversation_id,
+        auteur_id=utilisateur.id,
+        contenu=f"Message vocal ({duree_secondes // 60}:{duree_secondes % 60:02d})",
+        audio_lulufiles_id=file_id,
+        duree_audio_s=duree_secondes,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    sortie = MessageOut.model_validate(message)
+    sortie.auteur_nom = utilisateur.nom
+    sortie.auteur_prenom = utilisateur.prenom
+    return sortie
+
+
+@router.get("/messages/{message_id}/audio")
+def lien_message_vocal(
+    message_id: str,
+    db: Session = Depends(get_db),
+    files_client: LuluFilesClient = Depends(get_files_client),
+    utilisateur: Utilisateur = Depends(get_current_active_user),
+) -> dict[str, str]:
+    message = db.get(Message, message_id)
+    if message is None or message.audio_lulufiles_id is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "introuvable", "Message vocal introuvable.")
+    conversation = db.get(Conversation, message.conversation_id)
+    if not _est_participant(db, utilisateur, conversation):
+        raise api_error(status.HTTP_403_FORBIDDEN, "acces_refuse", "Vous n'êtes pas membre de cette conversation.")
+    try:
+        url = files_client.get_signed_link(message.audio_lulufiles_id, disposition="inline")
+    except FileStorageError as exc:
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "stockage_echoue", "Message vocal indisponible pour le moment.") from exc
+    return {"url": url}
 
 
 @router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)

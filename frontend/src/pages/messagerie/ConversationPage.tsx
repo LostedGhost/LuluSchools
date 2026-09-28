@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { TAILLE_PAGE_MESSAGES, listerMessages, masquerMessage, mesConversations, envoyerMessage, signalerMessage } from "../../api/messagerie";
+import { TAILLE_PAGE_MESSAGES, listerMessages, masquerMessage, mesConversations, envoyerMessage, envoyerMessageVocal, signalerMessage } from "../../api/messagerie";
 import { messageErreur } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import type { ConversationOut, MessageOut } from "../../types/api";
 import { Btn, EmptyState, ErrorBanner, Skeleton, TextArea } from "../../components/ui";
 import { ArrowLeft, Flag, MessageCircle, Send, Trash2, Users } from "lucide-react";
 import { useConfirmation } from "../../components/Modale";
+import { BoutonMessageVocal, LecteurMessageVocal } from "../../components/messagerie/MessageVocal";
 
 export function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -66,6 +67,20 @@ export function ConversationPage() {
       setContenu("");
     } catch (err) {
       setErreur(messageErreur(err, "Impossible d'envoyer ce message."));
+    } finally {
+      setEnvoiEnCours(false);
+    }
+  };
+
+  const envoyerVocal = async (audio: Blob, duree: number) => {
+    if (!conversationId) return;
+    setEnvoiEnCours(true);
+    setErreur(null);
+    try {
+      const res = await envoyerMessageVocal(conversationId, audio, duree);
+      setMessages((prev) => [...prev, res.data]);
+    } catch (err) {
+      setErreur(messageErreur(err, "Impossible d'envoyer ce message vocal."));
     } finally {
       setEnvoiEnCours(false);
     }
@@ -166,11 +181,15 @@ export function ConversationPage() {
                     maxWidth: "75%",
                     padding: "10px 14px",
                     borderRadius: "var(--radius-lg)",
-                    background: estMoi ? "var(--primary)" : "var(--surface-2)",
+                    background: estMoi ? "var(--primary-deep)" : "var(--surface-2)",
                     color: estMoi ? "var(--on-primary)" : "var(--ink)",
                   }}
                 >
-                  <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{m.contenu}</p>
+                  {m.est_vocal ? (
+                    <LecteurMessageVocal messageId={m.id} duree={m.duree_audio_s ?? null} />
+                  ) : (
+                    <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{m.contenu}</p>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: "4px", marginTop: "2px" }}>
                   <button
@@ -217,6 +236,7 @@ export function ConversationPage() {
             }}
           />
         </div>
+        <BoutonMessageVocal onEnregistre={envoyerVocal} desactive={envoiEnCours} />
         <Btn type="submit" variant="primary" loading={envoiEnCours} disabled={!contenu.trim()} aria-label="Envoyer">
           <Send size={16} />
         </Btn>

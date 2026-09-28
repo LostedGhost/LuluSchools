@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { GuideDemarrage } from "../../components/GuideDemarrage";
+import { useAccessibilite } from "../../accessibilite/AccessibiliteContext";
+import { ModeEcoute } from "./ModeEcoute";
 import { Link, useNavigate } from "react-router-dom";
 import { donnerConsentementParental, mesInscriptions } from "../../api/inscriptions";
 import { creerConversationDm } from "../../api/messagerie";
@@ -17,7 +19,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import type { ReactNode } from "react";
-import { UserPlus, ChevronRight, AlertCircle, Clock, CheckCircle2, XCircle, GraduationCap, ClipboardList, TriangleAlert, MessageCircle, Video, Bus, Ticket, Handshake, BookOpen, ShoppingBag, Radio, Bot, Wallet, Radar, Award } from "lucide-react";
+import { UserPlus, ChevronRight, AlertCircle, Clock, CheckCircle2, XCircle, GraduationCap, ClipboardList, TriangleAlert, MessageCircle, Video, Bus, Ticket, Handshake, BookOpen, ShoppingBag, Radio, Bot, Wallet, Radar, Award, Ear } from "lucide-react";
 
 type BadgeToneLocal = "neutral" | "success" | "error" | "pending";
 
@@ -43,6 +45,7 @@ const STATUS_ICON: Record<StatutInscription, ReactNode> = {
 
 export function TuteurDashboard() {
   const navigate = useNavigate();
+  const { preferences, modifier } = useAccessibilite();
   const [inscriptions, setInscriptions] = useState<InscriptionAvecEleveOut[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCoursId, setEnCoursId] = useState<string | null>(null);
@@ -102,9 +105,19 @@ export function TuteurDashboard() {
   const enAttente = inscriptions?.filter((i) => i.statut !== "validee" && i.statut !== "rejetee").length ?? 0;
   const consentementRequis = inscriptions?.filter((i) => i.statut === "en_attente_consentement_parental").length ?? 0;
 
+  // Lot 7.4 : accueil en images et en voix pour les parents qui lisent peu ou pas.
+  if (preferences.mode_ecoute) return <ModeEcoute />;
+
   return (
     <div className="page-content">
       <GuideDemarrage />
+      <button type="button" className="ecoute-activer" onClick={() => modifier({ mode_ecoute: true })}>
+        <Ear size={28} aria-hidden="true" />
+        <span>
+          <strong>Mode Écoute</strong>
+          <span>Des images qui parlent, pour suivre vos enfants sans avoir à lire.</span>
+        </span>
+      </button>
       {/* En-tête */}
       <div
         style={{

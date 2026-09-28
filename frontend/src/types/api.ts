@@ -467,6 +467,9 @@ export interface MessageOut {
   auteur_prenom: string | null;
   contenu: string;
   created_at: string;
+  /** Lot 7.4 : message vocal (écouter via GET /messages/{id}/audio). */
+  est_vocal?: boolean;
+  duree_audio_s?: number | null;
 }
 
 export interface SignalementOut {

@@ -1,0 +1,7 @@
+{
+  "_note": "Lot 7.4 : libellés du mode Écoute enregistrés en langues nationales. Déposer <langue>/<clé>.mp3 (ex. fon/bulletin.mp3) puis ajouter la clé à la liste de la langue ; une langue n'apparaît dans l'application que si elle a au moins un enregistrement. Clés : accueil, bulletin, presences, devoirs, paiements, accord, messages, inscrire, aide.",
+  "langues": {
+    "fon": { "nom": "Fɔngbè", "cles": [] },
+    "yo": { "nom": "Yorùbá", "cles": [] }
+  }
+}

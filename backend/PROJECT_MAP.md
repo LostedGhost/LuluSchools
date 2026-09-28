@@ -463,3 +463,12 @@ Cahier des charges : `docs/cahier-des-charges-conformite-pag.md`.
   désormais sur l'audio et la vidéo. FreeLLM n'a pas de route de transcription audio (vérifié dans son
   code source) : la transcription vient de l'enseignant (saisie ou dictée navigateur).
 - Migration `0022_transcriptions_cours` ; seed : les cours audio portent leur transcription.
+
+### app/modules/ecoute/ (7.4, mode Écoute)
+- `GET /ecoute/tuteur` : par enfant, tuiles `{cle, titre, phrase, lien, alerte, consentement_inscription_id}`
+  (bulletin de la période en cours sur 20 + décision du conseil, présences sur 30 jours, devoirs à rendre,
+  dépenses à valider, consentement à donner). Phrases construites SANS IA (`service.py`), aucune écriture
+  en base, formulations neutres en genre.
+- Messagerie : `POST /conversations/{id}/messages-vocaux` (audio ≤ 2 Mo, ≤ 120 s, LuluFiles ; `contenu`
+  = « Message vocal (m:ss) ») et `GET /messages/{id}/audio` (lien signé, membres seulement) ;
+  `MessageOut.est_vocal`/`duree_audio_s`. Migration `0023_messages_vocaux`.

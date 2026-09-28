@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -58,6 +58,14 @@ class Message(Base):
     auteur_id: Mapped[str] = mapped_column(ForeignKey("utilisateurs.id"), index=True)
     contenu: Mapped[str] = mapped_column(Text)
     masque_par: Mapped[list] = mapped_column(JSON, default=list)
+    # Lot 7.4 : message vocal (LuluFiles) pour qui ne sait pas ou peu ecrire ; `contenu`
+    # garde une trace lisible (« Message vocal (0:12) ») pour la moderation et les listes.
+    audio_lulufiles_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    duree_audio_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    @property
+    def est_vocal(self) -> bool:
+        return self.audio_lulufiles_id is not None
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
