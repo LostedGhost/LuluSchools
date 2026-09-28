@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { libelle } from "../../utils/libelles";
 import { mesClassesAffectees } from "../../api/etablissements";
 import { creerQuiz, listerCours, listerQuiz, obtenirLienFichierCours, publierCours } from "../../api/pedagogie";
 import { messageErreur } from "../../api/client";
@@ -559,7 +560,7 @@ export function MesCoursPage() {
                       }}
                     >
                       <span className="text-eyebrow">Détails du cours</span>
-                      <Badge tone="neutral">Format : {c.format}</Badge>
+                      <Badge tone="neutral">Format : {libelle(c.format)}</Badge>
                     </div>
                     <div
                       style={{

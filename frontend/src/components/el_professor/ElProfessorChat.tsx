@@ -36,6 +36,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
+import { useConfirmation } from "../Modale";
 import {
   ErreurElProfessor,
   poserQuestionEnFlux,
@@ -452,8 +453,16 @@ export function ElProfessorChat({
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const supprimer = async () => {
     if (!conversationActive) return;
+    const ok = await demanderConfirmation({
+      titre: "Supprimer cette conversation ?",
+      message: `« ${titreConversation(conversationActive)} » et tous ses messages seront définitivement effacés.`,
+      action: "Supprimer",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await supprimerConversation(persona, conversationActive.id);
       setConversations((prec) => prec.filter((c) => c.id !== conversationActive.id));

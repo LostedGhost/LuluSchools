@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { libelle } from "../../utils/libelles";
 import { useParams, useNavigate } from "react-router-dom";
 import { consulterVieScolaire } from "../../api/etablissements";
 import { messageErreur } from "../../api/client";
@@ -116,7 +117,7 @@ export function VieScolairePage() {
                       {i.classe_niveau}{i.classe_filiere ? ` ${i.classe_filiere}` : ""} — {i.annee_academique}
                     </span>
                   </div>
-                  <Badge tone={TONE_STATUT[i.statut] ?? "neutral"}>{i.statut}</Badge>
+                  <Badge tone={TONE_STATUT[i.statut] ?? "neutral"}>{libelle(i.statut)}</Badge>
                 </div>
               </Card>
             ))}

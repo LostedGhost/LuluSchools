@@ -19,6 +19,7 @@ import type { LigneTransportOut, StatutTicket, TicketCantineOut, TicketTransport
 import { Badge, Btn, Card, EmptyState, ErrorBanner, Field, SectionHead, Select, SkeletonCard, SuccessBanner, TextInput } from "../../components/ui";
 import { KkiapayButton } from "../../components/KkiapayButton";
 import { Bus, Download, RefreshCw, Utensils } from "lucide-react";
+import { useConfirmation } from "../Modale";
 
 const STATUT_TONE: Record<StatutTicket, "pending" | "success" | "neutral" | "error"> = {
   achete: "pending",
@@ -155,7 +156,9 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const rembourserTransport = async (ticketId: string) => {
+    if (!(await demanderConfirmation({ titre: "Rembourser ce ticket de transport ?", message: "Le ticket sera annulé ; le montant est reversé sur le compte Mobile Money du paiement.", action: "Rembourser", danger: true }))) return;
     setActionTicketId(ticketId);
     setErreur(null);
     try {
@@ -170,6 +173,7 @@ export function ServicesScolairesPanel({ etablissementId, eleveUtilisateurId }: 
   };
 
   const rembourserCantine = async (ticketId: string) => {
+    if (!(await demanderConfirmation({ titre: "Rembourser ce ticket de cantine ?", message: "Le ticket sera annulé ; le montant est reversé sur le compte Mobile Money du paiement.", action: "Rembourser", danger: true }))) return;
     setActionTicketId(ticketId);
     setErreur(null);
     try {

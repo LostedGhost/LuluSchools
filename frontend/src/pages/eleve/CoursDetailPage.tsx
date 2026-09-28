@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { libelle } from "../../utils/libelles";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   listerCours,
@@ -109,7 +110,7 @@ export function CoursDetailPage() {
         </h1>
         <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
           <Badge tone="info">{cours.chapitre}</Badge>
-          <Badge tone="magic">Format: {cours.format}</Badge>
+          <Badge tone="magic">Format : {libelle(cours.format)}</Badge>
         </div>
       </div>
 

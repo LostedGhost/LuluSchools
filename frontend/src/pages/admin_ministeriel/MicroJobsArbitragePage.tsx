@@ -7,7 +7,8 @@ import {
 } from "../../api/micro_jobs";
 import { messageErreur } from "../../api/client";
 import type { ContestationMicroJobDetailOut, MissionAReverserOut } from "../../types/api";
-import { Btn, Card, ErrorBanner, Field, PageTitle, SectionHead, SuccessBanner, TextArea, TextInput } from "../../components/ui";
+import { Btn, ErrorBanner, Field, PageTitle, SectionHead, SuccessBanner, TextArea, TextInput } from "../../components/ui";
+import { Modale } from "../../components/Modale";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { CheckCircle2, Landmark, Phone, XCircle } from "lucide-react";
 import { estRempli } from "../../utils/validation";
@@ -150,10 +151,25 @@ export function MicroJobsArbitragePage() {
         onRowClick={(c) => { setContestationSelectionnee(c); setMotifDecision(""); setErreurDecision(null); setSuccesDecision(null); }}
       />
 
-      {contestationSelectionnee && (
-        <Card className="mt-4 anim-slide-up" style={{ borderColor: "var(--primary)", borderWidth: "2px" }}>
-          <SectionHead title={`Contestation — ${contestationSelectionnee.offre_titre}`} />
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+      <Modale
+        ouvert={contestationSelectionnee !== null}
+        onFermer={() => setContestationSelectionnee(null)}
+        largeur={620}
+        titre={`Contestation — ${contestationSelectionnee?.offre_titre ?? ""}`}
+        pied={
+          <>
+            <Btn variant="ghost" onClick={() => setContestationSelectionnee(null)}>Fermer</Btn>
+            <Btn variant="action" loading={enCoursDecision === "rejetee"} onClick={() => trancher("rejetee")} leftIcon={<XCircle size={16} />}>
+              Rejeter (payer le prestataire)
+            </Btn>
+            <Btn variant="primary" loading={enCoursDecision === "acceptee"} onClick={() => trancher("acceptee")} leftIcon={<CheckCircle2 size={16} />}>
+              Accepter (rembourser le client)
+            </Btn>
+          </>
+        }
+      >
+        {contestationSelectionnee && (<>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
             <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
               <strong>Montant :</strong> {formaterMontant(contestationSelectionnee.prix)} ·{" "}
               <strong>Client :</strong> {contestationSelectionnee.client_prenom} {contestationSelectionnee.client_nom} ·{" "}
@@ -165,18 +181,9 @@ export function MicroJobsArbitragePage() {
             <TextArea rows={3} value={motifDecision} onChange={(e) => setMotifDecision(e.target.value)} />
           </Field>
           <ErrorBanner>{erreurDecision}</ErrorBanner>
-          <SuccessBanner>{succesDecision}</SuccessBanner>
-          <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-            <Btn variant="primary" loading={enCoursDecision === "acceptee"} onClick={() => trancher("acceptee")} leftIcon={<CheckCircle2 size={16} />}>
-              Accepter (rembourser le client)
-            </Btn>
-            <Btn variant="action" loading={enCoursDecision === "rejetee"} onClick={() => trancher("rejetee")} leftIcon={<XCircle size={16} />}>
-              Rejeter (payer le prestataire)
-            </Btn>
-            <Btn variant="ghost" onClick={() => setContestationSelectionnee(null)}>Fermer</Btn>
-          </div>
-        </Card>
-      )}
+        </>)}
+      </Modale>
+      <SuccessBanner>{succesDecision}</SuccessBanner>
 
       <div style={{ marginTop: "var(--space-8)" }}>
         <SectionHead
@@ -192,10 +199,21 @@ export function MicroJobsArbitragePage() {
           onRowClick={(m) => { setMissionSelectionnee(m); setReferencePaiement(""); setErreurReversement(null); setSuccesReversement(null); }}
         />
 
-        {missionSelectionnee && (
-          <Card className="mt-4 anim-slide-up" style={{ borderColor: "var(--primary)", borderWidth: "2px" }}>
-            <SectionHead title={`Reverser — ${missionSelectionnee.offre_titre}`} />
-            <p className="text-sm" style={{ color: "var(--ink-soft)", marginTop: "8px" }}>
+        <Modale
+          ouvert={missionSelectionnee !== null}
+          onFermer={() => setMissionSelectionnee(null)}
+          titre={`Reverser — ${missionSelectionnee?.offre_titre ?? ""}`}
+          pied={
+            <>
+              <Btn variant="ghost" onClick={() => setMissionSelectionnee(null)}>Fermer</Btn>
+              <Btn variant="primary" loading={enCoursReversement} onClick={reverser} leftIcon={<Landmark size={16} />}>
+                Confirmer le reversement
+              </Btn>
+            </>
+          }
+        >
+          {missionSelectionnee && (<>
+            <p className="text-sm" style={{ color: "var(--ink-soft)", marginTop: 0 }}>
               <strong>Prestataire :</strong> {missionSelectionnee.prestataire_prenom} {missionSelectionnee.prestataire_nom}
               {missionSelectionnee.prestataire_telephone && ` · ${missionSelectionnee.prestataire_telephone}`} ·{" "}
               <strong>Montant :</strong> {formaterMontant(missionSelectionnee.prix_paye)}
@@ -204,15 +222,9 @@ export function MicroJobsArbitragePage() {
               <TextInput value={referencePaiement} onChange={(e) => setReferencePaiement(e.target.value)} />
             </Field>
             <ErrorBanner>{erreurReversement}</ErrorBanner>
-            <SuccessBanner>{succesReversement}</SuccessBanner>
-            <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-              <Btn variant="primary" loading={enCoursReversement} onClick={reverser} leftIcon={<Landmark size={16} />}>
-                Confirmer le reversement
-              </Btn>
-              <Btn variant="ghost" onClick={() => setMissionSelectionnee(null)}>Fermer</Btn>
-            </div>
-          </Card>
-        )}
+          </>)}
+        </Modale>
+        <SuccessBanner>{succesReversement}</SuccessBanner>
       </div>
     </div>
   );

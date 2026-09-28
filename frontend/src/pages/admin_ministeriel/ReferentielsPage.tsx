@@ -11,6 +11,7 @@ import { messageErreur } from "../../api/client";
 import { Badge, Btn, Card, ErrorBanner, Field, PageTitle, SectionHead, Select, TextInput } from "../../components/ui";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { Check, CheckCircle2, Pencil, X } from "lucide-react";
+import { useConfirmation } from "../../components/Modale";
 import { estRempli } from "../../utils/validation";
 
 const TONE_STATUT: Record<ReferentielOut["statut"], "success" | "pending" | "neutral"> = {
@@ -165,10 +166,16 @@ export function ReferentielsPage() {
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const validerLot = async () => {
     const idsEligibles = referentielsActifs
       .filter((r) => selection.has(r.id) && r.statut === "proposition_en_attente")
       .map((r) => r.id);
+    if (idsEligibles.length > 0 && !(await demanderConfirmation({
+      titre: `Valider ${idsEligibles.length} coefficient(s) ?`,
+      message: "Ils s'appliqueront immédiatement au calcul des moyennes et des bulletins de tous les établissements concernés.",
+      action: "Valider",
+    }))) return;
     if (idsEligibles.length === 0) {
       setErreur("Sélectionnez au moins une proposition en attente pour valider en masse.");
       return;

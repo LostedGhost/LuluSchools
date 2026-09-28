@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { listerUtilisateursSupervision, reactiverCompte, suspendreCompte } from "../../api/admin";
 import { messageErreur } from "../../api/client";
 import type { AdminUtilisateurOut } from "../../types/api";
-import { Badge, Btn, Card, ErrorBanner, Field, PageTitle, Select, SuccessBanner, TextInput } from "../../components/ui";
+import { Badge, Btn, ErrorBanner, Field, PageTitle, Select, SuccessBanner, TextInput } from "../../components/ui";
+import { Modale } from "../../components/Modale";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { Ban, CheckCircle2, UserCog } from "lucide-react";
 import { estRempli } from "../../utils/validation";
@@ -151,25 +152,34 @@ export function UtilisateursPage() {
         onPageChange={setPage}
       />
 
-      {cibleAction && (
-        <Card className="mt-4 anim-slide-up" style={{ borderColor: "var(--action-deep)", borderWidth: "2px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-            <UserCog size={20} style={{ color: "var(--action-deep)" }} />
-            <strong>
-              {cibleAction.action === "suspendre" ? "Suspendre" : "Réactiver"} le compte de {cibleAction.utilisateur.prenom} {cibleAction.utilisateur.nom}
-            </strong>
-          </div>
-          <Field label="Motif" required={cibleAction.action === "suspendre"} helper="Journalisé dans le journal d'audit ministériel.">
-            <TextInput value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Ex. Signalement en cours d'instruction" />
-          </Field>
-          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-            <Btn variant={cibleAction.action === "suspendre" ? "action" : "primary"} loading={enCoursAction} onClick={confirmerAction}>
-              Confirmer
-            </Btn>
+      <Modale
+        ouvert={cibleAction !== null}
+        onFermer={() => setCibleAction(null)}
+        titre={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <UserCog size={20} style={{ color: "var(--action-deep)" }} aria-hidden="true" />
+            {cibleAction?.action === "suspendre" ? "Suspendre" : "Réactiver"} le compte de {cibleAction?.utilisateur.prenom} {cibleAction?.utilisateur.nom}
+          </span>
+        }
+        pied={
+          <>
             <Btn variant="ghost" onClick={() => setCibleAction(null)}>Annuler</Btn>
-          </div>
-        </Card>
-      )}
+            <Btn variant={cibleAction?.action === "suspendre" ? "action" : "primary"} loading={enCoursAction} onClick={confirmerAction}>
+              {cibleAction?.action === "suspendre" ? "Suspendre le compte" : "Réactiver le compte"}
+            </Btn>
+          </>
+        }
+      >
+        {cibleAction?.action === "suspendre" && (
+          <p className="text-sm" style={{ color: "var(--ink-soft)", marginTop: 0 }}>
+            La personne ne pourra plus se connecter tant que le compte n'est pas réactivé.
+          </p>
+        )}
+        <Field label="Motif" required={cibleAction?.action === "suspendre"} helper="Journalisé dans le journal d'audit ministériel.">
+          <TextInput value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Ex. Signalement en cours d'instruction" />
+        </Field>
+        <ErrorBanner>{erreur}</ErrorBanner>
+      </Modale>
     </div>
   );
 }

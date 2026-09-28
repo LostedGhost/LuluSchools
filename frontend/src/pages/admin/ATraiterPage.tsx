@@ -26,6 +26,7 @@ import { deciderContestationMicroJob } from "../../api/micro_jobs";
 import type { EtablissementOut } from "../../types/api";
 import { Badge, Btn, Card, EmptyState, ErrorBanner, SkeletonCard, SuccessBanner, TextInput } from "../../components/ui";
 import { CheckCheck, CircleCheck, Sparkles, TriangleAlert, Wand2 } from "lucide-react";
+import { useConfirmation, type DemandeConfirmation } from "../../components/Modale";
 
 const MarkdownIA = lazy(() => import("../../components/el_professor/MarkdownIA"));
 
@@ -65,6 +66,7 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
   const [propositions, setPropositions] = useState<PropositionAffectation[] | null>(null);
   const [references, setReferences] = useState<Record<string, string>>({});
   const [motifRejet, setMotifRejet] = useState("");
+  const confirmer = useConfirmation();
 
   const charger = useCallback(() => {
     aTraiter()
@@ -73,7 +75,8 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
   }, []);
   useEffect(charger, [charger]);
 
-  const agir = async (cle: string, action: () => Promise<string>) => {
+  const agir = async (cle: string, action: () => Promise<string>, confirmation?: DemandeConfirmation) => {
+    if (confirmation && !(await confirmer(confirmation))) return;
     setEnCours(cle);
     setErreur(null);
     setSucces(null);
@@ -100,12 +103,21 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
               onClick={() => agir(section.cle, async () => {
                 const r = (await validerInscriptionsEnLot(ids)).data;
                 return `${r.validees.length} inscription(s) validée(s)` + (r.refusees.length ? `, ${r.refusees.length} non validée(s) (${r.refusees[0].message})` : ".");
+              }, {
+                titre: `Valider ${ids.length} inscription(s) ?`,
+                message: "Les élèves sont admis dans l'ordre d'arrivée, dans la limite des places, et les familles sont prévenues.",
+                action: "Tout valider",
               })}>
               Tout valider ({ids.length})
             </Btn>
             <TextInput value={motifRejet} onChange={(e) => setMotifRejet(e.target.value)} placeholder="Motif de rejet commun" style={{ maxWidth: "240px" }} />
             <Btn size="sm" variant="outline" disabled={motifRejet.trim().length < 3}
-              onClick={() => agir(section.cle, async () => `${(await rejeterInscriptionsEnLot(ids, motifRejet.trim())).data.validees.length} inscription(s) rejetée(s).`)}>
+              onClick={() => agir(section.cle, async () => `${(await rejeterInscriptionsEnLot(ids, motifRejet.trim())).data.validees.length} inscription(s) rejetée(s).`, {
+                titre: `Rejeter ${ids.length} inscription(s) ?`,
+                message: <>Chaque famille recevra ce motif : « {motifRejet.trim()} ». Cette décision est définitive.</>,
+                action: "Tout rejeter",
+                danger: true,
+              })}>
               Tout rejeter
             </Btn>
           </div>
@@ -113,7 +125,11 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
       case "reconductions":
         return etablissement && (
           <Btn size="sm" leftIcon={<CheckCheck size={14} />} loading={enCours === section.cle}
-            onClick={() => agir(section.cle, async () => `${(await reconduireContratsEnLot(etablissement.id)).data.length} proposition(s) de reconduction envoyée(s) aux enseignants.`)}>
+            onClick={() => agir(section.cle, async () => `${(await reconduireContratsEnLot(etablissement.id)).data.length} proposition(s) de reconduction envoyée(s) aux enseignants.`, {
+              titre: `Proposer la reconduction de ${section.nombre} contrat(s) ?`,
+              message: "Chaque enseignant reçoit un nouveau contrat d'un an, avec le même syllabus, à signer depuis son espace.",
+              action: "Tout reconduire",
+            })}>
             Tout reconduire
           </Btn>
         );
@@ -136,6 +152,10 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
               const f = section.cle === "signalements_messages" ? traiterSignalementsMessagesEnLot : traiterSignalementsAnnoncesEnLot;
               const r = (await f(ids)).data;
               return `${r.traites.length} signalement(s) traité(s) selon la suggestion de l'IA ; ${r.ignores.length} laissé(s) pour un examen humain.`;
+            }, {
+              titre: "Appliquer les suggestions de l'IA ?",
+              message: "Les contenus que l'IA propose de retirer seront masqués, les autres classés sans suite. Les signalements « à examiner » restent pour vous.",
+              action: "Appliquer",
             })}>
             Appliquer les suggestions de l'IA
           </Btn>
@@ -143,7 +163,11 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
       case "remboursements":
         return (
           <Btn size="sm" variant="outline" loading={enCours === section.cle}
-            onClick={() => agir(section.cle, async () => `${(await marquerRemboursementsEffectues(ids)).data.length} remboursement(s) marqué(s) comme effectué(s).`)}>
+            onClick={() => agir(section.cle, async () => `${(await marquerRemboursementsEffectues(ids)).data.length} remboursement(s) marqué(s) comme effectué(s).`, {
+              titre: `Confirmer ${ids.length} remboursement(s) ?`,
+              message: "Ne confirmez que si vous avez réellement remboursé ces paiements (Mobile Money ou espèces) : ils disparaîtront de la liste.",
+              action: "J'ai remboursé",
+            })}>
             J'ai remboursé ces paiements
           </Btn>
         );
@@ -173,11 +197,20 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
       bouton = (
         <div className="flex gap-2">
           <Btn size="sm" loading={enCours === e.id}
-            onClick={() => agir(e.id, async () => { await decider(e.id, "acceptee"); return "Litige accepté : remboursement lancé via Kkiapay."; })}>
+            onClick={() => agir(e.id, async () => { await decider(e.id, "acceptee"); return "Litige accepté : remboursement lancé via Kkiapay."; }, {
+              titre: "Accepter ce litige ?",
+              message: "Le plaignant est remboursé automatiquement et l'autre partie ne sera pas payée. Cette décision est définitive.",
+              action: "Accepter et rembourser",
+              danger: true,
+            })}>
             Accepter
           </Btn>
           <Btn size="sm" variant="outline"
-            onClick={() => agir(e.id, async () => { await decider(e.id, "rejetee", e.ia && e.ia_niveau === "rejetee" ? e.ia : "Contestation non fondée après examen des faits."); return "Litige rejeté : la transaction est maintenue."; })}>
+            onClick={() => agir(e.id, async () => { await decider(e.id, "rejetee", e.ia && e.ia_niveau === "rejetee" ? e.ia : "Contestation non fondée après examen des faits."); return "Litige rejeté : la transaction est maintenue."; }, {
+              titre: "Rejeter ce litige ?",
+              message: "La transaction est maintenue et le bénéficiaire sera payé. Cette décision est définitive.",
+              action: "Rejeter",
+            })}>
             Rejeter
           </Btn>
         </div>
@@ -231,6 +264,10 @@ export function ATraiterPage({ etablissement }: { etablissement?: EtablissementO
               onClick={() => agir(groupe, async () => {
                 const r = (await lot(elements.map((e) => e.id), reference.trim())).data;
                 return `Virement de ${fcfa(r.montant_total)} enregistré pour ${r.reverses.length} opération(s).`;
+              }, {
+                titre: `Enregistrer un virement de ${fcfa(totalGroupe)} ?`,
+                message: <>Bénéficiaire : {elements[0].detail}. Référence : « {reference.trim()} ». Vérifiez le montant envoyé avant de confirmer.</>,
+                action: "Confirmer le virement",
               })}>
               Confirmer le virement
             </Btn>

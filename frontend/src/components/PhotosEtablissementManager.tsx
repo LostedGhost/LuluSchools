@@ -3,6 +3,7 @@ import { ajouterPhotoEtablissement, photosPubliques, supprimerPhotoEtablissement
 import { messageErreur } from "../api/client";
 import { ImagePlus, Trash2, ImageOff } from "lucide-react";
 import { SectionHead, ErrorBanner } from "./ui";
+import { useConfirmation } from "./Modale";
 
 const MAX_PHOTOS = 8;
 
@@ -40,7 +41,9 @@ export function PhotosEtablissementManager({ etablissementId }: { etablissementI
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const supprimer = async (photoId: string) => {
+    if (!(await demanderConfirmation({ titre: "Supprimer cette photo ?", message: "Elle disparaîtra de la fiche publique de l'établissement.", action: "Supprimer", danger: true }))) return;
     setErreur(null);
     try {
       await supprimerPhotoEtablissement(etablissementId, photoId);

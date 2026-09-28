@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { libelle } from "../../utils/libelles";
 import { annoncesDeMonEnfant, transactionsDeMonEnfant } from "../../api/marketplace";
 import { messageErreur } from "../../api/client";
 import { useMesEnfants } from "../../tuteur/useMesEnfants";
@@ -91,7 +92,7 @@ export function MarketplaceEnfantPage() {
                     <Card key={a.id}>
                       <h3 className="text-title" style={{ marginBottom: "4px" }}>{a.titre}</h3>
                       <p style={{ margin: "0 0 8px", fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>{a.prix} FCFA</p>
-                      <Badge tone={TONE_STATUT_ANNONCE[a.statut] ?? "neutral"}>{a.statut}</Badge>
+                      <Badge tone={TONE_STATUT_ANNONCE[a.statut] ?? "neutral"}>{libelle(a.statut)}</Badge>
                     </Card>
                   ))}
                 </div>
@@ -105,7 +106,7 @@ export function MarketplaceEnfantPage() {
                   {transactions.map((t) => (
                     <div key={t.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                       <span style={{ fontSize: "var(--text-sm)" }}>{t.prix_paye} FCFA</span>
-                      <Badge tone={TONE_STATUT_TRANSACTION[t.statut] ?? "neutral"}>{t.statut}</Badge>
+                      <Badge tone={TONE_STATUT_TRANSACTION[t.statut] ?? "neutral"}>{libelle(t.statut)}</Badge>
                     </div>
                   ))}
                 </div>

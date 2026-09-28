@@ -22,6 +22,7 @@ import type {
 } from "../types/api";
 import { Btn, ErrorBanner, TextInput } from "./ui";
 import { ChevronLeft, ChevronRight, Eraser, PenLine, Plus, Type, X } from "lucide-react";
+import { useConfirmation } from "./Modale";
 
 /**
  * Tableau de classe collaboratif ("craie/chiffon") - voir le cahier des charges du
@@ -220,7 +221,9 @@ export function TableauCollaboratif({
     }
   };
 
+  const demanderConfirmation = useConfirmation();
   const effacer = async () => {
+    if (!(await demanderConfirmation({ titre: "Effacer tout le tableau ?", message: "Tout ce qui est écrit sur ce panneau disparaîtra pour tous les participants.", action: "Effacer", danger: true }))) return;
     if (!panneauCourant) return;
     try {
       await effacerPanneauTableau(sessionId, panneauCourant.panneau.id);
